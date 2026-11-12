@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Botonera, AccionBotonera } from './botonera';
+import { AVISO_BOTONERA_ID, Botonera, AccionBotonera } from './botonera';
 import { ATAJOS } from './mostrador.atajos';
 
 describe('Botonera', () => {
@@ -9,7 +9,7 @@ describe('Botonera', () => {
   const el = () => fixture.nativeElement as HTMLElement;
   const botones = () => Array.from(el().querySelectorAll('button'));
   const textos = () => botones().map((b) => b.textContent!.replace(/\s+/g, ' ').trim());
-  const boton = (texto: string) => botones().find((b) => b.textContent!.includes(texto))!;
+  const boton = (texto: string) => botones().find((b) => b.textContent!.trim() === texto)!;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({ imports: [Botonera] }).compileComponents();
@@ -19,42 +19,38 @@ describe('Botonera', () => {
     fixture.detectChanges();
   });
 
-  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, Remito (sin tecla), F9 Cliente, F10 Quitar y Vaciar', () => {
+  it('muestra Buscar, Cantidad, los descuentos, Cobrar, Presupuesto, Remito, Cliente, Quitar y Vaciar, sin la tecla', () => {
     expect(textos()).toEqual([
-      'F2 Buscar',
-      'F3 Cantidad',
-      'F7 Descuento',
-      'F6 Dto. total',
-      'F4 Cobrar',
-      'F8 Presupuesto',
+      'Buscar',
+      'Cantidad',
+      'Descuento',
+      'Dto. total',
+      'Cobrar',
+      'Presupuesto',
       'Remito',
-      'F9 Cliente',
-      'F10 Quitar',
+      'Cliente',
+      'Quitar',
       'Vaciar',
     ]);
   });
 
-  it('la tecla visible no forma parte del nombre: va en aria-keyshortcuts', () => {
-    const kbds = Array.from(el().querySelectorAll('kbd'));
-    expect(kbds.length).toBeGreaterThan(0);
-    expect(kbds.every((k) => k.getAttribute('aria-hidden') === 'true')).toBe(true);
-    expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
+  it('la tecla no se ve: no hay ningún kbd y va en aria-keyshortcuts', () => {
+    expect(el().querySelectorAll('kbd')).toHaveLength(0);
+    expect(boton('Cobrar').getAttribute('aria-keyshortcuts')).toBe('F4');
+    expect(boton('Cliente').getAttribute('aria-keyshortcuts')).toBe('F9');
   });
 
   it('S6: solo Cobrar lleva la clase que lo fija en la barra de abajo en el celular', () => {
-    expect(boton('F4').classList).toContain('cobrar-fijo');
+    expect(boton('Cobrar').classList).toContain('cobrar-fijo');
     expect(botones().filter((b) => b.classList.contains('cobrar-fijo'))).toHaveLength(1);
   });
 
-  it('F9 Cliente va en la botonera con su tecla en aria-keyshortcuts', () => {
-    expect(boton('F9').textContent).toContain('Cliente');
-    expect(boton('F9').getAttribute('aria-keyshortcuts')).toBe('F9');
+  it('Cliente va en la botonera con su tecla en aria-keyshortcuts', () => {
+    expect(boton('Cliente').getAttribute('aria-keyshortcuts')).toBe('F9');
   });
 
   it('las etiquetas salen del mapa de atajos, sin duplicarlas', () => {
-    const esperadas = ATAJOS.filter((a) => a.enBotonera).map((a) =>
-      `${a.tecla ?? ''} ${a.etiqueta}`.trim(),
-    );
+    const esperadas = ATAJOS.filter((a) => a.enBotonera).map((a) => a.etiqueta);
     expect(textos()).toEqual(esperadas);
   });
 
@@ -76,13 +72,13 @@ describe('Botonera', () => {
   });
 
   it('el clic emite la acción', () => {
-    boton('F4').click();
-    boton('F3').click();
-    boton('F2').click();
-    boton('F8').click();
+    boton('Cobrar').click();
+    boton('Cantidad').click();
+    boton('Buscar').click();
+    boton('Presupuesto').click();
     boton('Remito').click();
-    boton('F9').click();
-    boton('F10').click();
+    boton('Cliente').click();
+    boton('Quitar').click();
     boton('Vaciar').click();
 
     expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'remito', 'cliente', 'quitar', 'vaciar']);
@@ -90,19 +86,53 @@ describe('Botonera', () => {
 
   it('mousedown se cancela para no robarle el foco a la caja', () => {
     const evento = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-    boton('F4').dispatchEvent(evento);
+    boton('Cobrar').dispatchEvent(evento);
 
     expect(evento.defaultPrevented).toBe(true);
   });
 
-  it('un botón deshabilitado no emite', () => {
-    fixture.componentRef.setInput('habilitadas', { cobrar: false, quitar: false });
+  it('S4: una acción sin motivo se puede usar; con motivo queda aria-disabled y nunca disabled', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
     fixture.detectChanges();
 
-    expect(boton('F4').disabled).toBe(true);
-    expect(boton('F10').disabled).toBe(true);
-    expect(boton('F3').disabled).toBe(false);
-    boton('F4').click();
-    expect(emitidas).toEqual([]);
+    expect(boton('Cobrar').getAttribute('aria-disabled')).toBe('true');
+    expect(boton('Cobrar').hasAttribute('disabled')).toBe(false);
+    expect(boton('Cantidad').hasAttribute('aria-disabled')).toBe(false);
+    expect(boton('Cantidad').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('S4: el botón apagado igual emite, para que el mostrador explique por qué', () => {
+    fixture.componentRef.setInput('motivos', {
+      cobrar: 'Abrí la caja para cobrar.',
+      quitar: 'Agregá un renglón para usar esta acción.',
+    });
+    fixture.detectChanges();
+
+    boton('Cobrar').click();
+    boton('Quitar').click();
+    boton('Buscar').click();
+
+    expect(emitidas).toEqual(['cobrar', 'quitar', 'buscar']);
+  });
+
+  it('S4: el botón apagado se ve apagado con su propia regla, sin el disabled global', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
+    fixture.detectChanges();
+
+    expect(getComputedStyle(boton('Cobrar')).cursor).toBe('not-allowed');
+    expect(getComputedStyle(boton('Cantidad')).cursor).not.toBe('not-allowed');
+  });
+
+  it('S4: el botón que se está explicando se enlaza con el aviso por aria-describedby', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
+    fixture.componentRef.setInput('explicada', 'cobrar');
+    fixture.detectChanges();
+
+    expect(boton('Cobrar').getAttribute('aria-describedby')).toBe(AVISO_BOTONERA_ID);
+    expect(boton('Cantidad').hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('S4: sin motivo a la vista ningún botón enlaza un aviso', () => {
+    expect(botones().some((b) => b.hasAttribute('aria-describedby'))).toBe(false);
   });
 });

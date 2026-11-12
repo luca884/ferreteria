@@ -143,6 +143,21 @@ app-caja-busqueda {
   background: var(--error-fondo);
   color: var(--error);
 }
+/*
+ * S4: el motivo por el que una acción de la botonera no se puede usar. Va como los avisos del contenedor pero en tono
+ * neutro: no es un error ni una venta cobrada, es una explicación que se va sola.
+ */
+.motivo-botonera {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--texto-tenue);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--texto-md);
+  font-weight: 500;
+}
 
 /* Sin caja del día no se vende: el aviso lleva directo a abrirla o cerrarla. */
 .aviso-caja {

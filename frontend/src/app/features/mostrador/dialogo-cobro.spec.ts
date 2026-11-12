@@ -1374,7 +1374,7 @@ describe('DialogoCobro', () => {
 
         expect(opcionCC().getAttribute('aria-disabled')).toBe('true');
         expect(opcionCC().hasAttribute('disabled')).toBe(false);
-        expect(razonDe(opcionCC())).toBe('Elegí un cliente (F9) para vender a cuenta corriente.');
+        expect(razonDe(opcionCC())).toBe('Elegí un cliente para vender a cuenta corriente.');
       });
 
       it('un clic en la deshabilitada no la elige', async () => {
@@ -1678,7 +1678,7 @@ describe('DialogoCobro', () => {
 
         expect(monto(5).disabled).toBe(true);
         expect(normal(el().querySelector('#razon-fila-5')?.textContent)).toBe(
-          'Elegí un cliente (F9) para vender a cuenta corriente.',
+          'Elegí un cliente para vender a cuenta corriente.',
         );
         expect(monto(1).disabled).toBe(false);
       });
@@ -1802,7 +1802,7 @@ describe('DialogoCobro', () => {
 
   describe('tope de Consumidor Final desde que abre (#57)', () => {
     const AVISO =
-      'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL (Esc y F9).';
+      'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.';
     const avisoTope = () => el().querySelector('.aviso-tope')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 
     async function abrirConTope(totalCentavos: number, formas: FormaPago[] = FORMAS, tope: number | null = 1000) {

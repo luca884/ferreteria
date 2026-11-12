@@ -638,7 +638,7 @@ export class DialogoCobro {
    */
   private readonly razonDeLaCuenta = computed<string | null>(() => {
     const cliente = this.clienteNombre();
-    if (cliente === null) return 'Elegí un cliente (F9) para vender a cuenta corriente.';
+    if (cliente === null) return 'Elegí un cliente para vender a cuenta corriente.';
     const cuenta = this.cuenta();
     if (cuenta === null || cuenta.estado === 'cargando') return 'Verificando la cuenta corriente…';
     if (cuenta.estado === 'error') return 'No se pudo verificar la cuenta corriente. Cerrá y reintentá.';
@@ -837,7 +837,7 @@ export class DialogoCobro {
     if (this.aCobrarCentavos() < Math.round(tope * 100)) return null;
     return (
       `Desde ${formatearMonto(tope)} la venta a Consumidor Final necesita identificar al comprador: ` +
-      'elegí un cliente con DNI, CUIT o CUIL (Esc y F9).'
+      'elegí un cliente con DNI, CUIT o CUIL.'
     );
   });
 

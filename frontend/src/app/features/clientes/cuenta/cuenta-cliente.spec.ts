@@ -269,7 +269,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     it('no tiene «Cobrar» y F4 no hace nada', async () => {
       await crear({ dueno: false });
 
-      expect(boton('Cobrar (F4)')).toBeUndefined();
+      expect(boton('Cobrar')).toBeUndefined();
       await f4();
       expect(dialogo()).toBeNull();
       expect(cobranza.pendientes).not.toHaveBeenCalled();
@@ -900,7 +900,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await crear({ pendientes: () => respuesta });
 
       expect(texto('.estado-vacio')).toBe('Cargando…');
-      expect(boton('Cobrar (F4)')!.disabled).toBe(true);
+      expect(boton('Cobrar')!.disabled).toBe(true);
       await f4();
       expect(dialogo()).toBeNull();
     });
@@ -910,7 +910,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await crear({ pendientes: () => (++intento === 1 ? throwError(() => errorHttp(500, null)) : of(con3)) });
 
       expect(texto('[role="alert"]')).toContain('No se pudo cargar la cuenta del cliente.');
-      expect(boton('Cobrar (F4)')!.disabled).toBe(true);
+      expect(boton('Cobrar')!.disabled).toBe(true);
 
       boton('Reintentar')!.click();
       await refrescar();
@@ -928,7 +928,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(texto('[role="alert"]')).toContain('Cliente no encontrado');
       expect(boton('Reintentar')).toBeUndefined();
       expect(el().querySelector('a[href="/clientes"]')).not.toBeNull();
-      expect(boton('Cobrar (F4)')!.disabled).toBe(true);
+      expect(boton('Cobrar')!.disabled).toBe(true);
     });
 
     it('el 404 también llega por la lectura del cliente: sin «Reintentar»', async () => {
@@ -980,7 +980,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
   });
 
   describe('cobrar (F4)', () => {
-    it('F4 abre el diálogo y el botón «Cobrar (F4)» hace lo mismo', async () => {
+    it('F4 abre el diálogo y el botón «Cobrar» hace lo mismo', async () => {
       await crear();
 
       const evento = await f4();
@@ -991,7 +991,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await refrescar();
       expect(dialogo()).toBeNull();
 
-      boton('Cobrar (F4)')!.click();
+      boton('Cobrar')!.click();
       await refrescar();
       expect(dialogo()).not.toBeNull();
     });
@@ -1172,7 +1172,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
 
       expect(dialogo()).not.toBeNull();
       expect(texto('.error-servidor')).toBe(message);
-      expect(boton('Cobrar')!.disabled).toBe(false);
+      expect(el().querySelector<HTMLButtonElement>('app-dialogo-cobranza button.cobrar')!.disabled).toBe(false);
 
       await confirmar();
       expect(cobranza.cobrar).toHaveBeenCalledTimes(2);
@@ -1657,12 +1657,12 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     }
 
     describe('quién los ve', () => {
-      it('el Dueño tiene «Recargo» y «Descuento» en la barra, junto a «Cobrar (F4)»', async () => {
+      it('el Dueño tiene «Recargo» y «Descuento» en la barra, junto a «Cobrar»', async () => {
         await crear();
 
         expect(boton('Recargo')).toBeDefined();
         expect(boton('Descuento')).toBeDefined();
-        expect(boton('Cobrar (F4)')).toBeDefined();
+        expect(boton('Cobrar')).toBeDefined();
       });
 
       it('el Vendedor no ve ni «Recargo» ni «Descuento» y no se hace ningún request de ajustes', async () => {

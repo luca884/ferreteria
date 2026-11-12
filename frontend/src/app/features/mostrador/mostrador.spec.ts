@@ -437,22 +437,22 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
-    it('muestra la botonera con los atajos en lugar de la pista fija (R-038)', async () => {
+    it('muestra la botonera con las etiquetas a la vista y las teclas solo en aria-keyshortcuts (R-038)', async () => {
       await crear();
 
       const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
         b.textContent!.replace(/\s+/g, ' ').trim(),
       );
       expect(botones).toEqual([
-        'F2 Buscar',
-        'F3 Cantidad',
-        'F7 Descuento',
-        'F6 Dto. total',
-        'F4 Cobrar',
-        'F8 Presupuesto',
+        'Buscar',
+        'Cantidad',
+        'Descuento',
+        'Dto. total',
+        'Cobrar',
+        'Presupuesto',
         'Remito',
-        'F9 Cliente',
-        'F10 Quitar',
+        'Cliente',
+        'Quitar',
         'Vaciar',
       ]);
       expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
@@ -1126,6 +1126,10 @@ describe('Mostrador', () => {
       Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
         b.textContent!.includes(etiqueta),
       )!;
+    /** S4: el aviso que dice por qué la acción intentada no se puede usar. */
+    const motivoDelBotonera = () =>
+      (el().querySelector('.motivo-botonera')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
     const botonDelDialogo = (texto: string) =>
       Array.from(dialogo()!.querySelectorAll<HTMLButtonElement>('button')).find(
         (b) => b.textContent!.trim() === texto,
@@ -1429,30 +1433,30 @@ describe('Mostrador', () => {
     it('la botonera dispara lo mismo que la tecla', async () => {
       await conTicket();
 
-      botonera('F3').click();
+      botonera('Cantidad').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('Cantidad de Artículo 2');
       await tecla('Escape');
 
-      botonera('F10').click();
+      botonera('Quitar').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('¿Quitar «Artículo 2» del ticket?');
       await tecla('Escape');
 
-      botonera('F4').click();
+      botonera('Cobrar').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('Cobrar');
       await tecla('Escape');
 
-      botonera('F2').click();
+      botonera('Buscar').click();
       await refrescar();
       expect(document.activeElement).toBe(campo());
     });
 
     it('con un diálogo abierto Tab no sale de él, y al cerrarlo el foco vuelve al código y no al botón que lo abrió', async () => {
       await conTicket();
-      botonera('F4').focus();
-      botonera('F4').click();
+      botonera('Cobrar').focus();
+      botonera('Cobrar').click();
       await refrescar();
 
       const cobrar = botonDelDialogo('Cobrar');
@@ -1466,14 +1470,99 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
-    it('con el ticket vacío la botonera deshabilita cantidad, cobrar, quitar y vaciar', async () => {
+    it('con el ticket vacío la botonera apaga cantidad, cobrar, quitar y vaciar y explica por qué', async () => {
       await crear();
 
-      expect(botonera('F3').disabled).toBe(true);
-      expect(botonera('F4').disabled).toBe(true);
-      expect(botonera('F10').disabled).toBe(true);
-      expect(botonera('Vaciar').disabled).toBe(true);
-      expect(botonera('F2').disabled).toBe(false);
+      for (const etiqueta of ['Cantidad', 'Cobrar', 'Quitar', 'Vaciar']) {
+        expect(botonera(etiqueta).getAttribute('aria-disabled')).toBe('true');
+        // S4: el clic tiene que llegar para poder explicar, así que no va el atributo disabled.
+        expect(botonera(etiqueta).hasAttribute('disabled')).toBe(false);
+      }
+      expect(botonera('Buscar').hasAttribute('aria-disabled')).toBe(false);
+
+      botonera('Cobrar').click();
+      await refrescar();
+
+      expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
+      expect(dialogo()).toBeNull();
+      expect(cobros).toHaveLength(0);
+    });
+
+    it('S4: un botón apagado no ejecuta la acción y dice por qué en un aviso role=status enlazado', async () => {
+      await crear();
+
+      botonera('Cantidad').click();
+      await refrescar();
+
+      const aviso = el().querySelector('.motivo-botonera')!;
+      expect(aviso.getAttribute('role')).toBe('status');
+      expect(aviso.textContent!.trim()).toBe('Agregá un renglón para usar esta acción.');
+      expect(botonera('Cantidad').getAttribute('aria-describedby')).toBe(aviso.id);
+      expect(botonera('Cobrar').hasAttribute('aria-describedby')).toBe(false);
+      expect(dialogo()).toBeNull();
+    });
+
+    it('S4: la tecla de una acción apagada dice lo mismo que su botón, y no hace nada', async () => {
+      await crear();
+
+      const evento = await tecla('F3', campo());
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
+      expect(dialogo()).toBeNull();
+    });
+
+    it('S4: con la caja cerrada, Cobrar dice que hay que abrirla (con la tecla y con el botón)', async () => {
+      await crear(sinCaja);
+      await escanear('M', articulo(1, { precioFinal: 1500 }));
+
+      await tecla('F4', campo());
+
+      expect(motivoDelBotonera()).toBe('Abrí la caja para vender.');
+      expect(dialogo()).toBeNull();
+      expect(cobros).toHaveLength(0);
+
+      // El aviso se va solo y el botón lo vuelve a decir.
+      await avanzar(5000);
+      expect(el().querySelector('.motivo-botonera')).toBeNull();
+      botonera('Cobrar').click();
+      await refrescar();
+      expect(motivoDelBotonera()).toBe('Abrí la caja para vender.');
+      expect(dialogo()).toBeNull();
+    });
+
+    it('S4: con un diálogo abierto ninguna acción se ejecuta y se dice que hay que cerrarlo', async () => {
+      await crear();
+      await tecla('F9', campo());
+      expect(dialogo()!.textContent).toContain('Cliente');
+
+      botonera('Buscar').click();
+      await refrescar();
+
+      expect(motivoDelBotonera()).toBe('Cerrá el diálogo para seguir con el ticket.');
+      expect(dialogo()!.textContent).toContain('Cliente');
+
+      await tecla('F3', campo());
+
+      expect(motivoDelBotonera()).toBe('Cerrá el diálogo para seguir con el ticket.');
+      expect(dialogo()!.textContent).toContain('Cliente');
+    });
+
+    it('S4: el motivo no le roba el foco a la caja de búsqueda y se va con la próxima acción que sí se puede', async () => {
+      await crear();
+      expect(document.activeElement).toBe(campo());
+
+      botonera('Cantidad').click();
+      await refrescar();
+
+      expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
+      expect(document.activeElement).toBe(campo());
+
+      botonera('Cliente').click();
+      await refrescar();
+
+      expect(el().querySelector('.motivo-botonera')).toBeNull();
+      expect(dialogo()).not.toBeNull();
     });
   });
 
@@ -1895,12 +1984,16 @@ describe('Mostrador', () => {
         await conMartillos();
         await cobrarYa(0, 12);
         await avanzar(2000);
+        // S4: F4 con el ticket vacío ya no deja un aviso del ticket: explica el motivo. El aviso nuevo lo deja un
+        // artículo dado de baja, que se queda hasta el próximo renglón.
         await tecla('F4');
-        expect(avisos()).toBe('El ticket está vacío.');
+        expect(el().querySelector('.motivo-botonera')).not.toBeNull();
+        await escanear('B', articulo(9, { activo: false }));
+        expect(avisos()).toBe('"Artículo 9" está dado de baja.');
 
         await avanzar(3500);
 
-        expect(avisos()).toBe('El ticket está vacío.');
+        expect(avisos()).toBe('"Artículo 9" está dado de baja.');
       });
 
       it('al destruir el componente no queda el temporizador', async () => {
@@ -2583,7 +2676,7 @@ describe('Mostrador', () => {
       expect(llamadas).toHaveLength(2);
     });
 
-    it('F8 con el ticket vacío avisa y anula la acción del navegador, como F4', async () => {
+    it('F8 con el ticket vacío dice por qué no puede y anula la acción del navegador, como F4', async () => {
       await crear();
       await escribir('tor');
       await avanzar(250);
@@ -2593,13 +2686,13 @@ describe('Mostrador', () => {
       await avanzar(500);
 
       expect(evento.defaultPrevented).toBe(true);
-      expect(el().textContent).toContain('El ticket está vacío.');
+      expect(el().textContent).toContain('Agregá un renglón para usar esta acción.');
       expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
       expect(campo().value).toBe('tor');
       expect(guardados).toHaveLength(0);
     });
 
-    it('F4 ya no es inerte: con el ticket vacío avisa y anula la acción del navegador (R-032)', async () => {
+    it('F4 ya no es inerte: con el ticket vacío dice por qué no puede y anula la acción del navegador (R-032)', async () => {
       await crear();
       await escribir('tor');
       await avanzar(250);
@@ -2609,7 +2702,7 @@ describe('Mostrador', () => {
       await avanzar(500);
 
       expect(evento.defaultPrevented).toBe(true);
-      expect(el().textContent).toContain('El ticket está vacío.');
+      expect(el().textContent).toContain('Agregá un renglón para usar esta acción.');
       expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
       expect(campo().value).toBe('tor');
       expect(filas()).toHaveLength(1);
@@ -3011,17 +3104,19 @@ describe('Mostrador', () => {
       expect(totalGrande()).toBe('$ 1.500,00');
     });
 
-    it('sin renglones los descuentos no abren nada: avisan que el ticket está vacío y los botones están apagados', async () => {
+    it('sin renglones los descuentos no abren nada: dicen por qué y los botones están apagados', async () => {
       await crear();
 
       await tecla('F7');
       await tecla('F6');
 
       expect(dialogo()).toBeNull();
-      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('El ticket está vacío.');
+      expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe(
+        'Agregá un renglón para usar esta acción.',
+      );
       const botones = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button'));
       for (const texto of ['Descuento', 'Dto. total']) {
-        expect(botones.find((b) => normal(b.textContent).includes(texto))!.disabled).toBe(true);
+        expect(botones.find((b) => normal(b.textContent).includes(texto))!.getAttribute('aria-disabled')).toBe('true');
       }
     });
 
@@ -3160,14 +3255,14 @@ describe('Mostrador', () => {
       expect(enlace.getAttribute('href')).toBe('/caja');
     });
 
-    it('sin caja abierta F4 no abre el cobro: avisa y no manda nada', async () => {
+    it('sin caja abierta F4 no abre el cobro: avisa que hay que abrirla y no manda nada', async () => {
       await conUnArticulo(sinCaja);
 
       await tecla('F4');
 
       expect(dialogo()).toBeNull();
       expect(cobros).toHaveLength(0);
-      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Abrí la caja para vender.');
+      expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe('Abrí la caja para vender.');
     });
 
     it('con la caja de otro día avisa que hay que cerrarla y no deja cobrar', async () => {
@@ -3182,13 +3277,21 @@ describe('Mostrador', () => {
       expect(cobros).toHaveLength(0);
     });
 
-    it('sin caja el botón Cobrar de la botonera queda deshabilitado', async () => {
+    it('sin caja el botón Cobrar queda apagado y al tocarlo dice que hay que abrir la caja', async () => {
       await conUnArticulo(sinCaja);
 
       const cobrar = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
         normal(b.textContent).includes('Cobrar'),
       )!;
-      expect(cobrar.disabled).toBe(true);
+      expect(cobrar.getAttribute('aria-disabled')).toBe('true');
+      expect(cobrar.hasAttribute('disabled')).toBe(false);
+
+      cobrar.click();
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
+      expect(cobros).toHaveLength(0);
+      expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe('Abrí la caja para vender.');
     });
 
     it('si el backend rechaza por CAJA_CERRADA, cierra el cobro, conserva el ticket y muestra el aviso de caja', async () => {
@@ -3294,12 +3397,12 @@ describe('Mostrador', () => {
         Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
           normal(b.textContent).includes('Presupuesto'),
         )!;
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
 
       await escribir('M');
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
-      expect(boton().disabled).toBe(false);
+      expect(boton().hasAttribute('aria-disabled')).toBe(false);
       boton().click();
       await refrescar();
 
@@ -3658,12 +3761,12 @@ describe('Mostrador', () => {
 
     it('el botón Remito abre «Emitir remito» y no manda nada todavía; está apagado con el ticket vacío', async () => {
       await crear();
-      expect(botonRemito().disabled).toBe(true);
+      expect(botonRemito().getAttribute('aria-disabled')).toBe('true');
 
       await escribir('M');
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
-      expect(botonRemito().disabled).toBe(false);
+      expect(botonRemito().hasAttribute('aria-disabled')).toBe(false);
       await abrirRemito();
 
       expect(normal(dialogoRemito()?.querySelector('h2')?.textContent)).toBe('Emitir remito');
@@ -4316,7 +4419,7 @@ describe('Mostrador', () => {
       const boton = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
         normal(b.textContent).includes('Cliente'),
       )!;
-      expect(boton.disabled).toBe(false);
+      expect(boton.hasAttribute('aria-disabled')).toBe(false);
 
       boton.click();
       await refrescar();
@@ -4531,7 +4634,7 @@ describe('Mostrador', () => {
         await tecla('F4');
 
         expect(clientesApi.cuenta).not.toHaveBeenCalled();
-        expect(razon()).toBe('Elegí un cliente (F9) para vender a cuenta corriente.');
+        expect(razon()).toBe('Elegí un cliente para vender a cuenta corriente.');
       });
 
       it('mientras llega la respuesta la opción dice «Verificando…» y al llegar queda disponible', async () => {
@@ -4997,7 +5100,7 @@ describe('Mostrador', () => {
       await tecla('F4');
 
       expect(normal(el().querySelector('app-dialogo-cobro .aviso-tope')?.textContent)).toBe(
-        'Desde $ 3.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL (Esc y F9).',
+        'Desde $ 3.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.',
       );
     });
 

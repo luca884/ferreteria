@@ -1,9 +1,18 @@
 <app-barra-acciones>
   <h1 class="sr-only">Mostrador</h1>
-  <app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
+  <app-botonera
+    [motivos]="motivos()"
+    [explicada]="motivoVisible()?.accion ?? null"
+    (accion)="alBotonera($event)"
+  />
 </app-barra-acciones>
 
 <div class="zona-busqueda">
+  <!-- S4: por qué la acción que se acaba de intentar no se puede usar. Va debajo de la barra y no roba el foco. -->
+  @if (motivoVisible(); as motivo) {
+    <p [id]="avisoBotoneraId" class="motivo-botonera" role="status">{{ motivo.texto }}</p>
+  }
+
   <div class="fila-codigo">
     <span class="rotulo" aria-hidden="true">Código</span>
     <app-caja-busqueda

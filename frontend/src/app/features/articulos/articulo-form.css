@@ -110,6 +110,29 @@
   background: var(--superficie);
   box-shadow: var(--sombra-1);
 }
+/*
+ * S3 (avisos-y-accesos): las tarjetas se ubican por nombre, no por renglón. Con el
+ * renglón automático la altura de «Precio» fijaba la del renglón y dejaba un hueco
+ * de ~500 px debajo de «Identificación». Ahora la columna izquierda apila
+ * Identificación, Clasificación y Stock, y «Precio» ocupa la derecha a lo alto de
+ * las tres. Las acciones quedan abajo de todo porque ocupan las dos columnas.
+ */
+.seccion.identificacion {
+  grid-column: 1;
+  grid-row: 1;
+}
+.seccion.clasificacion {
+  grid-column: 1;
+  grid-row: 2;
+}
+.seccion.stock {
+  grid-column: 1;
+  grid-row: 3;
+}
+.seccion.precio {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
 legend {
   float: left;
   grid-column: 1 / -1;
@@ -133,6 +156,14 @@ legend {
 @media (max-width: 900px) {
   .articulo {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* Con una sola columna la ubicación explícita vuelve al orden del DOM y los campos a todo el ancho. */
+  .seccion.identificacion,
+  .seccion.precio,
+  .seccion.clasificacion,
+  .seccion.stock {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 

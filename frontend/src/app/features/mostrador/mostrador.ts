@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, timer } from 'rxjs';
-import { AccionBotonera, Botonera } from './botonera';
+import { AccionBotonera, AVISO_BOTONERA_ID, Botonera } from './botonera';
 import { AvisosCae } from './avisos-cae';
 import { AvisosFacturacion } from './avisos-facturacion';
 import { CajaBusqueda } from './caja-busqueda';
@@ -19,7 +19,7 @@ import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
-import { accionDeTecla } from './mostrador.atajos';
+import { accionDeTecla, atajosDeBotonera } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { PrimerosPasos } from './primeros-pasos';
 import { AVISO_ESCANEO_CON_DIALOGO, GuardaLector } from './guarda-lector';
@@ -71,13 +71,32 @@ const ESPERA_MS = 250;
 const AVISO_COBRADA_MS = 5000;
 const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
-const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_REMITO_FALLIDO = 'No se pudo emitir el remito. Probá de nuevo.';
 const MENSAJE_OCUPADO = 'El sistema está ocupado, reintentá.';
 const MENSAJE_SIN_PERMISO = 'No tenés permiso para hacer esto.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
+
+/*
+ * S4: por qué no se puede usar una acción de la botonera. Son las mismas condiciones que antes apagaban los botones,
+ * dichas como las diría el vendedor: el mostrador las muestra cuando la acción se intenta, sin ejecutar nada.
+ */
+const MOTIVO_DIALOGO = 'Cerrá el diálogo para seguir con el ticket.';
+const MOTIVO_SIN_RENGLONES = 'Agregá un renglón para usar esta acción.';
+/** Las acciones que necesitan al menos un renglón en el ticket; el resto anda con el ticket vacío. */
+const NECESITAN_RENGLONES: readonly AccionBotonera[] = [
+  'cantidad',
+  'descuento',
+  'descuentoTotal',
+  'cobrar',
+  'presupuesto',
+  'remito',
+  'quitar',
+  'vaciar',
+];
+/** Cuánto queda a la vista el motivo de una acción que no se pudo usar. */
+const MOTIVO_A_LA_VISTA_MS = 5000;
 
 /** El diálogo abierto, si hay uno. `indice` es el renglón del ticket sobre el que actúa. */
 type Dialogo =
@@ -353,29 +372,37 @@ export class Mostrador {
   /** Lo recibido en el POST en curso (solo efectivo): el backend no guarda el vuelto, se calcula acá. */
   private recibidoEnVuelo: number | null = null;
 
-  /** Lo que la botonera puede disparar ahora: nada con un diálogo abierto; sin renglones, solo buscar. */
-  protected readonly habilitadas = computed(() => {
-    const abierto = this.dialogo() !== null;
-    const conRenglones = this.ticket.ticket().renglones.length > 0 && !abierto;
-    return {
-      buscar: !abierto,
-      cantidad: conRenglones,
-      descuento: conRenglones,
-      descuentoTotal: conRenglones,
-      cobrar: conRenglones && this.avisoCaja() === null,
-      // El presupuesto no toca la caja ni el stock: se puede guardar aunque no haya caja abierta.
-      presupuesto: conRenglones,
-      // El remito descuenta stock pero no toca la caja: se puede emitir aunque no haya caja abierta.
-      remito: conRenglones,
-      // El cliente se elige con el ticket vacío también: la venta, el presupuesto y el remito lo llevan.
-      cliente: !abierto,
-      quitar: conRenglones,
-      vaciar: conRenglones,
-    };
+  /**
+   * S4: por qué no se puede usar cada acción de la botonera ahora mismo; la que no figura, se puede. Son las mismas
+   * condiciones que antes apagaban los botones (nada con un diálogo abierto; sin renglones, solo buscar y cliente; y
+   * cobrar, además, con la caja abierta).
+   */
+  protected readonly motivos = computed<Partial<Record<AccionBotonera, string>>>(() => {
+    const motivos: Partial<Record<AccionBotonera, string>> = {};
+    if (this.dialogo() !== null) {
+      // Con un diálogo abierto no se hace nada desde la botonera ni con las teclas: la razón es la misma para todas.
+      for (const { accion } of atajosDeBotonera()) motivos[accion as AccionBotonera] = MOTIVO_DIALOGO;
+      return motivos;
+    }
+    // Sin renglones no hay nada sobre lo que actuar. El presupuesto y el remito no tocan la caja: siguen sin ella.
+    const conRenglones = this.ticket.ticket().renglones.length > 0;
+    if (!conRenglones) for (const accion of NECESITAN_RENGLONES) motivos[accion] = MOTIVO_SIN_RENGLONES;
+    // Cobrar es lo único que, además, pide la caja abierta: se dice lo mismo que el aviso fijo de la caja.
+    const sinCaja = this.avisoCaja();
+    if (conRenglones && sinCaja !== null) motivos.cobrar = sinCaja;
+    return motivos;
   });
+
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S4). */
+  protected readonly motivoVisible = signal<{ accion: AccionBotonera; texto: string } | null>(null);
+  /** Id del aviso del motivo: la botonera enlaza con aria-describedby el botón que lo explica. */
+  protected readonly avisoBotoneraId = AVISO_BOTONERA_ID;
+  /** Temporizador que oculta el motivo; cada motivo nuevo arranca el suyo, como el resto de los avisos. */
+  private ocultarMotivo: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
+    this.destroyRef.onDestroy(() => clearTimeout(this.ocultarMotivo));
     this.leerCaja();
     this.leerFormas();
     this.leerFacturacion();
@@ -533,23 +560,46 @@ export class Mostrador {
   }
 
   /**
-   * Atajos (mapa en `mostrador.atajos.ts`). Todos anulan la acción del navegador. Con un diálogo abierto
-   * ninguno actúa salvo Esc, que lo cierra.
+   * Atajos (mapa en `mostrador.atajos.ts`). Todos anulan la acción del navegador. Esc cierra el diálogo abierto o limpia
+   * la pantalla; cualquier otra tecla hace lo mismo que su botón, incluso cuando la acción no se puede usar: en ese caso
+   * el mostrador dice por qué en vez de no hacer nada (S4).
    */
   protected alTeclear(evento: KeyboardEvent): void {
     const accion = accionDeTecla(evento.key);
     if (!accion) return;
     evento.preventDefault();
-    if (this.dialogo()) {
-      if (accion === 'cerrar') this.cerrarDialogo();
+    if (accion === 'cerrar') {
+      if (this.dialogo()) this.cerrarDialogo();
+      else this.limpiar();
       return;
     }
-    if (accion === 'cerrar') this.limpiar();
-    else this.ejecutar(accion);
+    this.intentar(accion);
   }
 
   protected alBotonera(accion: AccionBotonera): void {
-    if (!this.dialogo()) this.ejecutar(accion);
+    this.intentar(accion);
+  }
+
+  /**
+   * Hace la acción o, si hoy no se puede, dice por qué sin ejecutar nada (S4). El aviso no mueve el foco: el vendedor
+   * sigue tipeando en la caja de búsqueda y el motivo se anuncia solo con role="status".
+   */
+  private intentar(accion: AccionBotonera): void {
+    const motivo = this.motivos()[accion];
+    this.callarMotivo();
+    if (motivo !== undefined) {
+      this.motivoVisible.set({ accion, texto: motivo });
+      this.ocultarMotivo = setTimeout(() => this.motivoVisible.set(null), MOTIVO_A_LA_VISTA_MS);
+      return;
+    }
+    this.ejecutar(accion);
+  }
+
+  /** Saca el motivo a la vista y su plazo: lo hace la próxima acción que sí se puede. */
+  private callarMotivo(): void {
+    clearTimeout(this.ocultarMotivo);
+    this.ocultarMotivo = undefined;
+    this.motivoVisible.set(null);
   }
 
   private ejecutar(accion: AccionBotonera): void {
@@ -559,15 +609,6 @@ export class Mostrador {
         this.caja().enfocar();
         return;
       case 'cobrar': {
-        if (renglones.length === 0) {
-          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
-          return;
-        }
-        const sinCaja = this.avisoCaja();
-        if (sinCaja) {
-          this.avisar({ texto: sinCaja, grave: true, tipo: 'otro' });
-          return;
-        }
         if (this.formasPago().length === 0) {
           this.leerFormas();
           this.avisar({ texto: MENSAJE_SIN_FORMAS, grave: true, tipo: 'otro' });
@@ -581,18 +622,10 @@ export class Mostrador {
         return;
       }
       case 'presupuesto':
-        if (renglones.length === 0) {
-          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
-          return;
-        }
         this.avisar(null);
         this.dialogo.set({ tipo: 'presupuesto' });
         return;
       case 'remito':
-        if (renglones.length === 0) {
-          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
-          return;
-        }
         this.avisar(null);
         this.dialogo.set({ tipo: 'remito' });
         return;
@@ -601,15 +634,10 @@ export class Mostrador {
         this.dialogo.set({ tipo: 'cliente' });
         return;
       case 'vaciar':
-        if (renglones.length === 0) return;
         this.avisar(null);
         this.dialogo.set({ tipo: 'vaciar' });
         return;
       case 'descuentoTotal':
-        if (renglones.length === 0) {
-          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
-          return;
-        }
         this.avisar(null);
         this.dialogo.set({ tipo: 'descuentoTotal' });
         return;
@@ -1150,6 +1178,8 @@ export class Mostrador {
     this.busquedas.next(null);
     this.texto.set('');
     if (this.aviso()?.tipo === 'persistente') this.avisar(null);
+    // La pantalla queda en blanco: el motivo de una acción que no se pudo usar ya no viene al caso.
+    this.callarMotivo();
     this.vaciar();
     this.caja().enfocar();
   }

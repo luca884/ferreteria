@@ -4,9 +4,13 @@ import { AccionMostrador, Atajo, atajosDeBotonera } from './mostrador.atajos';
 /** Acciones que emite la botonera: todas las del mapa menos Esc. */
 export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
 
+/** Id del aviso que dice por qué una acción no se puede usar: el botón lo enlaza con `aria-describedby` (S4). */
+export const AVISO_BOTONERA_ID = 'aviso-botonera';
+
 /**
- * Botonera del mostrador. Presentacional: las teclas y etiquetas salen de `ATAJOS` y emite la misma acción
- * que la tecla. Los botones no le sacan el foco a la caja de búsqueda.
+ * Botonera del mostrador. Presentacional: las etiquetas salen de `ATAJOS` y la tecla va en `aria-keyshortcuts`, sin
+ * mostrarse (S2). Emite la misma acción que la tecla, también cuando la acción no se puede usar: el mostrador es el que
+ * explica el motivo (S4). Los botones no le sacan el foco a la caja de búsqueda.
  */
 @Component({
   selector: 'app-botonera',
@@ -17,20 +21,18 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
           type="button"
           class="accion-barra"
           [class]="variantes[atajo.accion] ?? ''"
-          [disabled]="!habilitada(atajo.accion)"
+          [attr.aria-disabled]="motivoDe(atajo.accion) === null ? null : 'true'"
+          [attr.aria-describedby]="explicada() === atajo.accion ? avisoId : null"
           [attr.aria-keyshortcuts]="atajo.tecla"
           (mousedown)="$event.preventDefault()"
           (click)="emitir(atajo.accion)"
         >
-          @if (atajo.tecla) {
-            <kbd aria-hidden="true">{{ atajo.tecla }}</kbd>
-          }
           {{ atajo.etiqueta }}
         </button>
       }
     </div>
   `,
-  /* Los botones usan la clase global .accion-barra (styles.css); acá solo la fila y el separador. */
+  /* Los botones usan la clase global .accion-barra (styles.css); acá la fila, el separador y el apagado (S4). */
   styles: `
     :host {
       display: block;
@@ -39,6 +41,17 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
       display: flex;
       align-items: stretch;
       gap: 6px;
+    }
+    /*
+     * Una acción que hoy no se puede usar se ve apagada, con el mismo aspecto que le da el disabled de styles.css
+     * (que es global y no se toca acá), pero el clic igual llega: así el mostrador puede explicar el motivo (S4).
+     */
+    .accion-barra[aria-disabled='true'],
+    .accion-barra[aria-disabled='true']:hover {
+      background: var(--superficie-3);
+      border-color: var(--borde);
+      color: var(--texto-deshabilitado);
+      cursor: not-allowed;
     }
     /* Vaciar queda aparte de las acciones de la venta, detrás de una línea. */
     .peligro {
@@ -104,12 +117,16 @@ export class Botonera {
     vaciar: 'peligro',
   };
   readonly atajos = input<readonly Atajo[]>(atajosDeBotonera());
-  /** Acciones apagadas; las que no figuran están habilitadas. */
-  readonly habilitadas = input<Partial<Record<AccionBotonera, boolean>>>({});
+  /** El motivo por el que cada acción no se puede usar ahora; las que no figuran, se pueden. */
+  readonly motivos = input<Partial<Record<AccionBotonera, string>>>({});
+  /** La acción cuyo motivo está a la vista: su botón lo enlaza para que se lea con la tecla o el lector de pantalla. */
+  readonly explicada = input<AccionBotonera | null>(null);
   readonly accion = output<AccionBotonera>();
 
-  protected habilitada(accion: AccionMostrador): boolean {
-    return this.habilitadas()[accion as AccionBotonera] !== false;
+  protected readonly avisoId = AVISO_BOTONERA_ID;
+
+  protected motivoDe(accion: AccionMostrador): string | null {
+    return this.motivos()[accion as AccionBotonera] ?? null;
   }
 
   protected emitir(accion: AccionMostrador): void {

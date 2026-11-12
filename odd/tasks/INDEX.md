@@ -1,18 +1,19 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-12 desde los 89 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-12 desde los 91 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 89 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~22 KB; los 91 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
 
-- **87 cerradas · 2 abiertas**
+- **88 cerradas · 3 abiertas**
 
 ## Abiertas
 
 | Tarea | Estado | Fecha | Objetivo | Rama | KB |
 |---|---|---|---|---|---|
+| [`avisos-y-accesos.md`](avisos-y-accesos.md) | abierta (4✓/2✗) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | `fix/avisos-y-accesos` | 14 |
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 
@@ -25,6 +26,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
 | [`cabos-auth-l13.md`](cabos-auth-l13.md) | 2026-11-12 | cerrar los cinco cabos que el L13 de advertencias-recorrido-dueno.md dejó como trabajo aparte al mergear el PR #46: cuatro mejoras informativas de la  | 10 |
 | [`error-de-campo-pegado.md`](error-de-campo-pegado.md) | 2026-11-12 | que el 400 del reseteo de contraseña no quede pegado bajo el campo cuando el usuario ya está escribiendo otra cosa. | 2 |
+| [`lista-ventas-serie-fiscal.md`](lista-ventas-serie-fiscal.md) | 2026-11-12 | que la lista de Ventas distinga de qué serie fiscal es cada comprobante, para que dos series distintas no se lean como la misma numeración repetida. | 3 |
 | [`aviso-y-paginacion.md`](aviso-y-paginacion.md) | 2026-11-09 | los avisos con importes ya no cortan el importe en dos renglones, y en Artículos a 1280 px la paginación no se pisa con los filtros | 5 |
 | [`bugs-relevamiento-celular.md`](bugs-relevamiento-celular.md) | 2026-11-09 | arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 | 36 |
 | [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 90 |

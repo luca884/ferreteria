@@ -3268,4 +3268,70 @@ describe('ArticuloForm', () => {
       });
     });
   });
+
+  describe('sin celdas vacías de una columna (avisos-y-accesos, S3)', () => {
+    const secciones = () =>
+      Array.from(el().querySelectorAll<HTMLFieldSetElement>('form.articulo fieldset.seccion'));
+    const campo = (id: string) => el().querySelector(`#${id}`)!.closest('.campo') as HTMLElement;
+    const aTodoElAncho = (id: string) => campo(id).classList.contains('ancho');
+
+    it('las cuatro tarjetas llevan su clase y el orden del formulario no cambia', async () => {
+      await crearComponente();
+
+      expect(secciones().map((s) => s.className)).toEqual([
+        'seccion identificacion',
+        'seccion precio',
+        'seccion clasificacion',
+        'seccion stock',
+      ]);
+      expect(secciones().map((s) => s.querySelector('legend')?.textContent)).toEqual([
+        'Identificación',
+        'Precio',
+        'Clasificación y códigos',
+        'Stock',
+      ]);
+    });
+
+    it('«Unidad» se pareja con «Código interno» y «Descripción» queda a todo el ancho', async () => {
+      await crearComponente();
+
+      expect(campo('codigoInterno').nextElementSibling).toBe(campo('unidad'));
+      expect(aTodoElAncho('codigoInterno')).toBe(false);
+      expect(aTodoElAncho('unidad')).toBe(false);
+      expect(aTodoElAncho('descripcion')).toBe(true);
+      expect(campo('unidad').nextElementSibling).toBe(campo('descripcion'));
+    });
+
+    it('«Unidad» sigue siendo el mismo campo, con su rótulo y su control', async () => {
+      await crearComponente();
+
+      expect(el().querySelector('label[for="unidad"]')?.textContent?.trim()).toBe('Unidad');
+      expect(opciones('unidad')).toEqual(['Unidad', 'Metro', 'Kilo', 'Litro']);
+
+      await elegir('unidad', 'Kilo');
+      await completarMinimos();
+      await enviar();
+
+      expect(servicio.crear.mock.calls[0][0].unidad).toBe('KILO');
+    });
+
+    it('«Alícuota de IVA» se pareja con «Margen %» y queda antes de los recargos del costo', async () => {
+      await crearComponente();
+
+      expect(campo('margen').nextElementSibling).toBe(campo('alicuotaIva'));
+      expect(aTodoElAncho('margen')).toBe(false);
+      expect(aTodoElAncho('alicuotaIva')).toBe(false);
+      expect(campo('alicuotaIva').nextElementSibling).toBe(el().querySelector('fieldset.recargos-costo'));
+    });
+
+    it('«Alícuota de IVA» sigue siendo el mismo campo, con su rótulo y sus opciones', async () => {
+      await crearComponente();
+
+      expect(el().querySelector('label[for="alicuotaIva"]')?.textContent?.trim()).toBe('Alícuota de IVA');
+      expect(opciones('alicuotaIva')).toEqual(['0 %', '2,5 %', '5 %', '10,5 %', '21 %', '27 %']);
+
+      await elegir('alicuotaIva', '10,5 %');
+      expect(elegida('alicuotaIva')).toBe('10,5 %');
+    });
+  });
 });

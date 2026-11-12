@@ -86,7 +86,7 @@
   }
 
   <form class="articulo" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-    <fieldset class="seccion">
+    <fieldset class="seccion identificacion">
       <legend>Identificación</legend>
       <div class="campo">
         <label for="codigoInterno">Código interno</label>
@@ -122,6 +122,25 @@
         }
       </div>
 
+      <div class="campo">
+        <label for="unidad">Unidad</label>
+        <select
+          id="unidad"
+          name="unidad"
+          formControlName="unidad"
+          [attr.aria-invalid]="invalido('unidad') ? 'true' : null"
+          [attr.aria-describedby]="describir('unidad')"
+          (change)="limpiarErrorDe('unidad')"
+        >
+          @for (unidad of unidades; track unidad) {
+            <option [ngValue]="unidad">{{ unidadLabels[unidad] }}</option>
+          }
+        </select>
+        @if (errorServidor('unidad'); as mensaje) {
+          <span id="unidad-error-servidor" class="campo-error" data-error-de="unidad">{{ mensaje }}</span>
+        }
+      </div>
+
       <div class="campo ancho">
         <label for="descripcion">Descripción</label>
         <input
@@ -147,28 +166,9 @@
           <span id="descripcion-error-servidor" class="campo-error" data-error-de="descripcion">{{ mensaje }}</span>
         }
       </div>
-
-      <div class="campo">
-        <label for="unidad">Unidad</label>
-        <select
-          id="unidad"
-          name="unidad"
-          formControlName="unidad"
-          [attr.aria-invalid]="invalido('unidad') ? 'true' : null"
-          [attr.aria-describedby]="describir('unidad')"
-          (change)="limpiarErrorDe('unidad')"
-        >
-          @for (unidad of unidades; track unidad) {
-            <option [ngValue]="unidad">{{ unidadLabels[unidad] }}</option>
-          }
-        </select>
-        @if (errorServidor('unidad'); as mensaje) {
-          <span id="unidad-error-servidor" class="campo-error" data-error-de="unidad">{{ mensaje }}</span>
-        }
-      </div>
     </fieldset>
 
-    <fieldset class="seccion">
+    <fieldset class="seccion precio">
       <legend>Precio</legend>
       <!-- H07: el Vendedor no ve moneda, costo ni margen. -->
       @if (auth.esDueno()) {
@@ -247,7 +247,28 @@
             <span id="margenPorcentaje-error-servidor" class="campo-error" data-error-de="margenPorcentaje">{{ mensaje }}</span>
           }
         </div>
+      }
 
+      <div class="campo" [class.ancho]="!auth.esDueno()">
+        <label for="alicuotaIva">Alícuota de IVA</label>
+        <select
+          id="alicuotaIva"
+          name="alicuotaIva"
+          formControlName="alicuotaIva"
+          [attr.aria-invalid]="invalido('alicuotaIva') ? 'true' : null"
+          [attr.aria-describedby]="describir('alicuotaIva')"
+          (change)="limpiarErrorDe('alicuotaIva')"
+        >
+          @for (alicuota of alicuotas; track alicuota) {
+            <option [ngValue]="alicuota">{{ alicuotaLabels[alicuota] }}</option>
+          }
+        </select>
+        @if (errorServidor('alicuotaIva'); as mensaje) {
+          <span id="alicuotaIva-error-servidor" class="campo-error" data-error-de="alicuotaIva">{{ mensaje }}</span>
+        }
+      </div>
+
+      @if (auth.esDueno()) {
         <fieldset class="recargos-costo" aria-describedby="recargos-costo-pista">
           <legend>Recargos del costo (antes del margen)</legend>
           <p id="recargos-costo-pista" class="pista">
@@ -317,25 +338,6 @@
           }
         </fieldset>
       }
-
-      <div class="campo">
-        <label for="alicuotaIva">Alícuota de IVA</label>
-        <select
-          id="alicuotaIva"
-          name="alicuotaIva"
-          formControlName="alicuotaIva"
-          [attr.aria-invalid]="invalido('alicuotaIva') ? 'true' : null"
-          [attr.aria-describedby]="describir('alicuotaIva')"
-          (change)="limpiarErrorDe('alicuotaIva')"
-        >
-          @for (alicuota of alicuotas; track alicuota) {
-            <option [ngValue]="alicuota">{{ alicuotaLabels[alicuota] }}</option>
-          }
-        </select>
-        @if (errorServidor('alicuotaIva'); as mensaje) {
-          <span id="alicuotaIva-error-servidor" class="campo-error" data-error-de="alicuotaIva">{{ mensaje }}</span>
-        }
-      </div>
 
       @if (auth.esDueno()) {
         <div class="campo precio-manual">
@@ -495,7 +497,7 @@
       }
     </fieldset>
 
-    <fieldset class="seccion">
+    <fieldset class="seccion clasificacion">
       <legend>Clasificación y códigos</legend>
       <div class="campo">
         <label for="rubro">Rubro</label>
@@ -578,7 +580,7 @@
       </div>
     </fieldset>
 
-    <fieldset class="seccion">
+    <fieldset class="seccion stock">
       <legend>Stock</legend>
       <div class="campo">
         <label for="stockMinimo">Stock mínimo</label>
