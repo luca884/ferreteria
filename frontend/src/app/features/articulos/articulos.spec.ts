@@ -524,13 +524,14 @@ describe('Articulos', () => {
       expect(el().querySelectorAll('tbody button, tbody a')).toHaveLength(0);
     });
 
-    it('sin fila elegida, Editar, Ajustar stock y Dar de baja quedan deshabilitados', async () => {
+    it('sin fila elegida, Editar, Ajustar stock y Dar de baja quedan apagados con aria-disabled', async () => {
       await crearComponente(true);
 
       expect(elegidas()).toHaveLength(0);
-      expect(barra('button.editar')!.disabled).toBe(true);
-      expect(barra('button.ajustar-stock')!.disabled).toBe(true);
-      expect(barra('button.desactivar')!.disabled).toBe(true);
+      for (const boton of [barra('button.editar')!, barra('button.ajustar-stock')!, barra('button.desactivar')!]) {
+        expect(boton.getAttribute('aria-disabled')).toBe('true');
+        expect(boton.hasAttribute('disabled')).toBe(false);
+      }
     });
 
     it('clic en una fila la elige: resaltada, aria-selected, habilita las acciones y no navega', async () => {
@@ -540,9 +541,9 @@ describe('Articulos', () => {
 
       expect(elegidas()).toEqual([filas()[1]]);
       expect(filas()[0].getAttribute('aria-selected')).toBe('false');
-      expect(barra('button.editar')!.disabled).toBe(false);
-      expect(barra('button.ajustar-stock')!.disabled).toBe(false);
-      expect(barra('button.desactivar')!.disabled).toBe(false);
+      expect(barra('button.editar')!.hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('button.ajustar-stock')!.hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('button.desactivar')!.hasAttribute('aria-disabled')).toBe(false);
       expect(navegar).not.toHaveBeenCalledWith(['/articulos', 2], expect.anything());
     });
 
@@ -568,7 +569,8 @@ describe('Articulos', () => {
 
     it('Movimientos de la barra abre los movimientos de stock del elegido, aunque esté de baja (G29)', async () => {
       await crearComponente(true, pagina([articulo(7), articulo(8, { activo: false })]));
-      expect(barra('button.movimientos')!.disabled).toBe(true);
+      expect(barra('button.movimientos')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.movimientos')!.hasAttribute('disabled')).toBe(false);
 
       await elegir(1);
       await clickEn('app-barra-acciones button.movimientos');
@@ -584,7 +586,8 @@ describe('Articulos', () => {
 
     it('Clientes de la barra abre los clientes que compraron el elegido, aunque esté de baja (G29)', async () => {
       await crearComponente(true, pagina([articulo(7), articulo(8, { activo: false })]));
-      expect(barra('button.clientes')!.disabled).toBe(true);
+      expect(barra('button.clientes')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.clientes')!.hasAttribute('disabled')).toBe(false);
 
       await elegir(1);
       await clickEn('app-barra-acciones button.clientes');
@@ -608,6 +611,98 @@ describe('Articulos', () => {
         queryParams: { elegido: 8 },
         queryParamsHandling: 'merge',
       });
+    });
+  });
+
+  describe('los motivos de la barra (S5)', () => {
+    const motivoDeLaPantalla = () => el().querySelector('.motivo-accion');
+
+    it('intentar Editar sin fila elegida explica el motivo y no navega', async () => {
+      await crearComponente(true);
+      expect(motivoDeLaPantalla()).toBeNull();
+
+      await clickEn('app-barra-acciones button.editar');
+
+      const motivo = motivoDeLaPantalla()!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Elegí un artículo de la lista para editarlo.');
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 1], expect.anything());
+    });
+
+    it('intentar Ajustar stock sin fila elegida explica el motivo y no abre el panel', async () => {
+      await crearComponente(true);
+
+      await clickEn('app-barra-acciones button.ajustar-stock');
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe('Elegí un artículo de la lista para ajustar el stock.');
+      expect(el().querySelector('app-dialogo-ajuste-stock')).toBeNull();
+    });
+
+    it('con un artículo de baja, Ajustar stock explica el mismo motivo de la línea y no abre el panel', async () => {
+      await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
+      await elegir(1);
+
+      await clickEn('app-barra-acciones button.ajustar-stock');
+
+      const texto = '«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.';
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe(texto);
+      expect(el().querySelector('#motivo-sin-ajuste')?.textContent?.trim()).toBe(texto);
+      expect(el().querySelector('app-dialogo-ajuste-stock')).toBeNull();
+    });
+
+    it('intentar Movimientos sin fila elegida explica el motivo y no navega', async () => {
+      await crearComponente(true);
+
+      await clickEn('app-barra-acciones button.movimientos');
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe('Elegí un artículo de la lista para ver sus movimientos.');
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 1, 'movimientos']);
+    });
+
+    it('intentar Clientes sin fila elegida explica el motivo y no navega', async () => {
+      await crearComponente(true);
+
+      await clickEn('app-barra-acciones button.clientes');
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe(
+        'Elegí un artículo de la lista para ver qué clientes lo compraron.',
+      );
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 1, 'clientes']);
+    });
+
+    it('intentar Dar de baja sin fila elegida explica el motivo y no abre la confirmación', async () => {
+      await crearComponente(true);
+
+      await clickEn('app-barra-acciones button.desactivar');
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe('Elegí un artículo de la lista para darlo de baja.');
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.desactivar).not.toHaveBeenCalled();
+    });
+
+    it('el Vendedor: intentar Ver ficha sin fila elegida explica el motivo y no navega', async () => {
+      await crearComponente(false);
+
+      await clickEn('app-barra-acciones button.ver-ficha');
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe('Elegí un artículo de la lista para ver su ficha.');
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 1], expect.anything());
+    });
+
+    it('con el motivo a la vista, elegir una fila lo apaga solo y deja la acción usable', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8)]));
+      await clickEn('app-barra-acciones button.movimientos');
+      expect(motivoDeLaPantalla()).not.toBeNull();
+
+      await elegir(1);
+
+      // Nadie volvió a tocar el botón: el motivo se va porque la regla ya no rige.
+      expect(motivoDeLaPantalla()).toBeNull();
+      expect(barra('button.movimientos')!.hasAttribute('aria-disabled')).toBe(false);
+
+      await clickEn('app-barra-acciones button.movimientos');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8, 'movimientos']);
     });
   });
 
@@ -697,7 +792,8 @@ describe('Articulos', () => {
       expect(barra('button.desactivar')).toBeNull();
       expect(barra('button.reactivar')).not.toBeNull();
       const ajustar = barra('button.ajustar-stock')!;
-      expect(ajustar.disabled).toBe(true);
+      expect(ajustar.getAttribute('aria-disabled')).toBe('true');
+      expect(ajustar.hasAttribute('disabled')).toBe(false);
       const motivo = el().querySelector(`#${ajustar.getAttribute('aria-describedby')}`);
       expect(motivo?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
       // Bugs de la guía, S10.4/S12: el aviso va en su propia línea, fuera del paginador, que si no se partía en dos.
@@ -707,7 +803,7 @@ describe('Articulos', () => {
       await elegir(0);
       expect(barra('button.desactivar')).not.toBeNull();
       expect(barra('button.reactivar')).toBeNull();
-      expect(barra('button.ajustar-stock')!.disabled).toBe(false);
+      expect(barra('button.ajustar-stock')!.hasAttribute('aria-disabled')).toBe(false);
     });
 
     it('el Vendedor no ve las acciones del Dueño: en la barra solo tiene «Ver ficha» (bugs de la guía, S20)', async () => {
@@ -734,7 +830,8 @@ describe('Articulos', () => {
     // le muestra la ruta articulos/:id (H07). Ahora elige filas como el Dueño, para abrirla.
     it('el Vendedor elige filas como el Dueño: resaltada, aria-selected y en el orden de Tab', async () => {
       await crearComponente(false, pagina([articulo(7), articulo(8)]));
-      expect(barra('button.ver-ficha')!.disabled).toBe(true);
+      expect(barra('button.ver-ficha')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.ver-ficha')!.hasAttribute('disabled')).toBe(false);
       expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
 
       await elegir(1);
@@ -743,7 +840,7 @@ describe('Articulos', () => {
       expect(filas()[0].getAttribute('aria-selected')).toBe('false');
       expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['-1', '0']);
       expect(el().querySelector('table')!.getAttribute('role')).toBe('grid');
-      expect(barra('button.ver-ficha')!.disabled).toBe(false);
+      expect(barra('button.ver-ficha')!.hasAttribute('aria-disabled')).toBe(false);
       expect(el().querySelector('.elegido')?.textContent?.replace(/\s+/g, ' ')).toContain(
         'Elegido: Artículo 8 · Enter abre la ficha',
       );
