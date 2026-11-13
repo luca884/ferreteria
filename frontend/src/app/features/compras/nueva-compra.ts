@@ -9,6 +9,7 @@ import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { SelectorArchivo } from '../../shared/selector-archivo';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
@@ -37,6 +38,8 @@ const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la f
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
 /** Lo que valida el backend: hasta 5 recargos del costo por compra. */
 const MAXIMO_RECARGOS = 5;
+/** S5: lo que se explica al intentar agregar un recargo con la lista llena. */
+const MOTIVO_TOPE_RECARGOS = `Ya cargaste el máximo de recargos (${MAXIMO_RECARGOS}).`;
 
 /** Un renglón mientras se carga: la cantidad y el costo son el texto de los campos. */
 interface RenglonEnCarga {
@@ -122,6 +125,17 @@ export class NuevaCompra implements OnInit {
   protected readonly recargos = signal<RecargoEnCarga[]>([]);
   protected readonly errorRecargos = signal<string | null>(null);
   protected readonly maximoRecargos = MAXIMO_RECARGOS;
+  /**
+   * Por qué la acción no se puede usar: null si se puede (S5). Es la misma tabla que apaga el botón con `aria-disabled`
+   * y la que se explica al intentar.
+   */
+  protected readonly motivos = computed<Motivos<'recargo'>>(() => ({
+    recargo: this.recargos().length >= MAXIMO_RECARGOS ? MOTIVO_TOPE_RECARGOS : null,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly leyendo = signal(false);
   /** El PDF elegido, para que el selector diga cuál se leyó. */
@@ -361,7 +375,9 @@ export class NuevaCompra implements OnInit {
   }
 
   protected agregarRecargo(): void {
-    if (this.recargos().length >= MAXIMO_RECARGOS) return;
+    // S5: con la lista llena el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('recargo')) return;
+    this.motivo.limpiar();
     this.recargos.update((lista) => [...lista, { nombre: '', porcentaje: '' }]);
     this.editoRecargos();
   }

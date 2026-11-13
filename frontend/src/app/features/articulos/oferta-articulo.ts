@@ -6,10 +6,14 @@ import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Articulo, TIPOS_OFERTA, TIPO_OFERTA_LABELS, TipoOferta, precioDeOferta } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 
 type Campo = 'tipo' | 'valor' | 'hasta';
+
+/** S5: lo que se explica al intentar guardar la oferta sin un valor mayor a 0. */
+const MOTIVO_SIN_VALOR = 'Completá el porcentaje o el precio de oferta.';
 
 /** Hoy en Buenos Aires como AAAA-MM-DD (la oferta vale hasta ese día inclusive, hora argentina). */
 function hoyEnArgentina(): string {
@@ -75,10 +79,23 @@ export class OfertaArticulo {
     return 'La oferta no baja el precio normal de hoy, así que no se aplica.';
   });
 
-  protected readonly puedeGuardar = computed(() => {
+  /** El valor escrito no sirve como oferta: falta o no es mayor a 0 (la parte de la regla que no es transitoria). */
+  private readonly sinValorValido = computed(() => {
     const valor = this.valores().valor;
-    return !this.guardando() && valor !== null && valor !== undefined && valor > 0;
+    return valor === null || valor === undefined || !(valor > 0);
   });
+
+  /**
+   * Por qué la acción no se puede usar: null si se puede (S5). Es la misma tabla que apaga el botón con `aria-disabled`
+   * y la que se explica al intentar, así que la regla y su texto no se desalinean.
+   */
+  protected readonly motivos = computed<Motivos<'guardar'>>(() => ({
+    guardar: this.sinValorValido() ? MOTIVO_SIN_VALOR : null,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   constructor() {
     // Arranca con la oferta guardada (o vacío) y se vuelve a cargar cada vez que el servidor devuelve el artículo.
@@ -95,7 +112,11 @@ export class OfertaArticulo {
   }
 
   protected guardar(): void {
-    if (!this.puedeGuardar()) return;
+    // S5: sin un valor mayor a 0 el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('guardar')) return;
+    // Un envío por vez: el `disabled` transitorio llega recién en el próximo render.
+    if (this.guardando()) return;
+    this.motivo.limpiar();
     const { tipo, valor, hasta } = this.form.getRawValue();
     const version = this.articulo().version;
     this.enviar(

@@ -7,6 +7,10 @@
     }
 
     @if (editable()) {
+      @if (motivo.visible(); as texto) {
+        <p class="motivo-accion" role="status">{{ texto }}</p>
+      }
+
       <form class="campos-oferta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
         <label for="oferta-tipo">
           Tipo
@@ -72,7 +76,7 @@
         </p>
 
         <div class="acciones-oferta">
-          <button type="submit" [disabled]="!puedeGuardar()">
+          <button type="submit" [attr.aria-disabled]="ariaDe(motivos().guardar)" [disabled]="guardando()">
             {{ guardando() ? 'Guardando…' : 'Guardar oferta' }}
           </button>
           @if (oferta()) {

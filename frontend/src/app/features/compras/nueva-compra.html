@@ -3,6 +3,10 @@
   <a routerLink="/compras" class="btn accion-barra">Ver compras</a>
 </app-barra-acciones>
 
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
+
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede registrar compras.</p>
 } @else {
@@ -276,7 +280,12 @@
     @if (errorRecargos(); as mensaje) {
       <span class="campo-error" role="alert">{{ mensaje }}</span>
     }
-    <button type="button" class="secundario chico" [disabled]="recargos().length >= maximoRecargos" (click)="agregarRecargo()">
+    <button
+      type="button"
+      class="secundario chico"
+      [attr.aria-disabled]="ariaDe(motivos().recargo)"
+      (click)="agregarRecargo()"
+    >
       Agregar recargo
     </button>
   </section>
