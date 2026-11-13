@@ -35,19 +35,18 @@ export const ariaDe = (motivo: string | null | undefined): 'true' | null => (mot
  * usado: el motivo se muestra mientras sea cierto, no mientras dure el reloj.
  */
 export class MotivoDeAccion<A extends string = string> {
-  private readonly actual = signal<{ accion: A; texto: string } | null>(null);
+  private readonly actual = signal<A | null>(null);
   private readonly motivos: () => Motivos<A>;
   private reloj?: ReturnType<typeof setTimeout>;
 
-  /** El texto a la vista, o null. Se apaga solo si la acción que lo generó ya se puede usar. */
+  /** El texto a la vista, o null. Sale de la tabla, no de lo guardado al intentar: si la acción sigue bloqueada pero por otro motivo, se ve el motivo nuevo. */
   readonly visible: Signal<string | null>;
 
   constructor(motivos: () => Motivos<A>) {
     this.motivos = motivos;
     this.visible = computed(() => {
-      const actual = this.actual();
-      if (actual === null) return null;
-      return (this.motivos()[actual.accion] ?? null) === null ? null : actual.texto;
+      const accion = this.actual();
+      return accion === null ? null : (this.motivos()[accion] ?? null);
     });
     // El reloj puede estar pendiente al cerrar la pantalla: se cancela con el componente (S4).
     inject(DestroyRef).onDestroy(() => clearTimeout(this.reloj));
@@ -55,9 +54,8 @@ export class MotivoDeAccion<A extends string = string> {
 
   /** Muestra el motivo de `accion` y devuelve true (la acción no sigue). Sin motivo devuelve false y no toca lo que se ve. */
   mostrar(accion: A): boolean {
-    const texto = this.motivos()[accion] ?? null;
-    if (texto === null) return false;
-    this.actual.set({ accion, texto });
+    if ((this.motivos()[accion] ?? null) === null) return false;
+    this.actual.set(accion);
     clearTimeout(this.reloj);
     this.reloj = setTimeout(() => this.actual.set(null), MOTIVO_A_LA_VISTA_MS);
     return true;

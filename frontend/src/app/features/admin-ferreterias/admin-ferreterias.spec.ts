@@ -968,6 +968,22 @@ describe('AdminFerreterias', () => {
       expect(el().querySelector('#titulo-reset')).toBeNull();
     });
 
+    it('al elegir una ferretería sin Dueño el motivo pasa de «sin elegir» al de «sin Dueño» (S5)', async () => {
+      await crear();
+      barra('button.resetear').click();
+      await refrescar();
+      expect(el().querySelector('.motivo-accion')!.textContent?.trim()).toBe(
+        'Elegí una ferretería de la lista para resetear la contraseña del Dueño.',
+      );
+
+      await elegir(1);
+
+      // Sigue bloqueada, pero por otro motivo: el texto tiene que ser el nuevo, no el de antes.
+      expect(el().querySelector('.motivo-accion')!.textContent?.trim()).toBe(
+        'Esta ferretería todavía no tiene Dueño. Asignale uno primero.',
+      );
+    });
+
     it('abre el formulario sin pedir la contraseña actual', async () => {
       await crear();
 

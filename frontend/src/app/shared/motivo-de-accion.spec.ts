@@ -73,6 +73,18 @@ describe('MotivoDeAccion', () => {
     expect(motivo.visible()).toBeNull();
   });
 
+  it('cuando la misma acción pasa a estar bloqueada por otro motivo, se ve el motivo nuevo', () => {
+    type A = 'resetear';
+    let tabla: Motivos<A> = { resetear: 'Elegí una ferretería de la lista para resetear la contraseña del Dueño.' };
+    const motivo = TestBed.runInInjectionContext(() => new MotivoDeAccion<A>(() => tabla));
+    motivo.mostrar('resetear');
+
+    // El usuario elige una ferretería sin Dueño: sigue bloqueada, pero por otro motivo.
+    tabla = { resetear: 'Esta ferretería todavía no tiene Dueño. Asignale uno primero.' };
+
+    expect(motivo.visible()).toBe('Esta ferretería todavía no tiene Dueño. Asignale uno primero.');
+  });
+
   it('limpiar lo saca antes de que se vaya solo', () => {
     vi.useFakeTimers();
     const { motivo } = crear({ editar: 'Elegí un rubro de la lista para editarlo.' });
