@@ -173,9 +173,8 @@ export class Articulos implements OnInit {
 
   protected pedirBaja(): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('baja')) return;
     const articulo = this.filas.elegido();
-    if (!articulo) return;
+    if (this.motivo.mostrar('baja') || articulo === null) return;
     this.aDarDeBaja.set(articulo);
   }
 
@@ -211,9 +210,8 @@ export class Articulos implements OnInit {
   protected verMovimientos(): void {
     if (!this.auth.esDueno()) return;
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('movimientos')) return;
     const articulo = this.filas.elegido();
-    if (!articulo) return;
+    if (this.motivo.mostrar('movimientos') || articulo === null) return;
     void this.router.navigate(['/articulos', articulo.id, 'movimientos']);
   }
 
@@ -221,9 +219,8 @@ export class Articulos implements OnInit {
   protected verClientes(): void {
     if (!this.auth.esDueno()) return;
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('clientes')) return;
     const articulo = this.filas.elegido();
-    if (!articulo) return;
+    if (this.motivo.mostrar('clientes') || articulo === null) return;
     void this.router.navigate(['/articulos', articulo.id, 'clientes']);
   }
 
@@ -250,9 +247,8 @@ export class Articulos implements OnInit {
   protected ajustarStock(): void {
     // S5: sin fila elegida, o con un artículo dado de baja, el botón avisa el motivo en vez de quedar apagado sin
     // explicación (el mismo texto que la línea `#motivo-sin-ajuste`).
-    if (this.motivo.mostrar('ajuste')) return;
     const articulo = this.filas.elegido();
-    if (!articulo) return;
+    if (this.motivo.mostrar('ajuste') || articulo === null) return;
     this.limpiarMensajes();
     this.aAjustar.set(articulo);
   }
