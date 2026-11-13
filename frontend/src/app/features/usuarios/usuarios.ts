@@ -287,9 +287,8 @@ export class Usuarios implements OnInit {
 
   protected abrirReset(): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('reset')) return;
     const usuario = this.filas.elegido();
-    if (!usuario) return;
+    if (this.motivo.mostrar('reset') || usuario === null) return;
     this.aviso.set(null);
     this.limpiarErroresDeReset();
     this.reseteando.set(usuario);

@@ -1,11 +1,11 @@
 <app-barra-acciones>
   <h1>Etiquetas</h1>
   @if (auth.esDueno()) {
-    <button type="button" class="accion-barra vaciar" [disabled]="items().length === 0" (click)="confirmandoVaciar.set(true)">Vaciar</button>
+    <button type="button" class="accion-barra vaciar" [attr.aria-disabled]="ariaDe(motivos().vaciar)" (click)="pedirVaciar()">Vaciar</button>
     <button
       type="button"
       class="accion-barra primario imprimir"
-      [disabled]="etiquetas().length === 0"
+      [attr.aria-disabled]="ariaDe(motivos().imprimir)"
       (click)="imprimir()"
     >
       <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -15,6 +15,10 @@
     </button>
   }
 </app-barra-acciones>
+
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Las etiquetas son solo del Dueño.</p>
@@ -67,7 +71,12 @@
           @if (!a.activo) {
             <span class="baja">Dado de baja</span>
           }
-          <button type="button" class="secundario chico agregar" [disabled]="!a.activo" (click)="agregar(a)">
+          <button
+            type="button"
+            class="secundario chico agregar"
+            [attr.aria-disabled]="ariaDe(a.activo ? null : motivoDadoDeBaja)"
+            (click)="pedirAgregar(a)"
+          >
             Agregar
           </button>
         </li>

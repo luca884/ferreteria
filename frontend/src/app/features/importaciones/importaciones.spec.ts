@@ -2266,7 +2266,7 @@ describe('Importaciones', () => {
       expect(datos.conteosEsperados).toEqual({ ...conteos, suben: 1, sinCambio: 0 });
     });
 
-    it('sin ninguna fila marcada «Confirmar» queda deshabilitado con el aviso «Elegí al menos una fila»', async () => {
+    it('sin ninguna fila marcada «Confirmar» se apaga por regla de negocio con el aviso «Elegí al menos una fila»', async () => {
       await conVistaPrevia();
 
       Array.from(el().querySelectorAll('button'))
@@ -2274,23 +2274,47 @@ describe('Importaciones', () => {
         .click();
       await asentar();
 
-      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+      const boton = q<HTMLButtonElement>('button.confirmar');
+      expect(boton.getAttribute('aria-disabled')).toBe('true');
+      expect(boton.hasAttribute('disabled')).toBe(false);
       expect(q('#sin-filas-elegidas').textContent).toContain('Elegí al menos una fila');
       expect(q('button.confirmar').getAttribute('aria-describedby')).toContain('sin-filas-elegidas');
     });
 
-    it('con al menos una fila marcada vuelve a habilitarse y el aviso desaparece', async () => {
+    // S5: el botón no se apaga con `disabled` (así el clic llega) y la acción explica el motivo al intentarla.
+    it('sin filas, intentar confirmar dice por qué y no aplica nada', async () => {
       await conVistaPrevia();
       Array.from(el().querySelectorAll('button'))
         .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
         .click();
       await asentar();
 
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(texto(motivo)).toBe('Elegí al menos una fila.');
+      expect(servicio.aplicar).not.toHaveBeenCalled();
+    });
+
+    it('con al menos una fila marcada vuelve a habilitarse, el aviso y el motivo desaparecen sin tocar el botón', async () => {
+      await conVistaPrevia();
+      Array.from(el().querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
+        .click();
+      await asentar();
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
       casillaDeLaFila(2).click();
       await asentar();
 
-      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+      expect(q<HTMLButtonElement>('button.confirmar').getAttribute('aria-disabled')).toBeNull();
+      expect(q<HTMLButtonElement>('button.confirmar').hasAttribute('disabled')).toBe(false);
       expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
     });
 
     it('un 400 del backend por no haber filas se muestra', async () => {
@@ -2617,7 +2641,8 @@ describe('Importaciones', () => {
         casillaDeLaFila(4).click();
         await asentar();
 
-        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+        expect(q<HTMLButtonElement>('button.confirmar').getAttribute('aria-disabled')).toBe('true');
+        expect(q<HTMLButtonElement>('button.confirmar').hasAttribute('disabled')).toBe(false);
         // Hay filas elegidas: «Elegí al menos una fila.» contradiría el contador. Lo que falta es la casilla.
         expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
         expect(q('#nuevos-sin-crear').textContent).toContain('Tildala para crearlo.');
@@ -2644,7 +2669,7 @@ describe('Importaciones', () => {
         q<HTMLInputElement>('#crearNuevos').click();
         await asentar();
 
-        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        expect(q<HTMLButtonElement>('button.confirmar').getAttribute('aria-disabled')).toBeNull();
         expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
         servicio.aplicar.mockReturnValue(of(importacion));
         await confirmar();
@@ -2653,7 +2678,7 @@ describe('Importaciones', () => {
         expect(datos.filasElegidas).toEqual([{ hoja: 0, fila: 4 }]);
       });
 
-      it('al volver a apagarlo, vuelve el aviso y Confirmar no hace nada', async () => {
+      it('al volver a apagarlo, vuelve el aviso y Confirmar avisa el motivo sin hacer nada', async () => {
         await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(4).click();
@@ -2664,9 +2689,15 @@ describe('Importaciones', () => {
         q<HTMLInputElement>('#crearNuevos').click();
         await asentar();
 
-        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+        expect(q<HTMLButtonElement>('button.confirmar').getAttribute('aria-disabled')).toBe('true');
         expect(q('#nuevos-sin-crear')).not.toBeNull();
+        q<HTMLButtonElement>('button.confirmar').click();
+        await asentar();
         expect(servicio.aplicar).not.toHaveBeenCalled();
+        // El motivo es el mismo texto que la línea junto a la casilla, sin contradecirla con «Elegí al menos una fila.».
+        expect(texto(el().querySelector('.motivo-accion'))).toBe(
+          'Elegiste 1 artículo nuevo. Con la casilla apagada no se crea. Tildala para crearlo.',
+        );
       });
 
       it('con crear nuevos apagado y nuevas elegidas, avisa junto a la casilla que no se van a crear', async () => {
@@ -2736,7 +2767,7 @@ describe('Importaciones', () => {
         casillaDeLaFila(2).click();
         await asentar();
 
-        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        expect(q<HTMLButtonElement>('button.confirmar').getAttribute('aria-disabled')).toBeNull();
         expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
       });
     });

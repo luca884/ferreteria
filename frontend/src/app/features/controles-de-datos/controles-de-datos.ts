@@ -4,11 +4,15 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { formatearCosto, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { ALICUOTA_IVA_LABELS } from '../articulos/articulo.models';
 import { ArticuloEnControl, CONTROLES, ControlDeDatos } from './controles-de-datos.models';
 import { ControlesDeDatosService } from './controles-de-datos.service';
 
 const MENSAJE_ERROR = 'No se pudo cargar el listado.';
+
+/** S5: lo que se explica al intentar imprimir antes de que llegue el reporte. */
+const MOTIVO_SIN_DATOS = 'El reporte todavía no está listo. Esperá un segundo y probá de nuevo.';
 
 const FORMATO_EMITIDO = new Intl.DateTimeFormat('es-AR', {
   timeZone: 'America/Argentina/Buenos_Aires',
@@ -48,6 +52,14 @@ export class ControlesDeDatos implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly emitido = signal(emitidoEl(new Date()));
   private pedido?: Subscription;
+  /** Por qué Imprimir no se puede usar: null cuando el reporte ya está (S5). */
+  protected readonly motivos = computed<Motivos<'imprimir'>>(() => ({
+    imprimir: this.filas() === null ? MOTIVO_SIN_DATOS : null,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly elegido = computed(() => this.controles.find((c) => c.valor === this.control())!);
@@ -89,6 +101,9 @@ export class ControlesDeDatos implements OnInit {
   }
 
   protected imprimir(): void {
+    // S5: sin reporte el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('imprimir')) return;
+    this.motivo.limpiar();
     window.print();
   }
 }

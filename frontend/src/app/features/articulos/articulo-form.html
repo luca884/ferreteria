@@ -25,6 +25,10 @@
   }
 </app-barra-acciones>
 
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
+
 <p class="ayuda">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
 
 @if (aviso(); as mensaje) {
@@ -62,9 +66,9 @@
           <button
             type="button"
             class="secundario chico ajustar-stock"
-            [disabled]="!actual.activo"
+            [attr.aria-disabled]="ariaDe(motivos().ajustarStock)"
             [attr.aria-describedby]="actual.activo ? null : 'motivo-sin-ajuste'"
-            (click)="ajustandoStock.set(true)"
+            (click)="ajustarStock()"
           >
             Ajustar stock
           </button>
@@ -328,7 +332,7 @@
           <button
             type="button"
             class="secundario chico agregar-recargo-costo"
-            [disabled]="!puedeAgregarRecargo()"
+            [attr.aria-disabled]="ariaDe(motivos().recargo)"
             (click)="agregarRecargo()"
           >
             Agregar
@@ -652,7 +656,8 @@
         <button
           type="button"
           class="guardar-ajustes"
-          [disabled]="!puedeGuardarAjustes()"
+          [attr.aria-disabled]="ariaDe(motivos().ajustes)"
+          [disabled]="guardandoAjustes()"
           [attr.aria-describedby]="
             d.tieneLista ? (motivoSinGuardarAjustes() ? 'motivo-ajustes' : null) : 'motivo-sin-lista'
           "

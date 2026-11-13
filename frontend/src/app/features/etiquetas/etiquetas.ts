@@ -5,6 +5,7 @@ import { EMPTY, Subject, catchError, forkJoin, map, of, switchMap, throwError, t
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { ArticulosService } from '../articulos/articulos.service';
 import { ArticuloMostrador, comoArticuloMostrador } from '../mostrador/mostrador.models';
 import { MostradorService } from '../mostrador/mostrador.service';
@@ -12,6 +13,12 @@ import { Barra, CodigoDeBarras, barras, codigoParaEtiqueta } from './codigo-barr
 import { claveDeEtiquetas, guardarEtiquetas, leerEtiquetas } from './etiquetas.storage';
 
 const MAX_COPIAS = 999;
+
+/** S5: lo que se explica al intentar una acción de la barra que no se puede usar. */
+const MOTIVO_SIN_ARTICULOS = 'No hay artículos en la lista de etiquetas.';
+const MOTIVO_SIN_ETIQUETAS = 'Agregá al menos un artículo para imprimir las etiquetas.';
+/** S5: lo que se explica al intentar sumar un resultado que está dado de baja. */
+const MOTIVO_DADO_DE_BAJA = 'Ese artículo está dado de baja. Reactivalo para agregarlo.';
 
 const ENTERO = new Intl.NumberFormat('es-AR');
 
@@ -74,6 +81,23 @@ export class Etiquetas {
   protected readonly avisoLista = signal<string | null>(null);
   /** «Vaciar» pregunta antes (`app-confirmacion`), como «Vaciar» del Mostrador. */
   protected readonly confirmandoVaciar = signal(false);
+  /** El resultado cuyo «Agregar» se intentó sin poder: el motivo se va cuando ese artículo deja de estar de baja (S5). */
+  private readonly sinAgregar = signal<ArticuloMostrador | null>(null);
+  /**
+   * Por qué cada acción no se puede usar: null en la que sí se puede (S5). Es la misma tabla que apaga el botón con
+   * `aria-disabled` y la que se explica al intentar.
+   */
+  protected readonly motivos = computed<Motivos<'vaciar' | 'imprimir' | 'agregar'>>(() => ({
+    vaciar: this.items().length === 0 ? MOTIVO_SIN_ARTICULOS : null,
+    imprimir: this.etiquetas().length === 0 ? MOTIVO_SIN_ETIQUETAS : null,
+    agregar: this.sinAgregar()?.activo === false ? MOTIVO_DADO_DE_BAJA : null,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
+  /** S5: el motivo de un resultado dado de baja, para el `aria-disabled` de su botón «Agregar». */
+  protected readonly motivoDadoDeBaja = MOTIVO_DADO_DE_BAJA;
   /** Mientras la lista guardada no se cargó, lo guardado no se pisa. */
   private guardable = true;
   private readonly campo = viewChild<ElementRef<HTMLInputElement>>('campo');
@@ -309,9 +333,29 @@ export class Etiquetas {
     this.cambiarItems(() => []);
   }
 
-  /** Imprimir no vacía la lista: si la impresora se traba, se vuelve a imprimir. */
+  /** Imprimir no vacía la lista: si la impresora se traba, se vuelve a imprimir. Sin etiquetas explica el motivo (S5). */
   protected imprimir(): void {
+    if (this.motivo.mostrar('imprimir')) return;
+    this.motivo.limpiar();
     window.print();
+  }
+
+  /** «Vaciar» sin artículos explica el motivo en vez de abrir la confirmación (S5). */
+  protected pedirVaciar(): void {
+    if (this.motivo.mostrar('vaciar')) return;
+    this.motivo.limpiar();
+    this.confirmandoVaciar.set(true);
+  }
+
+  /**
+   * «Agregar» de un resultado: si el artículo está dado de baja explica el motivo en vez de quedar apagado (S5). El Enter
+   * y el código exacto siguen entrando por {@link agregar}, que avisa con el error de siempre.
+   */
+  protected pedirAgregar(articulo: ArticuloMostrador): void {
+    this.sinAgregar.set(articulo.activo ? null : articulo);
+    if (this.motivo.mostrar('agregar')) return;
+    this.motivo.limpiar();
+    this.agregar(articulo);
   }
 }
 

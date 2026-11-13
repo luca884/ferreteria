@@ -129,11 +129,12 @@ describe('Etiquetas', () => {
     localStorage.clear();
   });
 
-  it('el título va en la barra; sin artículos no hay hoja e Imprimir está deshabilitado', async () => {
+  it('el título va en la barra; sin artículos no hay hoja e Imprimir está apagado (S5)', async () => {
     await crear();
 
     expect(texto('app-barra-acciones h1')).toBe('Etiquetas');
-    expect(imprimir().disabled).toBe(true);
+    expect(imprimir().getAttribute('aria-disabled')).toBe('true');
+    expect(imprimir().hasAttribute('disabled')).toBe(false);
     expect(el().querySelector('.etiquetas-imprimible')).toBeNull();
     expect(buscar).not.toHaveBeenCalled();
   });
@@ -196,14 +197,23 @@ describe('Etiquetas', () => {
     }
   });
 
-  it('un artículo dado de baja no se puede sumar', async () => {
+  it('un artículo dado de baja no se puede sumar: lo dice al intentar (S5)', async () => {
     await crear(true, () => of(lista(dadoDeBaja)));
 
     await buscarTexto('viejo');
 
     const boton = el().querySelector<HTMLButtonElement>('.resultados button.agregar')!;
-    expect(boton.disabled).toBe(true);
+    expect(boton.getAttribute('aria-disabled')).toBe('true');
+    expect(boton.hasAttribute('disabled')).toBe(false);
     expect(texto('.resultados li .baja')).toBe('Dado de baja');
+
+    boton.click();
+    await refrescar();
+
+    const motivo = el().querySelector('.motivo-accion')!;
+    expect(motivo.getAttribute('role')).toBe('status');
+    expect(motivo.textContent?.trim()).toBe('Ese artículo está dado de baja. Reactivalo para agregarlo.');
+    expect(filasLista()).toHaveLength(0);
   });
 
   it('un código exacto dado de baja no se suma y avisa', async () => {
@@ -313,7 +323,7 @@ describe('Etiquetas', () => {
     await buscarTexto('TOR-001');
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
 
-    expect(imprimir().disabled).toBe(false);
+    expect(imprimir().getAttribute('aria-disabled')).toBeNull();
     imprimir().click();
 
     expect(print).toHaveBeenCalled();
@@ -449,13 +459,14 @@ describe('Etiquetas', () => {
       ]);
     });
 
-    it('confirmar «Vaciar» saca todo y borra lo guardado; sin artículos está deshabilitado', async () => {
+    it('confirmar «Vaciar» saca todo y borra lo guardado; sin artículos está apagado (S5)', async () => {
       await crear(true, () => of(lista(tornillo, tuerca)));
-      expect(vaciar().disabled).toBe(true);
+      expect(vaciar().getAttribute('aria-disabled')).toBe('true');
+      expect(vaciar().hasAttribute('disabled')).toBe(false);
       await buscarTexto('t');
       await agregarResultado(0);
 
-      expect(vaciar().disabled).toBe(false);
+      expect(vaciar().getAttribute('aria-disabled')).toBeNull();
       vaciar().click();
       await refrescar();
       expect(dialogo()?.querySelector('p')?.textContent?.trim()).toBe('Se saca 1 artículo.');
@@ -466,7 +477,7 @@ describe('Etiquetas', () => {
       expect(filasLista()).toHaveLength(0);
       expect(el().querySelector('.etiquetas-imprimible')).toBeNull();
       expect(localStorage.getItem('etiquetas:1:7')).toBeNull();
-      expect(vaciar().disabled).toBe(true);
+      expect(vaciar().getAttribute('aria-disabled')).toBe('true');
     });
 
     it('Imprimir no vacía la lista', async () => {
@@ -601,6 +612,49 @@ describe('Etiquetas', () => {
       await esperar(250);
       expect(el().querySelector('.error')).toBeNull();
       expect(descripciones()).toEqual(['Tuerca 1/4']);
+    });
+  });
+
+  describe('los botones apagados dicen por qué (S5)', () => {
+    const motivo = () => el().querySelector('.motivo-accion');
+
+    it('«Vaciar» sin artículos avisa al intentar y no abre la confirmación', async () => {
+      await crear(true, () => of(lista(tornillo)));
+
+      vaciar().click();
+      await refrescar();
+
+      expect(motivo()?.getAttribute('role')).toBe('status');
+      expect(texto('.motivo-accion')).toBe('No hay artículos en la lista de etiquetas.');
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+    });
+
+    it('«Imprimir» sin etiquetas avisa al intentar y no abre la impresión', async () => {
+      await crear(true, () => of(lista(tornillo)));
+      const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      imprimir().click();
+      await refrescar();
+
+      expect(motivo()?.getAttribute('role')).toBe('status');
+      expect(texto('.motivo-accion')).toBe('Agregá al menos un artículo para imprimir las etiquetas.');
+      expect(print).not.toHaveBeenCalled();
+    });
+
+    it('con el motivo a la vista, sumar un artículo lo hace desaparecer sin volver a tocar el botón', async () => {
+      await crear(true, () => of(exacto(tornillo)));
+      vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      imprimir().click();
+      await refrescar();
+      expect(texto('.motivo-accion')).toBe('Agregá al menos un artículo para imprimir las etiquetas.');
+
+      // Un código exacto se suma con el Enter del buscador: no se toca el botón.
+      await buscarTexto('4006381333931');
+
+      expect(filasLista()).toHaveLength(1);
+      expect(motivo()).toBeNull();
+      expect(imprimir().getAttribute('aria-disabled')).toBeNull();
     });
   });
 });

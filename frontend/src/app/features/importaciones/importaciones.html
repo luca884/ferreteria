@@ -406,24 +406,20 @@
         </label>
       </div>
       @if (nuevosSinCrear(); as n) {
-        <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">
-          {{
-            n === 1
-              ? 'Elegiste 1 artículo nuevo. Con la casilla apagada no se crea. Tildala para crearlo.'
-              : 'Elegiste ' +
-                (n | number) +
-                ' artículos nuevos. Con la casilla apagada no se crean. Tildala para crearlos.'
-          }}
-        </p>
+        <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">{{ textoNuevosSinCrear(n) }}</p>
       }
       <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
       @if (sinFilasElegidas() && !nuevosSinCrear()) {
-        <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">Elegí al menos una fila.</p>
+        <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">{{ MOTIVO_SIN_FILAS }}</p>
+      }
+      @if (motivo.visible(); as texto) {
+        <p class="motivo-accion" role="status">{{ texto }}</p>
       }
       <button
         type="button"
         class="confirmar primario"
-        [disabled]="aplicando() || sinFilasElegidas()"
+        [disabled]="aplicando()"
+        [attr.aria-disabled]="ariaDe(motivos().confirmar)"
         [attr.aria-describedby]="
           sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null
         "

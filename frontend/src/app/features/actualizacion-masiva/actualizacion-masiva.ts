@@ -23,6 +23,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -43,6 +44,11 @@ import { ActualizacionMasivaService } from './actualizacion-masiva.service';
 const MENSAJE_GENERICO = 'No se pudo completar la operación. Probá de nuevo.';
 const MENSAJE_CONFLICTO =
   'Los artículos cambiaron desde la vista previa. Volvé a generar la vista previa y confirmá de nuevo.';
+
+/** S5: lo que se explica al intentar actualizar con una vista previa que no cambia ningún precio. */
+const MOTIVO_SIN_CAMBIOS = 'Con esta lista no cambia ningún precio. Revisá el porcentaje o la lista elegida.';
+/** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'generar' | 'actualizar';
 
 /** Errores con un motivo que el Dueño puede corregir: se muestra el mensaje del servidor. */
 const ESTADOS_CON_MENSAJE = [400, 403, 404, 409];
@@ -223,6 +229,19 @@ export class ActualizacionMasiva implements OnInit {
     return `Para ver la vista previa, escribí ${nombre}.`;
   });
 
+  /** Por qué cada acción está apagada: null en la que se puede usar (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    const vistaPrevia = this.vistaPrevia();
+    return {
+      generar: this.motivoSinVistaPrevia(),
+      actualizar: vistaPrevia !== null && vistaPrevia.conteos.modificados === 0 ? MOTIVO_SIN_CAMBIOS : null,
+    };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
+
   private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
   private readonly confirmacionEl = viewChild<ElementRef<HTMLElement>>('confirmacionEl');
   private readonly confirmarEl = viewChild<ElementRef<HTMLButtonElement>>('confirmarEl');
@@ -343,8 +362,11 @@ export class ActualizacionMasiva implements OnInit {
   }
 
   protected generarVistaPrevia(): void {
+    // S5: sin lo mínimo para pedirla el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('generar')) return;
     const pedido = this.armarPedido();
     if (pedido === null || this.generando() || this.aplicando()) return;
+    this.motivo.limpiar();
     // Pedir otra vista previa deja sin efecto la anterior y cualquier respuesta que todavía esté en camino.
     this.invalidar();
     const version = this.version;
@@ -373,7 +395,9 @@ export class ActualizacionMasiva implements OnInit {
     const vistaPrevia = this.vistaPrevia();
     const pedido = this.pedidoVigente();
     if (this.aplicando() || vistaPrevia === null || pedido === null) return;
-    if (vistaPrevia.conteos.modificados === 0) return;
+    // S5: sin precios que cambien el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('actualizar')) return;
+    this.motivo.limpiar();
     this.confirmando.set(filtroVacio(pedido) ? 'todo' : 'filtrado');
   }
 

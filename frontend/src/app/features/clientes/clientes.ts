@@ -350,9 +350,8 @@ export class Clientes implements OnInit {
     // Mientras cambia sigue apagado por el disabled transitorio.
     if (this.cambiando()) return;
     // S5: sin fila elegida, o con saldo, el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('alternar')) return;
     const cliente = this.filas.elegido();
-    if (!cliente) return;
+    if (this.motivo.mostrar('alternar') || cliente === null) return;
     if (cliente.activo) this.aDesactivar.set(cliente);
     else this.cambiarActivo(cliente);
   }
@@ -383,9 +382,8 @@ export class Clientes implements OnInit {
   /** Solo el Dueño: la pantalla de cuenta del cliente elegido (pendientes y cobranza). Sin atajo: Enter sigue editando. */
   protected verCuenta(): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
-    if (this.motivo.mostrar('cuenta')) return;
     const cliente = this.filas.elegido();
-    if (!cliente) return;
+    if (this.motivo.mostrar('cuenta') || cliente === null) return;
     void this.router.navigate(['/clientes', cliente.id, 'cuenta']);
   }
 

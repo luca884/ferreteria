@@ -3,6 +3,7 @@ import { Component, DestroyRef, computed, effect, inject, input, output, signal,
 import { Subscription } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../../core/api/api-error';
 import { MontoPipe } from '../../../core/formato/monto';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../../shared/motivo-de-accion';
 import { textoDeSaldo } from './ajuste.models';
 import { fechaCompletaLocal } from './cobranza.models';
 import {
@@ -24,6 +25,13 @@ type Estado = 'cargando' | 'listo' | 'error';
 
 const MENSAJE_CARGA = 'No se pudieron cargar los movimientos.';
 const MENSAJE_IMPRESION = 'No se pudo preparar el extracto para imprimir. Probá de nuevo.';
+/** S5: lo que se explica al intentar anular con el cliente desactivado (el mismo texto del aviso de la tabla). */
+const MOTIVO_CLIENTE_INACTIVO = 'Reactivá el cliente para anular';
+/** S5: lo que se explica al intentar imprimir sin un extracto o sin movimientos en el período. */
+const MOTIVO_SIN_EXTRACTO = 'Todavía no hay extracto para imprimir.';
+const MOTIVO_SIN_MOVIMIENTOS = 'No hay movimientos en el período elegido.';
+/** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'anular' | 'imprimir';
 
 /**
  * Los movimientos de la cuenta de un cliente (extracto, solo el Dueño): filtros por fecha y tipo, encabezado del período,
@@ -73,6 +81,24 @@ export class MovimientosCuenta {
 
   /** Hay algún cobro que se podría anular: solo entonces importa avisar que el cliente está desactivado. */
   protected readonly hayAnulables = computed(() => this.extracto()?.movimientos.items.some(puedeAnular) ?? false);
+  /** Por qué cada acción está apagada por una regla de negocio: null en la que se puede usar (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    const extracto = this.extracto();
+    return {
+      anular: this.clienteActivo() ? null : MOTIVO_CLIENTE_INACTIVO,
+      imprimir: extracto === null
+        ? MOTIVO_SIN_EXTRACTO
+        : extracto.movimientos.items.length === 0
+          ? MOTIVO_SIN_MOVIMIENTOS
+          : null,
+    };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
+  /** El texto del aviso de cliente desactivado, uno solo para la línea y para el motivo de «Anular». */
+  protected readonly MOTIVO_CLIENTE_INACTIVO = MOTIVO_CLIENTE_INACTIVO;
 
   /** Lo último que se pidió (para «Reintentar» y para recargar la misma página con el mismo filtro). */
   private pedido: { filtro: FiltroExtracto; page: number } = { filtro: FILTRO_VACIO, page: 0 };
@@ -164,12 +190,22 @@ export class MovimientosCuenta {
     this.cargar(this.pedido.filtro, page);
   }
 
+  /** «Anular» de un renglón: con el cliente desactivado avisa el motivo en vez de quedar apagado sin explicación (S5). */
+  protected anularLinea(linea: LineaExtracto): void {
+    if (this.motivo.mostrar('anular')) return;
+    this.motivo.limpiar();
+    this.anular.emit(linea);
+  }
+
   /**
    * Imprimir: pide el período con el filtro APLICADO (el de la tabla) completo y en un solo pedido, y abre el extracto
    * imprimible. No usa `disabled` mientras espera: un botón deshabilitado pierde el foco y el diálogo no podría devolvérselo.
    */
   protected imprimir(): void {
+    // S5: sin extracto o sin movimientos el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('imprimir')) return;
     if (this.imprimiendo()) return;
+    this.motivo.limpiar();
     this.imprimiendo.set(true);
     this.errorImpresion.set(null);
     this.servicio.paraImprimir(this.clienteId(), this.pedido.filtro).subscribe({

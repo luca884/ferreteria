@@ -19,6 +19,7 @@ import { map } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -78,6 +79,10 @@ const AVISOS_DE_LECTURA = [
 const SEGUNDOS_POR_AVISO = 3;
 /** Las advertencias se muestran de a tandas; «Ver más» suma otra. */
 const ADVERTENCIAS_POR_TANDA = 100;
+/** S5: lo que se explica al intentar confirmar sin ninguna fila para aplicar (el mismo texto de la pantalla). */
+const MOTIVO_SIN_FILAS = 'Elegí al menos una fila.';
+/** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'confirmar';
 
 /**
  * Medidas del visor al 100 %. Son múltiplos de 10 / 3 para que, con el zoom en pasos de 10 %, la altura
@@ -322,6 +327,19 @@ export class Importaciones implements OnInit {
   protected readonly nuevosSinCrear = computed(() =>
     this.crearNuevos() ? 0 : nuevasElegidas(this.seleccion(), this.filasDeVista()),
   );
+  /** Por qué «Confirmar importación» no se puede usar: null cuando hay algo para aplicar (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    if (!this.sinFilasElegidas()) return { confirmar: null };
+    // Con nuevas elegidas y la casilla apagada, lo que falta es la casilla: el motivo es el mismo aviso de la pantalla.
+    const nuevas = this.nuevosSinCrear();
+    return { confirmar: nuevas > 0 ? this.textoNuevosSinCrear(nuevas) : MOTIVO_SIN_FILAS };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
+  /** El texto de «Elegí al menos una fila.», uno solo para la línea y para el motivo de confirmar. */
+  protected readonly MOTIVO_SIN_FILAS = MOTIVO_SIN_FILAS;
   /** Las nuevas que quedaron sin crear en la importación aplicada: el resultado lo avisa. */
   protected readonly nuevosNoCreados = signal(0);
   protected readonly advertenciasVisibles = computed(
@@ -582,6 +600,15 @@ export class Importaciones implements OnInit {
     this.crearNuevos.set(crear);
   }
 
+  /**
+   * El aviso de las nuevas elegidas que no se van a crear: el mismo texto junto a la casilla y en el motivo de
+   * «Confirmar importación», para que el botón no diga algo distinto de lo que se ve en la pantalla.
+   */
+  protected textoNuevosSinCrear(cantidad: number): string {
+    if (cantidad === 1) return 'Elegiste 1 artículo nuevo. Con la casilla apagada no se crea. Tildala para crearlo.';
+    return `Elegiste ${new Intl.NumberFormat('es-AR').format(cantidad)} artículos nuevos. Con la casilla apagada no se crean. Tildala para crearlos.`;
+  }
+
   protected cambiarSeleccion(seleccion: Seleccion): void {
     this.seleccion.set(seleccion);
   }
@@ -607,12 +634,14 @@ export class Importaciones implements OnInit {
   }
 
   protected confirmar(): void {
+    // S5: sin filas para aplicar el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('confirmar')) return;
     const archivo = this.archivo();
     const vistaPrevia = this.vistaPrevia();
     const conteosEsperados = this.conteosElegidos();
     const datos = this.armarDatos();
     if (archivo === null || vistaPrevia === null || conteosEsperados === null || datos === null) return;
-    if (this.sinFilasElegidas()) return;
+    this.motivo.limpiar();
     const filas = filasElegidas(this.seleccion(), this.filasDeVista());
     const antes = { seleccion: this.seleccion(), filas: this.filasDeVista() };
     const nuevosSinCrear = this.nuevosSinCrear();

@@ -147,11 +147,40 @@ describe('OfertaArticulo', () => {
     expect(texto('.precio-resultante')).toBe('Con ese valor el precio no baja.');
   });
 
-  it('sin valor no se puede guardar', async () => {
+  it('sin valor no se puede guardar: el botón queda apagado con aria-disabled (S5)', async () => {
     await crear(articulo());
 
-    expect(boton('Guardar oferta')!.disabled).toBe(true);
+    const guardar = boton('Guardar oferta')!;
+    expect(guardar.getAttribute('aria-disabled')).toBe('true');
+    expect(guardar.hasAttribute('disabled')).toBe(false);
     expect(boton('Sacar oferta')).toBeUndefined();
+  });
+
+  it('con el botón apagado, el clic trae el motivo a la vista y no guarda (S5)', async () => {
+    await crear(articulo());
+
+    boton('Guardar oferta')!.click();
+    await refrescar();
+
+    // Por su contenedor: la ficha de artículo también puede tener un motivo a la vista.
+    const motivo = el().querySelector('.oferta-articulo .motivo-accion');
+    expect(motivo?.getAttribute('role')).toBe('status');
+    expect(motivo?.textContent?.trim()).toBe('Completá el porcentaje o el precio de oferta.');
+    expect(servicio.ponerOferta).not.toHaveBeenCalled();
+  });
+
+  it('con el motivo a la vista, completar el valor lo hace desaparecer sin volver a tocar el botón (S5)', async () => {
+    await crear(articulo());
+
+    boton('Guardar oferta')!.click();
+    await refrescar();
+    expect(el().querySelector('.oferta-articulo .motivo-accion')).not.toBeNull();
+
+    await escribir('#oferta-valor', '800');
+
+    expect(el().querySelector('.oferta-articulo .motivo-accion')).toBeNull();
+    expect(boton('Guardar oferta')!.getAttribute('aria-disabled')).toBeNull();
+    expect(boton('Guardar oferta')!.hasAttribute('disabled')).toBe(false);
   });
 
   it('con una oferta vigente muestra el resumen, arranca con sus datos y la puede sacar', async () => {

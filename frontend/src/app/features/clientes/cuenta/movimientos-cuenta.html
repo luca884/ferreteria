@@ -1,6 +1,10 @@
 <section class="panel movimientos-seccion" aria-labelledby="movimientos-titulo">
   <h2 id="movimientos-titulo">Movimientos</h2>
 
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
+
   <form class="filtros" (submit)="filtrar($event)" novalidate>
     <label>
       Desde
@@ -31,8 +35,8 @@
     <button
       type="button"
       class="secundario imprimir-extracto"
-      [disabled]="estado() !== 'listo' || !extracto()?.movimientos?.items?.length"
-      [attr.aria-disabled]="imprimiendo() ? 'true' : null"
+      [disabled]="estado() !== 'listo'"
+      [attr.aria-disabled]="imprimiendo() ? 'true' : ariaDe(motivos().imprimir)"
       (click)="imprimir()"
     >
       Imprimir
@@ -84,7 +88,7 @@
           <p class="ayuda estado-vacio">Sin movimientos para ese filtro</p>
         } @else {
           @if (!clienteActivo() && hayAnulables()) {
-            <p id="aviso-inactivo" class="ayuda aviso-inactivo">Reactivá el cliente para anular</p>
+            <p id="aviso-inactivo" class="ayuda aviso-inactivo">{{ MOTIVO_CLIENTE_INACTIVO }}</p>
           }
           @if (e.movimientos.totalPages > 1) {
             <nav class="paginas" aria-label="Páginas de movimientos">
@@ -142,10 +146,10 @@
                         <button
                           type="button"
                           class="peligro chico anular"
-                          [disabled]="!clienteActivo()"
+                          [attr.aria-disabled]="ariaDe(motivos().anular)"
                           [attr.aria-describedby]="!clienteActivo() ? 'aviso-inactivo' : null"
                           [attr.aria-label]="'Anular ' + linea.referencia"
-                          (click)="anular.emit(linea)"
+                          (click)="anularLinea(linea)"
                         >
                           Anular
                         </button>
