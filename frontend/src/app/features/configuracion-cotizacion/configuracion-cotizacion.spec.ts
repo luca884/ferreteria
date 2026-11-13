@@ -290,6 +290,22 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
       expect(el().querySelector('.vista-previa')).toBeNull();
     });
+    it('«Ver vista previa» del aviso del dólar también avisa el motivo al intentarlo (S5)', async () => {
+      obtener = vi.fn(() => of({ ...conDolarAConfirmar, activa: false }));
+      await crear();
+      const boton = q<HTMLButtonElement>('button.confirmar-dolar');
+
+      expect(boton.getAttribute('aria-disabled')).toBe('true');
+      expect(boton.hasAttribute('disabled')).toBe(false);
+
+      boton.click();
+      await refrescar();
+
+      expect(vistaPrevia).not.toHaveBeenCalled();
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(texto(motivo)).toBe('La cotización está apagada. Activala y guardá para poder recalcular.');
+    });
   });
 
   describe('vista previa de «Recalcular ahora»', () => {
@@ -576,38 +592,53 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(texto(q('.recalculo [role="alert"]'))).toBe('La cotización está apagada');
     });
 
-    it('con la cotización apagada el botón está deshabilitado y se explica por qué', async () => {
+    it('con la cotización apagada el botón avisa el motivo al intentarlo y no se usa', async () => {
       obtener = vi.fn(() => of({ ...configuracion, activa: false }));
       await crear();
 
-      expect(botonRecalcular().disabled).toBe(true);
+      expect(botonRecalcular().getAttribute('aria-disabled')).toBe('true');
+      expect(botonRecalcular().hasAttribute('disabled')).toBe(false);
       const motivo = q('#motivo-sin-recalculo');
       expect(texto(motivo)).toBe('La cotización está apagada. Activala y guardá para poder recalcular.');
       expect(botonRecalcular().getAttribute('aria-describedby')).toContain('motivo-sin-recalculo');
       expect(texto(q('.recalculo-texto'))).toBe('Con la cotización apagada, los precios en dólares no se recalculan solos.');
 
       botonRecalcular().click();
+      await refrescar();
+
+      expect(vistaPrevia).not.toHaveBeenCalled();
       expect(recalcular).not.toHaveBeenCalled();
+      const aviso = el().querySelector('.motivo-accion')!;
+      expect(aviso.getAttribute('role')).toBe('status');
+      expect(texto(aviso)).toBe('La cotización está apagada. Activala y guardá para poder recalcular.');
     });
 
     it('con la cotización activada no hay motivo y el botón se puede usar', async () => {
       await crear();
 
       expect(botonRecalcular().disabled).toBe(false);
+      expect(botonRecalcular().getAttribute('aria-disabled')).toBeNull();
       expect(el().querySelector('#motivo-sin-recalculo')).toBeNull();
     });
 
-    it('con cambios sin guardar el botón espera: se pide guardar antes, porque recalcula con lo guardado', async () => {
+    it('con cambios sin guardar el botón espera y el motivo se va al guardar, sin volver a tocarlo', async () => {
       await crear();
       await marcar('input[type="checkbox"][value="USD:blue"]', true);
 
-      expect(botonRecalcular().disabled).toBe(true);
+      expect(botonRecalcular().getAttribute('aria-disabled')).toBe('true');
+      expect(botonRecalcular().hasAttribute('disabled')).toBe(false);
       expect(texto(q('#motivo-sin-recalculo'))).toBe('Guardá los cambios antes de recalcular.');
+
+      botonRecalcular().click();
+      await refrescar();
+      expect(vistaPrevia).not.toHaveBeenCalled();
+      expect(texto(el().querySelector('.motivo-accion'))).toBe('Guardá los cambios antes de recalcular.');
 
       await enviarFormulario();
 
-      expect(botonRecalcular().disabled).toBe(false);
+      expect(botonRecalcular().getAttribute('aria-disabled')).toBeNull();
       expect(el().querySelector('#motivo-sin-recalculo')).toBeNull();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
     });
   });
 });

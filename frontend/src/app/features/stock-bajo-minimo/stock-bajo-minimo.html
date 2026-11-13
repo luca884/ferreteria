@@ -1,7 +1,12 @@
 <app-barra-acciones>
   <h1>Stock bajo mínimo</h1>
   @if (auth.esDueno()) {
-    <button type="button" class="accion-barra primario imprimir" [disabled]="filas() === null" (click)="imprimir()">
+    <button
+      type="button"
+      class="accion-barra primario imprimir"
+      [attr.aria-disabled]="ariaDe(motivos().imprimir)"
+      (click)="imprimir()"
+    >
       <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M4 6V1.5h8V6M4 12H2V6h12v6h-2M4 9.5h8v5H4z" />
       </svg>
@@ -9,6 +14,10 @@
     </button>
   }
 </app-barra-acciones>
+
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">El listado de stock bajo mínimo es solo del Dueño.</p>

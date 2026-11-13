@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { formatearCosto } from '../../core/formato/monto';
@@ -155,10 +155,41 @@ describe('StockBajoMinimo', () => {
   it('Imprimir de la barra imprime el listado', async () => {
     await crear();
     const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const boton = el().querySelector<HTMLButtonElement>('app-barra-acciones button.imprimir')!;
 
-    el().querySelector<HTMLButtonElement>('app-barra-acciones button.imprimir')!.click();
+    expect(boton.getAttribute('aria-disabled')).toBeNull();
+    boton.click();
 
     expect(imprimir).toHaveBeenCalledOnce();
+  });
+
+  // S5: el botón no se apaga con `disabled` (así el clic llega) y la acción explica el motivo al intentarla.
+  it('con el listado todavía sin cargar, intentar Imprimir dice por qué y no imprime', async () => {
+    const respuesta = new Subject<ArticuloBajoMinimo[]>();
+    const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    await crear(true, vi.fn(() => respuesta));
+    const boton = () => el().querySelector<HTMLButtonElement>('app-barra-acciones button.imprimir')!;
+
+    expect(boton().getAttribute('aria-disabled')).toBe('true');
+    expect(boton().hasAttribute('disabled')).toBe(false);
+
+    boton().click();
+    await refrescar();
+
+    const motivo = el().querySelector('.motivo-accion')!;
+    expect(motivo.getAttribute('role')).toBe('status');
+    expect(motivo.textContent?.trim()).toBe(
+      'El listado todavía no está listo. Esperá un segundo y probá de nuevo.',
+    );
+    expect(imprimir).not.toHaveBeenCalled();
+
+    // Llega el listado: el motivo se va solo, sin volver a tocar el botón.
+    respuesta.next(filas);
+    respuesta.complete();
+    await refrescar();
+
+    expect(el().querySelector('.motivo-accion')).toBeNull();
+    expect(boton().getAttribute('aria-disabled')).toBeNull();
   });
 
   it('sin artículos bajo el mínimo lo dice', async () => {
@@ -176,7 +207,9 @@ describe('StockBajoMinimo', () => {
     await crear(true, respuesta);
 
     expect(texto('[role="alert"] span')).toBe('No se pudo cargar el listado.');
-    expect(el().querySelector<HTMLButtonElement>('button.imprimir')!.disabled).toBe(true);
+    const boton = el().querySelector<HTMLButtonElement>('button.imprimir')!;
+    expect(boton.getAttribute('aria-disabled')).toBe('true');
+    expect(boton.hasAttribute('disabled')).toBe(false);
     el().querySelector<HTMLButtonElement>('button.reintentar')!.click();
     await refrescar();
 

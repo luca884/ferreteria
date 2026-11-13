@@ -5,6 +5,9 @@
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar la facturación.</p>
 } @else {
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
   <p class="ayuda">
     Para facturar con ARCA hace falta un certificado digital a nombre de la ferretería. El sistema genera la clave y el
     pedido de certificado; la clave queda guardada cifrada y nunca sale del sistema. Vos llevás el pedido a ARCA y subís
@@ -299,15 +302,16 @@
               type="button"
               class="primario subir-certificado"
               [attr.aria-describedby]="hayPedido() ? 'certificado-pista' : 'certificado-motivo certificado-pista'"
-              [disabled]="ocupado() || !hayPedido()"
-              (click)="entrada.click()"
+              [disabled]="ocupado()"
+              [attr.aria-disabled]="ariaDe(motivos().subirCertificado)"
+              (click)="pedirCertificado(entrada)"
             >
               Subir certificado (.crt)
             </button>
           </div>
           <input #entrada id="certificado" type="file" hidden accept=".crt,.pem,.cer" (change)="alElegirCertificado(entrada)" />
           @if (!hayPedido()) {
-            <span id="certificado-motivo" class="pista motivo">Primero generá el pedido de certificado.</span>
+            <span id="certificado-motivo" class="pista motivo">{{ MOTIVO_SIN_PEDIDO }}</span>
           }
           <span id="certificado-pista" class="pista">
             El archivo que bajaste de ARCA (.crt, .pem o .cer), de hasta 16 KB.
@@ -323,7 +327,8 @@
               type="button"
               class="secundario firmar-simulador"
               [attr.aria-describedby]="hayPedido() ? null : 'certificado-motivo'"
-              [disabled]="ocupado() || !hayPedido()"
+              [disabled]="ocupado()"
+              [attr.aria-disabled]="ariaDe(motivos().firmarSimulador)"
               (click)="firmarConSimulador()"
             >
               Firmar con el simulador

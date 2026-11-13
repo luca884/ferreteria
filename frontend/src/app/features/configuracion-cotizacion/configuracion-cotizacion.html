@@ -43,6 +43,9 @@
 
       <section class="recalculo panel" aria-labelledby="recalculo-titulo">
         <h2 id="recalculo-titulo">Recalcular precios</h2>
+        @if (motivo.visible(); as texto) {
+          <p class="motivo-accion" role="status">{{ texto }}</p>
+        }
         <p class="vigente">{{ textoVigente(actual) }}</p>
         @if (actual.aConfirmar; as aConfirmar) {
           <div class="alerta advertencia dolar-a-confirmar" role="alert">
@@ -50,7 +53,8 @@
             <button
               type="button"
               class="confirmar-dolar"
-              [disabled]="ocupado() || motivoSinRecalculo() !== null"
+              [disabled]="ocupado()"
+              [attr.aria-disabled]="ariaDe(motivos().recalcular)"
               (click)="pedirVistaPrevia()"
             >
               Ver vista previa
@@ -62,7 +66,8 @@
           <button
             type="button"
             class="primario recalcular"
-            [disabled]="ocupado() || motivoSinRecalculo() !== null"
+            [disabled]="ocupado()"
+            [attr.aria-disabled]="ariaDe(motivos().recalcular)"
             [attr.aria-describedby]="motivoSinRecalculo() ? 'motivo-sin-recalculo' : null"
             (click)="pedirVistaPrevia()"
           >

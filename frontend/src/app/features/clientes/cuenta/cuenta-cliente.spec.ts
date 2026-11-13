@@ -316,18 +316,19 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(extractos.extracto).not.toHaveBeenCalled();
     });
 
-    it('le pasa `clienteActivo` del cliente cargado: con el cliente desactivado «Anular» queda deshabilitado', async () => {
+    it('le pasa `clienteActivo` del cliente cargado: con el cliente desactivado «Anular» explica que hay que reactivarlo (S5)', async () => {
       await crear({ cliente: { ...ana, activo: false }, extracto: () => of(extractoBase([lineaCobro])) });
 
       const anular = movimientos()!.querySelector<HTMLButtonElement>('button.anular')!;
-      expect(anular.disabled).toBe(true);
+      expect(anular.getAttribute('aria-disabled')).toBe('true');
+      expect(anular.hasAttribute('disabled')).toBe(false);
       expect(limpio(movimientos()!.querySelector('.aviso-inactivo')?.textContent)).toBe('Reactivá el cliente para anular');
     });
 
     it('con el cliente activo «Anular» está habilitado', async () => {
       await crear({ extracto: () => of(extractoBase([lineaCobro])) });
 
-      expect(movimientos()!.querySelector<HTMLButtonElement>('button.anular')!.disabled).toBe(false);
+      expect(movimientos()!.querySelector<HTMLButtonElement>('button.anular')!.hasAttribute('aria-disabled')).toBe(false);
     });
 
     it('tras un cobro la sección se recarga (version++) y muestra el cobro nuevo', async () => {
