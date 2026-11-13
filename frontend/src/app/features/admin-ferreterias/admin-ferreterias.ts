@@ -8,6 +8,7 @@ import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CONTRASENA_SOLO_ESPACIOS, ContrasenaForm, NuevaContrasena, noSoloEspacios } from '../../shared/contrasena-form';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { AdminFerreteriasService } from './admin-ferreterias.service';
 import {
   AMBIENTE_ARCA_LABELS,
@@ -52,6 +53,16 @@ const ERROR_POR_ACCION: Record<AccionFerreteria, string> = {
 
 const porRazonSocial = (a: FerreteriaAdmin, b: FerreteriaAdmin) =>
   a.razonSocial.localeCompare(b.razonSocial, 'es') || a.id - b.id;
+
+/** S5: lo que se explica al intentar cada acción de la barra sin una ferretería elegida. */
+const MOTIVO_SIN_ELEGIR: Record<AccionFerreteria, string> = {
+  activo: 'Elegí una ferretería de la lista para suspenderla o reactivarla.',
+  dePrueba: 'Elegí una ferretería de la lista para cambiar su marca de prueba.',
+  simulador: 'Elegí una ferretería de la lista para cambiar su ambiente de ARCA.',
+  facturacion: 'Elegí una ferretería de la lista para habilitarle la facturación.',
+};
+const MOTIVO_RESET_SIN_ELEGIR = 'Elegí una ferretería de la lista para resetear la contraseña del Dueño.';
+const MOTIVO_RESET_SIN_DUENO = 'Esta ferretería todavía no tiene Dueño. Asignale uno primero.';
 
 /** «2026-10-21T10:00:00» → «21/10/2026». El servidor manda la hora de Buenos Aires sin zona: no se convierte. */
 export function fechaDeAlta(creadoEn: string): string {
@@ -119,6 +130,27 @@ export class AdminFerreterias implements OnInit {
   });
   /** La ferretería cuyo Dueño tiene el reset abierto. */
   protected readonly reseteando = signal<FerreteriaAdmin | null>(null);
+  /** Por qué las acciones de la barra no se pueden usar: null en la que sí se puede (S5). */
+  protected readonly motivos = computed<Motivos<AccionFerreteria | 'resetear'>>(() => {
+    const ferreteria = this.filas.elegido();
+    const sinElegir = (accion: AccionFerreteria) => (ferreteria ? null : MOTIVO_SIN_ELEGIR[accion]);
+    return {
+      activo: sinElegir('activo'),
+      dePrueba: sinElegir('dePrueba'),
+      simulador: sinElegir('simulador'),
+      facturacion: sinElegir('facturacion'),
+      // Resetear tiene dos motivos: sin fila elegida, o con una ferretería que todavía no tiene Dueño.
+      resetear: !ferreteria
+        ? MOTIVO_RESET_SIN_ELEGIR
+        : ferreteria.duenoId === null
+          ? MOTIVO_RESET_SIN_DUENO
+          : null,
+    };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
   protected readonly errorReset = signal<string | null>(null);
   protected readonly enviandoReset = signal(false);
   /** «Probar ARCA desde el servidor» en curso: el botón dice «Probando…». */
@@ -276,7 +308,13 @@ export class AdminFerreterias implements OnInit {
 
   protected pedirConfirmacion(accion: AccionFerreteria): void {
     const ferreteria = this.filas.elegido();
-    if (!ferreteria || this.cambiando()) return;
+    // S5: sin fila elegida el botón avisa el motivo; mientras cambia sigue apagado por el disabled transitorio.
+    if (!ferreteria) {
+      this.motivo.mostrar(accion);
+      return;
+    }
+    if (this.cambiando()) return;
+    this.motivo.limpiar();
     this.aviso.set(null);
     this.error.set(null);
     this.aConfirmar.set({ accion, ferreteria });
@@ -316,7 +354,9 @@ export class AdminFerreterias implements OnInit {
 
   protected abrirReset(): void {
     const ferreteria = this.filas.elegido();
-    if (!ferreteria || ferreteria.duenoId === null) return;
+    // S5: sin fila elegida, o sin Dueño, el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('resetear')) return;
+    this.motivo.limpiar();
     this.aviso.set(null);
     this.errorReset.set(null);
     this.reseteando.set(ferreteria);

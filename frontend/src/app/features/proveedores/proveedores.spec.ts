@@ -311,11 +311,13 @@ describe('Proveedores', () => {
   });
 
   describe('barra de acciones sobre la fila elegida', () => {
-    it('sin fila elegida, Editar y Dar de baja están deshabilitados', async () => {
+    it('sin fila elegida, Editar y Dar de baja quedan apagados con aria-disabled', async () => {
       await crearComponente(true);
 
-      expect(barra('button.editar')!.disabled).toBe(true);
-      expect(barra('button.desactivar')!.disabled).toBe(true);
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.editar')!.hasAttribute('disabled')).toBe(false);
+      expect(barra('button.desactivar')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.desactivar')!.hasAttribute('disabled')).toBe(false);
     });
 
     it('clic en una fila la elige, la marca y habilita las acciones', async () => {
@@ -324,9 +326,33 @@ describe('Proveedores', () => {
       await elegir(1);
 
       expect(elegidas()).toEqual([filas()[1]]);
-      expect(barra('button.editar')!.disabled).toBe(false);
-      expect(barra('button.desactivar')!.disabled).toBe(false);
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBeNull();
+      expect(barra('button.desactivar')!.getAttribute('aria-disabled')).toBeNull();
       expect(el().querySelector('.elegido')?.textContent).toContain('Tersuave');
+    });
+
+    it('intentar Editar o Dar de baja sin fila elegida explica el motivo y no hace nada (S5)', async () => {
+      await crearComponente(true);
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+
+      barra('button.editar')!.click();
+      await refrescar();
+
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Elegí un proveedor de la lista para editarlo.');
+      // El motivo no es una acción: el formulario sigue en el alta.
+      expect(el().querySelector('form h2')?.textContent).toContain('Nuevo proveedor');
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('');
+
+      barra('button.desactivar')!.click();
+      await refrescar();
+
+      expect(el().querySelector('.motivo-accion')!.textContent?.trim()).toBe(
+        'Elegí un proveedor de la lista para darlo de baja.',
+      );
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.desactivar).not.toHaveBeenCalled();
     });
 
     it('Enter o doble clic en la fila la editan', async () => {

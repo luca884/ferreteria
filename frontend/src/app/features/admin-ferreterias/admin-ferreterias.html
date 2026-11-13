@@ -6,19 +6,38 @@
     </svg>
     Nueva
   </button>
-  <button type="button" class="accion-barra suspender" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('activo')">
+  <button
+    type="button"
+    class="accion-barra suspender"
+    [attr.aria-disabled]="ariaDe(motivos().activo)"
+    [disabled]="cambiando()"
+    (click)="pedirConfirmacion('activo')"
+  >
     {{ filas.elegido()?.estado === 'SUSPENDIDA' ? 'Reactivar' : 'Suspender' }}
   </button>
-  <button type="button" class="accion-barra de-prueba" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('dePrueba')">
+  <button
+    type="button"
+    class="accion-barra de-prueba"
+    [attr.aria-disabled]="ariaDe(motivos().dePrueba)"
+    [disabled]="cambiando()"
+    (click)="pedirConfirmacion('dePrueba')"
+  >
     {{ filas.elegido()?.dePrueba ? 'Quitar marca de prueba' : 'Marcar de prueba' }}
   </button>
-  <button type="button" class="accion-barra simulador" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('simulador')">
+  <button
+    type="button"
+    class="accion-barra simulador"
+    [attr.aria-disabled]="ariaDe(motivos().simulador)"
+    [disabled]="cambiando()"
+    (click)="pedirConfirmacion('simulador')"
+  >
     {{ filas.elegido()?.ambiente === 'SIMULADOR' ? 'Quitar simulador' : 'Asignar simulador' }}
   </button>
   <button
     type="button"
     class="accion-barra facturacion"
-    [disabled]="!filas.elegido() || cambiando()"
+    [attr.aria-disabled]="ariaDe(motivos().facturacion)"
+    [disabled]="cambiando()"
     (click)="pedirConfirmacion('facturacion')"
   >
     {{ filas.elegido()?.facturacionHabilitada ? 'Deshabilitar facturación' : 'Habilitar facturación' }}
@@ -26,12 +45,16 @@
   <button
     type="button"
     class="accion-barra resetear"
-    [disabled]="!filas.elegido() || filas.elegido()?.duenoId === null"
+    [attr.aria-disabled]="ariaDe(motivos().resetear)"
     (click)="abrirReset()"
   >
     Resetear contraseña del Dueño
   </button>
 </app-barra-acciones>
+
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
 
 <p class="ayuda">
   Las ferreterías que usan el sistema. Suspender corta el acceso de todos sus usuarios en el acto, pero no borra ningún

@@ -603,6 +603,39 @@ describe('AdminFerreterias', () => {
     });
   });
 
+  describe('motivo de las acciones de la barra (S5)', () => {
+    it('intentar una acción sin ferretería elegida explica el motivo y no abre nada', async () => {
+      await crear();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+
+      const motivos: ReadonlyArray<readonly [string, string]> = [
+        ['button.suspender', 'Elegí una ferretería de la lista para suspenderla o reactivarla.'],
+        ['button.de-prueba', 'Elegí una ferretería de la lista para cambiar su marca de prueba.'],
+        ['button.simulador', 'Elegí una ferretería de la lista para cambiar su ambiente de ARCA.'],
+        ['button.facturacion', 'Elegí una ferretería de la lista para habilitarle la facturación.'],
+        ['button.resetear', 'Elegí una ferretería de la lista para resetear la contraseña del Dueño.'],
+      ];
+
+      for (const [boton, esperado] of motivos) {
+        barra(boton).click();
+        await refrescar();
+
+        const motivo = el().querySelector('.motivo-accion')!;
+        expect(motivo.getAttribute('role')).toBe('status');
+        expect(motivo.textContent?.trim()).toBe(esperado);
+        // El motivo no es una acción: no hay confirmación ni formulario de reset abiertos.
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(el().querySelector('#titulo-reset')).toBeNull();
+      }
+
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      expect(servicio.cambiarDePrueba).not.toHaveBeenCalled();
+      expect(servicio.cambiarSimulador).not.toHaveBeenCalled();
+      expect(servicio.cambiarFacturacion).not.toHaveBeenCalled();
+      expect(servicio.resetearContrasenaDueno).not.toHaveBeenCalled();
+    });
+  });
+
   describe('suspender y reactivar', () => {
     const confirmar = () => el().querySelector<HTMLButtonElement>('app-confirmacion .confirmar')!;
 
@@ -618,7 +651,11 @@ describe('AdminFerreterias', () => {
     it('sin una fila elegida no hay nada para suspender', async () => {
       await crear();
 
-      expect(barra('button.suspender').disabled).toBe(true);
+      expect(barra('button.suspender').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.suspender').hasAttribute('disabled')).toBe(false);
+
+      await elegir(0);
+      expect(barra('button.suspender').getAttribute('aria-disabled')).toBeNull();
     });
 
     it('pide confirmación y no suspende hasta confirmar', async () => {
@@ -696,12 +733,20 @@ describe('AdminFerreterias', () => {
       await refrescar();
     }
 
-    it('sin una fila elegida las tres acciones están deshabilitadas', async () => {
+    it('sin una fila elegida las tres acciones quedan apagadas con aria-disabled', async () => {
       await crear();
 
-      expect(barra('button.de-prueba').disabled).toBe(true);
-      expect(barra('button.simulador').disabled).toBe(true);
-      expect(barra('button.facturacion').disabled).toBe(true);
+      expect(barra('button.de-prueba').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.de-prueba').hasAttribute('disabled')).toBe(false);
+      expect(barra('button.simulador').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.simulador').hasAttribute('disabled')).toBe(false);
+      expect(barra('button.facturacion').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.facturacion').hasAttribute('disabled')).toBe(false);
+
+      await elegir(0);
+      expect(barra('button.de-prueba').getAttribute('aria-disabled')).toBeNull();
+      expect(barra('button.simulador').getAttribute('aria-disabled')).toBeNull();
+      expect(barra('button.facturacion').getAttribute('aria-disabled')).toBeNull();
     });
 
     it('cada botón dice lo que va a hacer según el estado de la fila', async () => {
@@ -903,7 +948,24 @@ describe('AdminFerreterias', () => {
 
       await elegir(1);
 
-      expect(barra('button.resetear').disabled).toBe(true);
+      expect(barra('button.resetear').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.resetear').hasAttribute('disabled')).toBe(false);
+
+      await elegir(0);
+      expect(barra('button.resetear').getAttribute('aria-disabled')).toBeNull();
+    });
+
+    it('intentar Resetear sin Dueño explica que falta el Dueño y no abre el formulario (S5)', async () => {
+      await crear();
+
+      await elegir(1);
+      barra('button.resetear').click();
+      await refrescar();
+
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Esta ferretería todavía no tiene Dueño. Asignale uno primero.');
+      expect(el().querySelector('#titulo-reset')).toBeNull();
     });
 
     it('abre el formulario sin pedir la contraseña actual', async () => {
