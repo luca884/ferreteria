@@ -343,12 +343,12 @@ button,
     box-shadow var(--transicion),
     transform var(--transicion);
 }
-button:hover:not(:disabled),
+button:hover:not(:disabled, [aria-disabled='true']),
 .btn:hover {
   background: var(--superficie-3);
   color: var(--texto);
 }
-button:active:not(:disabled),
+button:active:not(:disabled, [aria-disabled='true']),
 .btn:active {
   transform: translateY(1px);
 }
@@ -366,8 +366,8 @@ button.primario,
   color: var(--acento-texto);
   font-weight: 600;
 }
-button[type='submit']:hover:not(:disabled),
-button.primario:hover:not(:disabled),
+button[type='submit']:hover:not(:disabled, [aria-disabled='true']),
+button.primario:hover:not(:disabled, [aria-disabled='true']),
 .btn.primario:hover {
   background: var(--acento-hover);
   border-color: var(--acento-hover);
@@ -380,7 +380,7 @@ button.secundario,
   border-color: var(--borde-fuerte);
   color: var(--texto);
 }
-button.secundario:hover:not(:disabled) {
+button.secundario:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--superficie-3);
   border-color: var(--borde-fuerte);
   color: var(--texto);
@@ -390,7 +390,7 @@ button.peligro {
   border-color: var(--error-borde);
   color: var(--error);
 }
-button.peligro:hover:not(:disabled) {
+button.peligro:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--error-fondo);
   border-color: var(--error);
   color: var(--error);
@@ -403,10 +403,15 @@ button.chico,
   font-size: var(--texto-sm);
 }
 
+/*
+ * S4: un botón que no se puede usar deja llegar el clic para explicar el motivo, así que se apaga con
+ * `aria-disabled` en vez de `disabled` y tiene que verse igual de apagado.
+ */
 button:disabled,
 button[type='submit']:disabled,
 button.primario:disabled,
-button.peligro:disabled {
+button.peligro:disabled,
+button[aria-disabled='true'] {
   background: var(--superficie-3);
   border-color: var(--borde);
   color: var(--texto-deshabilitado);
@@ -443,7 +448,8 @@ button[type='submit'][data-tecla]::after {
   color: var(--acento-texto);
   opacity: 0.8;
 }
-button:disabled[data-tecla]::after {
+button:disabled[data-tecla]::after,
+button[aria-disabled='true'][data-tecla]::after {
   color: var(--texto-deshabilitado);
   opacity: 1;
 }
@@ -490,7 +496,7 @@ app-barra-acciones h1 {
   font-size: var(--texto-sm);
   font-weight: 500;
 }
-.accion-barra:hover:not(:disabled) {
+.accion-barra:hover:not(:disabled, [aria-disabled='true']) {
   border-color: var(--borde-fuerte);
 }
 /*
@@ -520,17 +526,34 @@ app-barra-acciones:not(:has(svg, kbd)) .accion-barra {
 .accion-barra.peligro {
   border-color: var(--error-borde);
 }
-.accion-barra:disabled {
+.accion-barra:disabled,
+.accion-barra[aria-disabled='true'] {
   border-color: var(--borde);
 }
-.accion-barra:disabled kbd {
+.accion-barra:disabled kbd,
+.accion-barra[aria-disabled='true'] kbd {
   color: var(--texto-deshabilitado);
 }
 .accion-barra svg {
   flex-shrink: 0;
 }
-.accion-barra.peligro:not(:disabled) {
+.accion-barra.peligro:not(:disabled, [aria-disabled='true']) {
   color: var(--error);
+}
+/*
+ * S4: el motivo por el que una acción de la barra no se puede usar, justo debajo de la barra. Va en tono neutro: no es
+ * un error, es una explicación que se va sola.
+ */
+.motivo-accion {
+  margin: 0 0 var(--pantalla-y);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--texto-tenue);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--texto-md);
+  font-weight: 500;
 }
 /* Separador vertical entre grupos de acciones y la casilla «Mostrar dados de baja». */
 .separador-barra {

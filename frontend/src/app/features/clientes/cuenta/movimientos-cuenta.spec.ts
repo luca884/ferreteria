@@ -638,24 +638,44 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect(recibosVistos).toEqual([14, 13, 13]);
     });
 
-    it('con el cliente desactivado «Anular» queda deshabilitado, con «Reactivá el cliente para anular», y no emite', async () => {
+    it('con el cliente desactivado «Anular» se apaga por regla de negocio, avisa «Reactivá el cliente para anular» y no emite', async () => {
       await crear({ extracto: () => of(surtido()), clienteActivo: false });
 
       const anular = el().querySelector<HTMLButtonElement>('button.anular')!;
-      expect(anular.disabled).toBe(true);
+      expect(anular.getAttribute('aria-disabled')).toBe('true');
+      expect(anular.hasAttribute('disabled')).toBe(false);
       expect(texto('.aviso-inactivo')).toBe('Reactivá el cliente para anular');
       expect(anular.getAttribute('aria-describedby')).toBe(el().querySelector('.aviso-inactivo')!.id);
       anular.click();
+      await refrescar();
       expect(anuladas).toHaveLength(0);
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(texto('.motivo-accion')).toBe('Reactivá el cliente para anular');
       // «Reimprimir» sigue disponible: reimprimir no depende de que el cliente esté activo.
-      expect(el().querySelector<HTMLButtonElement>('button.reimprimir')!.disabled).toBe(false);
+      expect(el().querySelector<HTMLButtonElement>('button.reimprimir')!.hasAttribute('aria-disabled')).toBe(false);
+    });
+
+    it('al reactivar el cliente el motivo se va sin volver a tocar el botón', async () => {
+      await crear({ extracto: () => of(surtido()), clienteActivo: false });
+      el().querySelector<HTMLButtonElement>('button.anular')!.click();
+      await refrescar();
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      fixture.componentRef.setInput('clienteActivo', true);
+      await refrescar();
+
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+      expect(el().querySelector<HTMLButtonElement>('button.anular')!.getAttribute('aria-disabled')).toBeNull();
+      boton('Anular')!.click();
+      expect(anuladas).toHaveLength(1);
     });
 
     it('con el cliente activo no hay aviso de reactivar', async () => {
       await crear({ extracto: () => of(surtido()) });
 
       expect(el().querySelector('.aviso-inactivo')).toBeNull();
-      expect(el().querySelector<HTMLButtonElement>('button.anular')!.disabled).toBe(false);
+      expect(el().querySelector<HTMLButtonElement>('button.anular')!.hasAttribute('aria-disabled')).toBe(false);
     });
 
     it('si no hay ningún cobro vigente no hace falta el aviso de reactivar', async () => {
@@ -759,10 +779,36 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect(document.activeElement).toBe(imprimirBtn());
     });
 
-    it('sin movimientos no hay nada que imprimir: el botón queda deshabilitado', async () => {
+    it('sin movimientos no hay nada que imprimir: el botón se apaga por regla de negocio y dice por qué', async () => {
       await crear({ extracto: () => of(extracto([])) });
 
+      expect(imprimirBtn().getAttribute('aria-disabled')).toBe('true');
+      expect(imprimirBtn().hasAttribute('disabled')).toBe(false);
+
+      imprimirBtn().click();
+      await refrescar();
+
+      expect(servicio.paraImprimir).not.toHaveBeenCalled();
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(texto('.motivo-accion')).toBe('No hay movimientos en el período elegido.');
+    });
+
+    it('mientras carga, el disabled transitorio sigue impidiendo imprimir', async () => {
+      const respuesta = new Subject<Extracto>();
+      await crear({ extracto: () => respuesta });
+
       expect(imprimirBtn().disabled).toBe(true);
+      imprimirBtn().click();
+      await refrescar();
+      expect(servicio.paraImprimir).not.toHaveBeenCalled();
+
+      respuesta.next(extracto([linea(1)]));
+      respuesta.complete();
+      await refrescar();
+
+      expect(imprimirBtn().disabled).toBe(false);
+      expect(imprimirBtn().getAttribute('aria-disabled')).toBeNull();
     });
   });
 

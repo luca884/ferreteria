@@ -385,12 +385,38 @@ describe('PaginaFacturacion', () => {
   });
 
   describe('subir el certificado', () => {
-    it('se ve siempre: sin pedido, deshabilitado con «Primero generá el pedido de certificado.»', async () => {
+    it('se ve siempre: sin pedido queda apagado por regla de negocio con «Primero generá el pedido de certificado.»', async () => {
       await crear();
 
       expect(texto('button.subir-certificado')).toBe('Subir certificado (.crt)');
-      expect(boton('button.subir-certificado')!.disabled).toBe(true);
+      const subir = boton('button.subir-certificado')!;
+      expect(subir.getAttribute('aria-disabled')).toBe('true');
+      expect(subir.hasAttribute('disabled')).toBe(false);
       expect(texto('#certificado-motivo')).toBe('Primero generá el pedido de certificado.');
+    });
+
+    // S5: el clic llega al botón y la acción explica el motivo, sin abrir el selector de archivos.
+    it('sin pedido, un clic en «Subir certificado» dice el motivo, no abre el selector y el motivo se va al generar el pedido', async () => {
+      await crear();
+      const entrada = el().querySelector<HTMLInputElement>('#certificado')!;
+      const abrirSelector = vi.spyOn(entrada, 'click').mockImplementation(() => undefined);
+      api.configuracion.mockReturnValue(of(config({ pedido: PEDIDO })));
+
+      await click('button.subir-certificado');
+
+      expect(abrirSelector).not.toHaveBeenCalled();
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(texto('.motivo-accion')).toBe('Primero generá el pedido de certificado.');
+
+      // Generar el pedido hace usable el botón: el motivo se va sin volver a tocarlo.
+      await click('button.generar-pedido');
+
+      expect(boton('button.subir-certificado')!.getAttribute('aria-disabled')).toBeNull();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+
+      await click('button.subir-certificado');
+      expect(abrirSelector).toHaveBeenCalledOnce();
     });
 
     it('al generar el pedido se habilita y el motivo se va', async () => {
@@ -400,6 +426,7 @@ describe('PaginaFacturacion', () => {
       await click('button.generar-pedido');
 
       expect(boton('button.subir-certificado')!.disabled).toBe(false);
+      expect(boton('button.subir-certificado')!.getAttribute('aria-disabled')).toBeNull();
       expect(el().querySelector('#certificado-motivo')).toBeNull();
     });
 
@@ -539,18 +566,25 @@ describe('PaginaFacturacion', () => {
       expect(texto('.credencial')).toContain('CA del simulador');
     });
 
-    it('sin pedido pendiente, subir y firmar se ven deshabilitados con el motivo; fuera del simulador no ofrece firmar', async () => {
+    it('sin pedido pendiente, subir y firmar se ven apagados por regla de negocio con el motivo; fuera del simulador no ofrece firmar', async () => {
       await crear(config({ ambiente: 'SIMULADOR', simulador: true }));
-      expect(boton('button.firmar-simulador')!.disabled).toBe(true);
-      expect(boton('button.subir-certificado')!.disabled).toBe(true);
+      expect(boton('button.firmar-simulador')!.getAttribute('aria-disabled')).toBe('true');
+      expect(boton('button.firmar-simulador')!.hasAttribute('disabled')).toBe(false);
+      expect(boton('button.subir-certificado')!.getAttribute('aria-disabled')).toBe('true');
+      expect(boton('button.subir-certificado')!.hasAttribute('disabled')).toBe(false);
       expect(texto('#certificado-motivo')).toBe('Primero generá el pedido de certificado.');
       expect(boton('button.subir-certificado')!.getAttribute('aria-describedby')).toContain('certificado-motivo');
       expect(boton('button.firmar-simulador')!.getAttribute('aria-describedby')).toContain('certificado-motivo');
+
+      await click('button.firmar-simulador');
+      expect(api.firmarConSimulador).not.toHaveBeenCalled();
+      expect(texto('.motivo-accion')).toBe('Primero generá el pedido de certificado.');
 
       TestBed.resetTestingModule();
       await crear(config({ pedido: PEDIDO }));
       expect(boton('button.firmar-simulador')).toBeNull();
       expect(boton('button.subir-certificado')!.disabled).toBe(false);
+      expect(boton('button.subir-certificado')!.getAttribute('aria-disabled')).toBeNull();
       expect(el().querySelector('#certificado-motivo')).toBeNull();
       expect(boton('button.subir-certificado')!.getAttribute('aria-describedby')).not.toContain('certificado-motivo');
     });

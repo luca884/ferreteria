@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
@@ -8,6 +8,7 @@ import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CONTRASENA_SOLO_ESPACIOS, ContrasenaForm, NuevaContrasena, noSoloEspacios } from '../../shared/contrasena-form';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import {
   EdicionUsuarioRequest,
   ROLES_DE_FERRETERIA,
@@ -20,6 +21,16 @@ import {
 import { UsuariosService } from './usuarios.service';
 
 const porNombre = (a: Usuario, b: Usuario) => a.nombre.localeCompare(b.nombre) || a.id - b.id;
+
+/** S5: lo que se explica al intentar una acción de la barra sin un usuario elegido. */
+const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un usuario de la lista para editarlo.';
+const MOTIVO_SIN_ELEGIR_ALTERNAR = 'Elegí un usuario de la lista para desactivarlo o reactivarlo.';
+const MOTIVO_SIN_ELEGIR_RESET = 'Elegí un usuario de la lista para resetearle la contraseña.';
+/** La razón de no poder desactivarse a uno mismo: la muestra la línea `#motivo-desactivar`, enlazada al botón. */
+const MOTIVO_ES_PROPIO = 'No podés desactivarte ni cambiarte el rol a vos mismo.';
+
+/** Las acciones de la barra que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'editar' | 'alternar' | 'reset';
 
 const topeValido = (control: AbstractControl<string>): ValidationErrors | null =>
   leerTope(control.value) === undefined ? { tope: true } : null;
@@ -72,6 +83,23 @@ export class Usuarios implements OnInit {
   /** El 400 del reseteo: el DTO llama `password` al campo y va debajo de «Contraseña nueva». */
   protected readonly errorNueva = signal<string | null>(null);
   protected readonly enviandoReset = signal(false);
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /**
+   * Por qué cada acción de la barra no se puede usar; null en la que sí se puede. Sobre uno mismo la razón ya está a la
+   * vista en `#motivo-desactivar` (enlazada con aria-describedby) y no se repite en el motivo de la acción.
+   */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    const usuario = this.filas.elegido();
+    return {
+      editar: usuario ? null : MOTIVO_SIN_ELEGIR_EDITAR,
+      alternar: usuario ? (this.esPropio(usuario) ? MOTIVO_ES_PROPIO : null) : MOTIVO_SIN_ELEGIR_ALTERNAR,
+      reset: usuario ? null : MOTIVO_SIN_ELEGIR_RESET,
+    };
+  });
+  protected readonly motivoEsPropio = MOTIVO_ES_PROPIO;
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly contrasenaSoloEspacios = CONTRASENA_SOLO_ESPACIOS;
 
@@ -182,7 +210,12 @@ export class Usuarios implements OnInit {
 
   /** Editar (barra, Enter o doble clic): precarga al usuario en el formulario de al lado. */
   protected editar(usuario: Usuario | null = this.filas.elegido()): void {
-    if (!usuario) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación. Enter y doble clic
+    // traen su propio usuario, así que la acción mira el argumento y no la tabla.
+    if (!usuario) {
+      this.motivo.mostrar('editar');
+      return;
+    }
     this.aviso.set(null);
     this.reseteando.set(null);
     this.filas.elegidoId.set(usuario.id);
@@ -216,7 +249,14 @@ export class Usuarios implements OnInit {
   /** Desactivar pide confirmación (un clic deja al empleado sin acceso); reactivar es directo. */
   protected alternarActivo(): void {
     const usuario = this.filas.elegido();
-    if (!usuario || this.cambiando()) return;
+    // S5: sin fila elegida el botón avisa el motivo; mientras cambia sigue apagado por el disabled transitorio.
+    if (!usuario) {
+      this.motivo.mostrar('alternar');
+      return;
+    }
+    if (this.cambiando()) return;
+    // Sobre uno mismo la razón ya está a la vista: se explica sola y no se abre la confirmación.
+    if (this.esPropio(usuario)) return;
     if (usuario.activo) this.aDesactivar.set(usuario);
     else this.cambiarActivo(usuario);
   }
@@ -246,8 +286,9 @@ export class Usuarios implements OnInit {
   }
 
   protected abrirReset(): void {
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     const usuario = this.filas.elegido();
-    if (!usuario) return;
+    if (this.motivo.mostrar('reset') || usuario === null) return;
     this.aviso.set(null);
     this.limpiarErroresDeReset();
     this.reseteando.set(usuario);

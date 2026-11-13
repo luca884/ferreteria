@@ -29,6 +29,7 @@ import { Confirmacion } from '../../shared/confirmacion';
 import { conOrigen } from '../../shared/documento-por-ruta';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -92,6 +93,11 @@ export const MENSAJE_PORCENTAJE_RECARGO = 'El porcentaje del recargo debe estar 
 export const MENSAJE_DECIMALES_RECARGO = 'El porcentaje del recargo tiene hasta 2 decimales.';
 export const MENSAJE_PRECIO_MANUAL = 'El precio tiene que ser mayor a 0.';
 export const MENSAJE_PRECIO_GRANDE = 'El precio es demasiado grande.';
+/** S5: lo que se explica al intentar agregar un recargo del costo con la lista llena. */
+const MOTIVO_TOPE_RECARGOS = 'Ya cargaste el máximo de recargos.';
+/** S5: lo que se explica al intentar ajustar el stock de un artículo dado de baja. */
+const motivoDeBaja = (descripcion: string) =>
+  `«${descripcion}» está dado de baja. Reactivalo para ajustar el stock.`;
 
 /** El precio manual: mayor a 0 y dentro del tope. Con la casilla destildada el control está deshabilitado y no corre. */
 function precioManualValido(control: AbstractControl<number | null>): ValidationErrors | null {
@@ -335,6 +341,25 @@ export class ArticuloForm implements OnInit {
     if (invalido >= 0) return `Corregí el ajuste ${invalido + 1}`;
     return ajustesEfectivos(d, escritos).cambiaron ? null : 'Cambiá un ajuste para guardar';
   });
+
+  /**
+   * Por qué cada acción de la pantalla no se puede usar: null en la que sí se puede (S5). Es la misma tabla que apaga
+   * el botón con `aria-disabled` y la que se explica al intentar, así que la regla y su texto no se desalinean.
+   */
+  protected readonly motivos = computed<Motivos<'ajustarStock' | 'recargo' | 'ajustes'>>(() => {
+    const actual = this.articulo();
+    const d = this.desglose();
+    return {
+      ajustarStock: actual && !actual.activo ? motivoDeBaja(actual.descripcion) : null,
+      recargo: this.puedeAgregarRecargo() ? null : MOTIVO_TOPE_RECARGOS,
+      // Lo que ya dice el servidor sin lista se explica con el mismo texto del desglose (R-213).
+      ajustes: this.motivoSinGuardarAjustes() ?? (d && !d.tieneLista ? d.motivoSinLista : null),
+    };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   /**
    * Con ajustes escritos distintos de los guardados, el costo y el precio que saldrían (los de la cadena del
@@ -624,7 +649,9 @@ export class ArticuloForm implements OnInit {
   }
 
   protected agregarRecargo(): void {
-    if (!this.puedeAgregarRecargo()) return;
+    // S5: con la lista llena el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('recargo')) return;
+    this.motivo.limpiar();
     this.form.controls.recargosCosto.push(filaDeRecargo());
     this.form.markAsDirty();
     this.limpiarErrorDeRecargos();
@@ -709,8 +736,11 @@ export class ArticuloForm implements OnInit {
    * masiva), el aviso sale ANTES de enviar y sin pedido de prueba (R-214): lo calcula con el desglose y lo escrito.
    */
   protected guardarAjustes(): void {
+    // S5: el botón avisa por qué no se puede en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('ajustes')) return;
     const d = this.desglose();
     if (this.id === null || d === null || !this.puedeGuardarAjustes()) return;
+    this.motivo.limpiar();
     const aviso = this.avisoDePisar(d);
     if (aviso !== null) {
       // Se congela lo que se vio en el aviso: es lo que se envía al confirmar.
@@ -911,6 +941,13 @@ export class ArticuloForm implements OnInit {
     if (!actual) return;
     this.articulo.set({ ...actual, stockActual: ajuste.stockActual });
     this.aviso.set(`Stock ajustado: ahora hay ${cantidadConUnidad(ajuste.stockActual, actual.unidad)}.`);
+  }
+
+  /** «Ajustar stock»: con el artículo dado de baja explica el motivo en vez de abrir el diálogo (S5). */
+  protected ajustarStock(): void {
+    if (this.motivo.mostrar('ajustarStock')) return;
+    this.motivo.limpiar();
+    this.ajustandoStock.set(true);
   }
 
   private cargar(): void {

@@ -996,13 +996,46 @@ describe('NuevaCompra', () => {
       expect('recargos' in api.vistaPrevia.mock.calls[0][0]).toBe(false);
     });
 
+    it('con 5 recargos, «Agregar recargo» avisa el tope al intentar y no suma otra fila (S5)', async () => {
+      await crear();
+      await cargarCompra();
+      for (let i = 0; i < 5; i++) boton('Agregar recargo')!.click();
+      await refrescar();
+
+      boton('Agregar recargo')!.click();
+      await refrescar();
+
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Ya cargaste el máximo de recargos (5).');
+      expect(el().querySelectorAll('input[name^="recargo-nombre-"]')).toHaveLength(5);
+    });
+
+    it('con el motivo del tope a la vista, quitar un recargo lo hace desaparecer sin volver a tocar el botón (S5)', async () => {
+      await crear();
+      await cargarCompra();
+      for (let i = 0; i < 5; i++) boton('Agregar recargo')!.click();
+      await refrescar();
+      boton('Agregar recargo')!.click();
+      await refrescar();
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      porEtiqueta('Quitar el recargo 5').click();
+      await refrescar();
+
+      expect(el().querySelectorAll('input[name^="recargo-nombre-"]')).toHaveLength(4);
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+      expect(boton('Agregar recargo')!.getAttribute('aria-disabled')).toBeNull();
+    });
+
     it('«Agregar» suma un recargo (hasta 5), «Quitar» lo saca y se mandan en la vista previa y al confirmar', async () => {
       await crear();
       await cargarCompra();
       for (let i = 0; i < 5; i++) boton('Agregar recargo')!.click();
       await refrescar();
       expect(el().querySelectorAll('input[name^="recargo-nombre-"]')).toHaveLength(5);
-      expect(boton('Agregar recargo')!.disabled).toBe(true);
+      expect(boton('Agregar recargo')!.getAttribute('aria-disabled')).toBe('true');
+      expect(boton('Agregar recargo')!.hasAttribute('disabled')).toBe(false);
       for (let i = 4; i >= 1; i--) {
         porEtiqueta(`Quitar el recargo ${i + 1}`).click();
         await refrescar();

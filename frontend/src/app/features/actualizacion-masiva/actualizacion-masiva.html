@@ -2,6 +2,10 @@
   <h1>Actualizar precios</h1>
 </app-barra-acciones>
 
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
+
 @if (auth.esDueno()) {
   <p class="ayuda">
     Elegí qué artículos querés actualizar y qué cambio hacer, y revisá la vista previa antes de
@@ -122,7 +126,8 @@
         #generarEl
         type="button"
         class="generar primario"
-        [disabled]="!puedeGenerar()"
+        [disabled]="generando() || aplicando()"
+        [attr.aria-disabled]="ariaDe(motivos().generar)"
         [attr.aria-describedby]="motivoSinVistaPrevia() ? 'motivo-vista-previa' : null"
         (click)="generarVistaPrevia()"
       >
@@ -363,7 +368,8 @@
             #confirmarEl
             type="button"
             class="confirmar primario"
-            [disabled]="aplicando() || vp.conteos.modificados === 0"
+            [disabled]="aplicando()"
+            [attr.aria-disabled]="ariaDe(motivos().actualizar)"
             (click)="abrirConfirmacion()"
           >
             @if (aplicando()) {

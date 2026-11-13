@@ -13,11 +13,23 @@ import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 
 const TAMANO_PAGINA = 20;
+
+/** S5: lo que se explica al intentar una acción de la barra sin un artículo elegido. */
+const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un artículo de la lista para editarlo.';
+const MOTIVO_SIN_ELEGIR_FICHA = 'Elegí un artículo de la lista para ver su ficha.';
+const MOTIVO_SIN_ELEGIR_AJUSTE = 'Elegí un artículo de la lista para ajustar el stock.';
+const MOTIVO_SIN_ELEGIR_MOVIMIENTOS = 'Elegí un artículo de la lista para ver sus movimientos.';
+const MOTIVO_SIN_ELEGIR_CLIENTES = 'Elegí un artículo de la lista para ver qué clientes lo compraron.';
+const MOTIVO_SIN_ELEGIR_BAJA = 'Elegí un artículo de la lista para darlo de baja.';
+
+/** Las acciones de la barra que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'ficha' | 'ajuste' | 'movimientos' | 'clientes' | 'baja';
 
 @Component({
   selector: 'app-articulos',
@@ -71,6 +83,22 @@ export class Articulos implements OnInit {
   protected readonly aDarDeBaja = signal<Articulo | null>(null);
   /** Artículo cuyo stock se está ajustando (panel abierto). */
   protected readonly aAjustar = signal<Articulo | null>(null);
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Por qué cada acción de la barra no se puede usar: null en la que sí se puede (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    const articulo = this.filas.elegido();
+    return {
+      // El Dueño edita y el Vendedor ve la ficha: el mismo botón con dos textos.
+      ficha: articulo ? null : this.motivoSinFicha(),
+      ajuste: articulo ? (articulo.activo ? null : this.textoBajaSinAjuste(articulo)) : MOTIVO_SIN_ELEGIR_AJUSTE,
+      movimientos: articulo ? null : MOTIVO_SIN_ELEGIR_MOVIMIENTOS,
+      clientes: articulo ? null : MOTIVO_SIN_ELEGIR_CLIENTES,
+      baja: articulo ? null : MOTIVO_SIN_ELEGIR_BAJA,
+    };
+  });
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly form = inject(FormBuilder).nonNullable.group({ q: [''] });
   /** Se vuelve de editar un artículo: la primera carga le pone el foco a su fila. */
@@ -131,7 +159,12 @@ export class Articulos implements OnInit {
    * `elegido` para que al volver siga elegido.
    */
   protected abrirFicha(articulo: Articulo | null = this.filas.elegido()): void {
-    if (!articulo) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación. Enter y doble clic
+    // traen su propio artículo, así que la acción mira el argumento y no la tabla.
+    if (!articulo) {
+      this.motivo.mostrar('ficha');
+      return;
+    }
     void this.router.navigate(['/articulos', articulo.id], {
       queryParams: { elegido: articulo.id },
       queryParamsHandling: 'merge',
@@ -139,7 +172,10 @@ export class Articulos implements OnInit {
   }
 
   protected pedirBaja(): void {
-    this.aDarDeBaja.set(this.filas.elegido());
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    const articulo = this.filas.elegido();
+    if (this.motivo.mostrar('baja') || articulo === null) return;
+    this.aDarDeBaja.set(articulo);
   }
 
   protected desactivar(): void {
@@ -172,15 +208,19 @@ export class Articulos implements OnInit {
 
   /** G29: los movimientos de stock del elegido, también de uno dado de baja (su historia sigue ahí). */
   protected verMovimientos(): void {
+    if (!this.auth.esDueno()) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     const articulo = this.filas.elegido();
-    if (!articulo || !this.auth.esDueno()) return;
+    if (this.motivo.mostrar('movimientos') || articulo === null) return;
     void this.router.navigate(['/articulos', articulo.id, 'movimientos']);
   }
 
   /** G29: los clientes que compraron el elegido (el Ctrl+A de GDS), también de uno dado de baja. */
   protected verClientes(): void {
+    if (!this.auth.esDueno()) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     const articulo = this.filas.elegido();
-    if (!articulo || !this.auth.esDueno()) return;
+    if (this.motivo.mostrar('clientes') || articulo === null) return;
     void this.router.navigate(['/articulos', articulo.id, 'clientes']);
   }
 
@@ -205,8 +245,10 @@ export class Articulos implements OnInit {
   }
 
   protected ajustarStock(): void {
+    // S5: sin fila elegida, o con un artículo dado de baja, el botón avisa el motivo en vez de quedar apagado sin
+    // explicación (el mismo texto que la línea `#motivo-sin-ajuste`).
     const articulo = this.filas.elegido();
-    if (!articulo?.activo) return;
+    if (this.motivo.mostrar('ajuste') || articulo === null) return;
     this.limpiarMensajes();
     this.aAjustar.set(articulo);
   }
@@ -231,6 +273,16 @@ export class Articulos implements OnInit {
   private limpiarMensajes(): void {
     this.error.set(null);
     this.aviso.set(null);
+  }
+
+  /** Lo que se explica al intentar abrir la ficha sin una fila elegida: el Dueño edita y el Vendedor la ve. */
+  private motivoSinFicha(): string {
+    return this.auth.esDueno() ? MOTIVO_SIN_ELEGIR_EDITAR : MOTIVO_SIN_ELEGIR_FICHA;
+  }
+
+  /** El motivo de Ajustar stock con el artículo dado de baja: el mismo texto que muestra la barra. */
+  protected textoBajaSinAjuste(articulo: Articulo): string {
+    return `«${articulo.descripcion}» está dado de baja. Reactivalo para ajustar el stock.`;
   }
 
   /** Con `retrocederSiVacia`, si la página quedó sin artículos (por una baja) trae la anterior. */

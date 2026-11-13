@@ -5,6 +5,7 @@ import {
   Injector,
   OnInit,
   afterNextRender,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -15,12 +16,17 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, ariaDe } from '../../shared/motivo-de-accion';
 import { MEDIOS_PAGO, MEDIO_PAGO_LABELS, MedioPago } from '../mostrador/venta.models';
 import { FormaPago, FormaPagoRequest } from './forma-pago.models';
 import { FormasPagoService } from './formas-pago.service';
 
 const RECARGO_MAXIMO = 200;
 const DESCUENTO_MAXIMO = 99.99;
+/** S5: lo que se explica al intentar Editar sin una fila elegida. */
+const MOTIVO_SIN_ELEGIR = 'Elegí una forma de pago de la lista para editarla.';
+/** S5: lo que se explica al intentar Activar o Desactivar sin una fila elegida. */
+const MOTIVO_SIN_ELEGIR_ALTERNAR = 'Elegí una forma de pago de la lista para activarla o desactivarla.';
 const porOrden = (a: FormaPago, b: FormaPago) => a.orden - b.orden || a.nombre.localeCompare(b.nombre);
 const porcentaje = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
@@ -62,6 +68,15 @@ export class FormasPago implements OnInit {
   protected readonly cambiando = signal(false);
   /** La forma que se está por desactivar: espera la confirmación. */
   protected readonly aDesactivar = signal<FormaPago | null>(null);
+  /** Por qué las acciones de la barra no se pueden usar: null en la que sí se puede (S5). */
+  protected readonly motivos = computed(() => ({
+    editar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR,
+    alternar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR_ALTERNAR,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly form = inject(FormBuilder).nonNullable.group(
     {
@@ -163,7 +178,13 @@ export class FormasPago implements OnInit {
 
   /** Editar (barra, Enter o doble clic): precarga la forma en el formulario de al lado. */
   protected editar(forma: FormaPago | null = this.filas.elegido()): void {
-    if (!forma || !this.auth.esDueno()) return;
+    if (!this.auth.esDueno()) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (!forma) {
+      this.motivo.mostrar('editar');
+      return;
+    }
+    this.motivo.limpiar();
     this.aviso.set(null);
     this.filas.elegidoId.set(forma.id);
     this.editando.set(forma);
@@ -191,7 +212,13 @@ export class FormasPago implements OnInit {
   /** Desactivar pide confirmación; activar es directo. */
   protected alternarActiva(): void {
     const forma = this.filas.elegido();
-    if (!forma || this.cambiando()) return;
+    // S5: sin fila elegida el botón avisa el motivo; mientras cambia sigue apagado por el disabled transitorio.
+    if (!forma) {
+      this.motivo.mostrar('alternar');
+      return;
+    }
+    if (this.cambiando()) return;
+    this.motivo.limpiar();
     if (forma.activa) this.aDesactivar.set(forma);
     else this.cambiarActiva(forma, true);
   }

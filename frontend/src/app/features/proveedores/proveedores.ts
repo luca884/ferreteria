@@ -21,6 +21,7 @@ import { contiene } from '../../core/formato/texto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, ariaDe } from '../../shared/motivo-de-accion';
 import { resumenDeLista } from './lista-del-proveedor';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
 import { ProveedoresService } from './proveedores.service';
@@ -28,6 +29,10 @@ import { ProveedoresService } from './proveedores.service';
 const porNombre = (a: Proveedor, b: Proveedor) => a.nombre.localeCompare(b.nombre);
 /** Igual que el backend (utf8mb4_0900_ai_ci): sin distinguir mayúsculas ni tildes. */
 const mismoNombre = (a: string, b: string) => a.trim().localeCompare(b.trim(), 'es', { sensitivity: 'base' }) === 0;
+/** S5: lo que se explica al intentar Editar sin una fila elegida. */
+const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un proveedor de la lista para editarlo.';
+/** S5: lo que se explica al intentar Dar de baja sin una fila elegida. */
+const MOTIVO_SIN_ELEGIR_BAJA = 'Elegí un proveedor de la lista para darlo de baja.';
 
 @Component({
   selector: 'app-proveedores',
@@ -74,6 +79,15 @@ export class Proveedores implements OnInit {
   protected readonly aDarDeBaja = signal<Proveedor | null>(null);
   /** El alta chocó con un proveedor dado de baja: se ofrece reactivarlo. */
   protected readonly reactivable = signal<Proveedor | null>(null);
+  /** Por qué las acciones de la barra no se pueden usar: null en la que sí se puede (S5). */
+  protected readonly motivos = computed(() => ({
+    editar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR_EDITAR,
+    baja: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR_BAJA,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly deBaja = computed(() => this.proveedores().filter((p) => !p.activo).length);
   protected readonly activos = computed(() => this.proveedores().length - this.deBaja());
@@ -150,7 +164,13 @@ export class Proveedores implements OnInit {
 
   /** Editar (barra, Enter o doble clic): precarga el proveedor en el formulario de al lado. */
   protected editar(proveedor: Proveedor | null = this.filas.elegido()): void {
-    if (!proveedor || !this.auth.esDueno()) return;
+    if (!this.auth.esDueno()) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (!proveedor) {
+      this.motivo.mostrar('editar');
+      return;
+    }
+    this.motivo.limpiar();
     this.limpiarMensajes();
     this.filas.elegidoId.set(proveedor.id);
     this.editandoId.set(proveedor.id);
@@ -176,7 +196,14 @@ export class Proveedores implements OnInit {
   }
 
   protected pedirBaja(): void {
-    this.aDarDeBaja.set(this.filas.elegido());
+    const proveedor = this.filas.elegido();
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (!proveedor) {
+      this.motivo.mostrar('baja');
+      return;
+    }
+    this.motivo.limpiar();
+    this.aDarDeBaja.set(proveedor);
   }
 
   protected invalido(campo: 'nombre' | 'cuit' | 'contacto' | 'telefono' | 'whatsapp' | 'email'): boolean {

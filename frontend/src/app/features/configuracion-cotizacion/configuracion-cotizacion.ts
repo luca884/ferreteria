@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { RecalculoCotizacion, VistaPreviaRecalculo } from '../../core/cotizacion/cotizacion.models';
@@ -6,6 +6,7 @@ import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { formatearCotizacion } from '../../core/formato/monto';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import {
   ConfiguracionCotizacion,
   ConfiguracionCotizacionRequest,
@@ -50,6 +51,12 @@ export class PaginaConfiguracionCotizacion implements OnInit {
   protected readonly errorRecalculo = signal<string | null>(null);
   /** El formulario difiere de lo guardado: «Recalcular ahora» usa lo guardado, así que espera. */
   protected readonly hayCambios = signal(false);
+  /** Por qué «Ver vista previa» y «Recalcular ahora» no se pueden usar sin una regla de negocio de por medio (S5). */
+  protected readonly motivos = computed<Motivos<'recalcular'>>(() => ({ recalcular: this.motivoSinRecalculo() }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
@@ -96,7 +103,10 @@ export class PaginaConfiguracionCotizacion implements OnInit {
    * cambiar nada. Recién «Aplicar» recalcula (mejoras-ferreteros-bloque-1, S2).
    */
   protected pedirVistaPrevia(): void {
-    if (this.ocupado() || this.motivoSinRecalculo() !== null) return;
+    // S5: con un motivo de negocio el botón avisa por qué en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('recalcular')) return;
+    if (this.ocupado()) return;
+    this.motivo.limpiar();
     this.preparando.set(true);
     this.vistaPrevia.set(null);
     this.resultado.set(null);

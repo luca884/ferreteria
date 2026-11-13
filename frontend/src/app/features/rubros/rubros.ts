@@ -7,6 +7,7 @@ import {
   Injector,
   OnInit,
   afterNextRender,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -17,10 +18,13 @@ import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, ariaDe } from '../../shared/motivo-de-accion';
 import { Rubro, RubroRequest, VistaPreviaMargen } from './rubro.models';
 import { RubrosService } from './rubros.service';
 
 const MARGEN_INICIAL = 30;
+/** S4: lo que se explica al intentar Editar sin una fila elegida. */
+const MOTIVO_SIN_ELEGIR = 'Elegí un rubro de la lista para editarlo.';
 const ENTERO = new Intl.NumberFormat('es-AR');
 const porNombre = (a: Rubro, b: Rubro) => a.nombre.localeCompare(b.nombre);
 const porcentaje = (valor: number) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(valor);
@@ -61,6 +65,12 @@ export class Rubros implements OnInit {
   /** Rubro que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editando = signal<Rubro | null>(null);
   protected readonly cambioDeMargen = signal<CambioDeMargen | null>(null);
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S4). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Por qué las acciones de la barra no se pueden usar: null en la que sí se puede (S4). */
+  protected readonly motivos = computed(() => ({ editar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR }));
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     nombre: ['', [Validators.required, Validators.maxLength(80), Validators.pattern(/\S/)]],
@@ -144,7 +154,13 @@ export class Rubros implements OnInit {
 
   /** Editar (barra, Enter o doble clic): precarga el rubro en el formulario de al lado. */
   protected editar(rubro: Rubro | null = this.filas.elegido()): void {
-    if (!rubro || !this.auth.esDueno()) return;
+    if (!this.auth.esDueno()) return;
+    // S4: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (!rubro) {
+      this.motivo.mostrar('editar');
+      return;
+    }
+    this.motivo.limpiar();
     this.aviso.set(null);
     this.avisosSalteados.set([]);
     this.filas.elegidoId.set(rubro.id);
@@ -154,6 +170,8 @@ export class Rubros implements OnInit {
   }
 
   protected cancelar(): void {
+    // El motivo de un intento anterior no corresponde a lo que se está por hacer (S5).
+    this.motivo.limpiar();
     this.vaciarFormulario();
     this.error.set(null);
   }

@@ -3,10 +3,14 @@ import { AuthService } from '../../core/auth/auth.service';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { formatearCosto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { ArticuloBajoMinimo, ORDENES, OrdenBajoMinimo } from './stock-bajo-minimo.models';
 import { StockBajoMinimoService } from './stock-bajo-minimo.service';
 
 const MENSAJE_ERROR = 'No se pudo cargar el listado.';
+
+/** S5: lo que se explica al intentar imprimir antes de que llegue el listado. */
+const MOTIVO_SIN_DATOS = 'El listado todavía no está listo. Esperá un segundo y probá de nuevo.';
 
 const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
@@ -47,6 +51,14 @@ export class StockBajoMinimo implements OnInit {
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly emitido = signal(emitidoEl(new Date()));
+  /** Por qué Imprimir no se puede usar: null cuando el listado ya está (S5). */
+  protected readonly motivos = computed<Motivos<'imprimir'>>(() => ({
+    imprimir: this.filas() === null ? MOTIVO_SIN_DATOS : null,
+  }));
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly textoOrden = computed(
@@ -89,6 +101,9 @@ export class StockBajoMinimo implements OnInit {
   }
 
   protected imprimir(): void {
+    // S5: sin listado el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('imprimir')) return;
+    this.motivo.limpiar();
     window.print();
   }
 }

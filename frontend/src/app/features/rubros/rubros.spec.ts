@@ -194,14 +194,60 @@ describe('Rubros', () => {
       expect(el().querySelectorAll('tbody button')).toHaveLength(0);
     });
 
-    it('sin fila elegida Editar está deshabilitado; al elegir una se habilita y queda marcada', async () => {
+    it('sin fila elegida Editar queda apagado con aria-disabled; al elegir una se habilita y queda marcada', async () => {
       await crear([buloneria, pinturas], true);
-      expect(barra('button.editar')!.disabled).toBe(true);
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.editar')!.hasAttribute('disabled')).toBe(false);
 
       await elegir(1);
 
       expect(elegidas()).toEqual([filas()[1]]);
-      expect(barra('button.editar')!.disabled).toBe(false);
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBeNull();
+    });
+
+    it('intentar Editar sin fila elegida explica el motivo en vez de no hacer nada (S4)', async () => {
+      await crear([buloneria, pinturas], true);
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+
+      await clickEn('app-barra-acciones button.editar');
+
+      const motivo = el().querySelector('.motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Elegí un rubro de la lista para editarlo.');
+      // El motivo no es una acción: el formulario sigue en el alta.
+      expect(el().querySelector('form h2')!.textContent?.trim()).toBe('Nuevo rubro');
+    });
+
+    it('el motivo se va cuando la acción sí se puede usar', async () => {
+      await crear([buloneria, pinturas], true);
+      await clickEn('app-barra-acciones button.editar');
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      await editarFila(1);
+
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+      expect(input('nombre').value).toBe('Pinturas');
+    });
+
+    it('el motivo se va en cuanto elegir la fila habilita Editar, sin volver a tocar el botón (S4)', async () => {
+      await crear([buloneria, pinturas], true);
+      await clickEn('app-barra-acciones button.editar');
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      await elegir(1);
+
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBeNull();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+    });
+
+    it('Nuevo también saca el motivo de la vista (S4)', async () => {
+      await crear([buloneria], true);
+      await clickEn('app-barra-acciones button.editar');
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      await clickEn('app-barra-acciones button.nuevo');
+
+      expect(el().querySelector('.motivo-accion')).toBeNull();
     });
 
     it('Enter o doble clic en la fila la editan', async () => {

@@ -634,14 +634,40 @@ describe('FormasPago', () => {
     expect(input('nombre').value).toBe('');
   });
 
-  it('Editar y Desactivar de la barra están apagados sin fila elegida', async () => {
+  it('Editar y Desactivar de la barra quedan apagados con aria-disabled sin fila elegida', async () => {
     await crear([efectivo]);
 
-    expect(barra('button.editar')!.disabled).toBe(true);
-    expect(barra('button.desactivar')!.disabled).toBe(true);
+    expect(barra('button.editar')!.getAttribute('aria-disabled')).toBe('true');
+    expect(barra('button.editar')!.hasAttribute('disabled')).toBe(false);
+    expect(barra('button.desactivar')!.getAttribute('aria-disabled')).toBe('true');
+    expect(barra('button.desactivar')!.hasAttribute('disabled')).toBe(false);
     await elegir(0);
-    expect(barra('button.editar')!.disabled).toBe(false);
-    expect(barra('button.desactivar')!.disabled).toBe(false);
+    expect(barra('button.editar')!.getAttribute('aria-disabled')).toBeNull();
+    expect(barra('button.desactivar')!.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('intentar Editar o Desactivar sin fila elegida explica el motivo y no hace nada (S5)', async () => {
+    await crear([efectivo]);
+    expect(el().querySelector('.motivo-accion')).toBeNull();
+
+    barra('button.editar')!.click();
+    await refrescar();
+
+    const motivo = el().querySelector('.motivo-accion')!;
+    expect(motivo.getAttribute('role')).toBe('status');
+    expect(motivo.textContent?.trim()).toBe('Elegí una forma de pago de la lista para editarla.');
+    // El motivo no es una acción: el formulario sigue en el alta.
+    expect(el().querySelector('form h2')?.textContent).toContain('Nueva forma de pago');
+    expect(input('nombre').value).toBe('');
+
+    barra('button.desactivar')!.click();
+    await refrescar();
+
+    expect(el().querySelector('.motivo-accion')!.textContent?.trim()).toBe(
+      'Elegí una forma de pago de la lista para activarla o desactivarla.',
+    );
+    expect(el().querySelector('app-confirmacion')).toBeNull();
+    expect(servicio.actualizar).not.toHaveBeenCalled();
   });
 
   describe('desactivar desde la barra', () => {

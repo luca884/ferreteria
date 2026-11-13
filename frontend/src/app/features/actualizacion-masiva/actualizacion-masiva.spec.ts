@@ -189,9 +189,10 @@ describe('ActualizacionMasiva', () => {
       ]);
     });
 
-    it('«Ver vista previa» deshabilitado dice qué falta', async () => {
+    it('«Ver vista previa» deshabilitado dice qué falta y lleva el motivo al clic (S5)', async () => {
       await crearComponente();
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
+      expect(boton().hasAttribute('disabled')).toBe(false);
       expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, elegí la operación.']);
 
       await elegir('#modo', 'Cambiar el costo en %');
@@ -204,9 +205,29 @@ describe('ActualizacionMasiva', () => {
       expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, corregí el margen.']);
 
       await escribir('#valor', '40');
-      expect(boton().disabled).toBe(false);
+      expect(boton().getAttribute('aria-disabled')).toBeNull();
+      expect(boton().hasAttribute('aria-disabled')).toBe(false);
       expect(boton().hasAttribute('aria-describedby')).toBe(false);
     });
+  });
+
+  // S5: el botón no se apaga con `disabled` (así el clic llega) y la acción explica el motivo al intentarla.
+  it('sin operación, un clic en «Ver vista previa» dice qué falta y el motivo se va al completar el formulario', async () => {
+    await crearComponente();
+
+    boton().click();
+    await asentar();
+
+    const motivo = el().querySelector('.motivo-accion')!;
+    expect(motivo.getAttribute('role')).toBe('status');
+    expect(motivo.textContent?.trim()).toBe('Para ver la vista previa, elegí la operación.');
+    expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+
+    // Completar el formulario hace usable el botón: el motivo se va sin volver a tocarlo.
+    await completar();
+
+    expect(el().querySelector('.motivo-accion')).toBeNull();
+    expect(boton().getAttribute('aria-disabled')).toBeNull();
   });
 
   // Bugs de la guía, S13: con la pista abajo del Valor, la fila alineaba por abajo y «Operación» quedaba más bajo.
@@ -274,7 +295,7 @@ describe('ActualizacionMasiva', () => {
       expect(q<HTMLInputElement>('#q').value).toBe('');
       expect(q('label[for="incluirInactivos"]').textContent).toContain('Incluir dados de baja');
       expect(q<HTMLInputElement>('#incluirInactivos').checked).toBe(false);
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
       expect(boton().textContent).toContain('Ver vista previa');
     });
 
@@ -304,15 +325,15 @@ describe('ActualizacionMasiva', () => {
       expect(q('label[for="valor"]').textContent?.trim()).toBe('Porcentaje (%)');
     });
 
-    it('el botón sigue deshabilitado con solo el modo o con solo el valor', async () => {
+    it('el botón sigue apagado con solo el modo o con solo el valor', async () => {
       await crearComponente();
 
       await elegir('#modo', 'Cambiar el costo en %');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
 
       await elegir('#modo', 'Elegí qué querés hacer');
       await escribir('#valor', '10');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
     });
 
     it('con modo y valor numérico el botón se habilita', async () => {
@@ -321,16 +342,17 @@ describe('ActualizacionMasiva', () => {
       await completar();
 
       expect(boton().disabled).toBe(false);
+      expect(boton().getAttribute('aria-disabled')).toBeNull();
     });
 
     it.each(['abc', '', '   ', 'Infinity'])(
-      'un valor que no es un número (%j) deja el botón deshabilitado',
+      'un valor que no es un número (%j) deja el botón apagado',
       async (valor) => {
         await crearComponente();
 
         await completar('Cambiar el costo en %', valor);
 
-        expect(boton().disabled).toBe(true);
+        expect(boton().getAttribute('aria-disabled')).toBe('true');
         generarSinHabilitar();
       },
     );
@@ -493,6 +515,7 @@ describe('ActualizacionMasiva', () => {
       expect(seleccionado('#modo')).toBe('Cambiar el costo en %');
       expect(q<HTMLInputElement>('#valor').value).toBe('0');
       expect(boton().disabled).toBe(false);
+      expect(boton().getAttribute('aria-disabled')).toBeNull();
     });
 
     it('un 400 con errores por campo muestra cada mensaje y no el genérico', async () => {
@@ -1080,6 +1103,7 @@ describe('ActualizacionMasiva', () => {
       expect(el().querySelector('.vista-previa')).toBeNull();
       expect(boton().textContent).toContain('Ver vista previa');
       expect(boton().disabled).toBe(false);
+      expect(boton().getAttribute('aria-disabled')).toBeNull();
     });
 
     it('un error que llega después de cambiar el formulario tampoco se muestra', async () => {
@@ -1204,6 +1228,7 @@ describe('ActualizacionMasiva', () => {
 
         expect(botonConfirmar().textContent?.trim()).toBe(etiqueta);
         expect(botonConfirmar().disabled).toBe(false);
+        expect(botonConfirmar().getAttribute('aria-disabled')).toBeNull();
       });
 
       it('N es `modificados` y no `total`', async () => {
@@ -1431,16 +1456,22 @@ describe('ActualizacionMasiva', () => {
     });
 
     describe('con modificados 0 y total mayor que 0', () => {
-      it('el botón está deshabilitado, un clic no envía nada y se explica por qué', async () => {
+      it('el botón se apaga por regla de negocio y un clic deja el motivo a la vista sin abrir la confirmación', async () => {
         await conVistaPrevia(vistaPrevia(0, 2));
 
         expect(botonConfirmar().textContent?.trim()).toBe('Actualizar 0 artículos');
-        expect(botonConfirmar().disabled).toBe(true);
+        expect(botonConfirmar().getAttribute('aria-disabled')).toBe('true');
+        expect(botonConfirmar().hasAttribute('disabled')).toBe(false);
         botonConfirmar().click();
         await asentar();
         expect(servicio.aplicar).not.toHaveBeenCalled();
         expect(hayConfirmacion()).toBe(false);
         expect(texto('.sin-cambios')).toBe('Con esta operación no cambia ningún artículo.');
+        const motivo = el().querySelector('.motivo-accion')!;
+        expect(motivo.getAttribute('role')).toBe('status');
+        expect(texto('.motivo-accion')).toBe(
+          'Con esta lista no cambia ningún precio. Revisá el porcentaje o la lista elegida.',
+        );
       });
 
       it('tampoco envía nada con el filtro vacío: no abre la segunda confirmación', async () => {
@@ -1992,7 +2023,7 @@ describe('ActualizacionMasiva', () => {
       expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
       expect(q<HTMLInputElement>('#valor').value).toBe('');
       expect(seleccionado('#proveedor')).toBe('Sinteplast');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
       expect(texto('.resumen')).toBe('Se actualizaron 3 artículos.');
     });
 
@@ -2046,7 +2077,8 @@ describe('ActualizacionMasiva', () => {
       await completar(modo, valor);
 
       expect(texto('.campo:has(#valor) .campo-error')).toBe(mensaje);
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
+      expect(boton().hasAttribute('disabled')).toBe(false);
     });
 
     it('un valor válido no muestra error en el campo', async () => {
@@ -2208,7 +2240,8 @@ describe('ActualizacionMasiva', () => {
         expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
         expect(q('#valor').getAttribute('aria-invalid')).toBe('true');
         expect(describedby('#valor')).toEqual([PISTA, 'El monto no puede ser cero.']);
-        expect(boton().disabled).toBe(true);
+        expect(boton().getAttribute('aria-disabled')).toBe('true');
+        expect(boton().hasAttribute('disabled')).toBe(false);
         expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el monto.');
         expect(servicio.vistaPrevia).not.toHaveBeenCalled();
       });
@@ -2423,7 +2456,7 @@ describe('ActualizacionMasiva', () => {
 
       await completar(MODO_PORCENTAJE, '-100');
       expect(texto('#valor-error')).toBe('El porcentaje tiene que estar entre -99,99 y 1.000.');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
       await escribir('#valor', '1000,01');
       expect(texto('#valor-error')).toBe('El porcentaje tiene que estar entre -99,99 y 1.000.');
       expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el porcentaje.');
@@ -2457,7 +2490,7 @@ describe('ActualizacionMasiva', () => {
       expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
       expect(describedby('#valor')).toEqual([PISTA_PRECIO, 'El monto no puede ser cero.']);
       expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el monto.');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
 
       await escribir('#valor', '50000');
       expect(el().querySelector('#valor-error')).toBeNull();
@@ -2639,7 +2672,7 @@ describe('ActualizacionMasiva', () => {
       expect(textosDe('#rubroDestino')).toEqual(['Elegí el rubro', 'Pinturas', 'Herramientas']);
       expect(texto('#rubro-destino-pista')).toBe(PISTA);
       expect(q('#rubroDestino').getAttribute('aria-describedby')).toBe('rubro-destino-pista');
-      expect(boton().disabled).toBe(true);
+      expect(boton().getAttribute('aria-disabled')).toBe('true');
       expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, elegí el rubro destino.');
 
       await elegir('#rubroDestino', 'Herramientas');

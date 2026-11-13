@@ -1636,16 +1636,34 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('button.ajustar-stock')).toBeNull();
     });
 
-    it('un artículo dado de baja tiene «Ajustar stock» deshabilitado con la ayuda', async () => {
+    it('un artículo dado de baja tiene «Ajustar stock» apagado con la ayuda y explica el motivo al intentar (S5)', async () => {
       await crearComponente({
         id: '5',
         articulo: articuloGuardado({ activo: false, descripcion: 'Tuerca vieja' }),
       });
 
       const boton = el().querySelector<HTMLButtonElement>('button.ajustar-stock')!;
-      expect(boton.disabled).toBe(true);
-      const motivo = el().querySelector(`#${boton.getAttribute('aria-describedby')}`);
-      expect(motivo?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
+      expect(boton.getAttribute('aria-disabled')).toBe('true');
+      expect(boton.hasAttribute('disabled')).toBe(false);
+      const ayuda = el().querySelector(`#${boton.getAttribute('aria-describedby')}`);
+      expect(ayuda?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
+
+      boton.click();
+      await refrescar();
+
+      const motivo = el().querySelector(':scope > .motivo-accion')!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
+      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
+    });
+
+    it('con el artículo activo, «Ajustar stock» está prendido y sin motivo (S5)', async () => {
+      await crearComponente({ id: '5' });
+
+      const boton = el().querySelector<HTMLButtonElement>('button.ajustar-stock')!;
+      expect(boton.getAttribute('aria-disabled')).toBeNull();
+      expect(boton.hasAttribute('disabled')).toBe(false);
+      expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
     });
 
     it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar desde la barra', async () => {
@@ -2303,13 +2321,37 @@ describe('ArticuloForm', () => {
       expect(filas()).toBe(1);
     });
 
-    it('tiene hasta 5 recargos: con 5 «Agregar» se apaga', async () => {
+    it('tiene hasta 5 recargos: con 5 «Agregar» se apaga y explica el motivo al intentar (S5)', async () => {
       await crearComponente();
 
       for (let i = 0; i < 5; i++) await agregar();
 
       expect(filas()).toBe(5);
-      expect(botonAgregar().disabled).toBe(true);
+      expect(botonAgregar().getAttribute('aria-disabled')).toBe('true');
+      expect(botonAgregar().hasAttribute('disabled')).toBe(false);
+
+      botonAgregar().click();
+      await refrescar();
+
+      expect(filas()).toBe(5);
+      expect(limpio(el().querySelector(':scope > .motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
+      expect(el().querySelector(':scope > .motivo-accion')?.getAttribute('role')).toBe('status');
+    });
+
+    it('con el motivo del tope a la vista, quitar un recargo lo hace desaparecer sin tocar «Agregar» (S5)', async () => {
+      await crearComponente();
+
+      for (let i = 0; i < 5; i++) await agregar();
+      botonAgregar().click();
+      await refrescar();
+      expect(limpio(el().querySelector(':scope > .motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
+
+      el().querySelector<HTMLButtonElement>('button.quitar-recargo-costo')!.click();
+      await refrescar();
+
+      expect(filas()).toBe(4);
+      expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
+      expect(botonAgregar().getAttribute('aria-disabled')).toBeNull();
     });
 
     it('el precio en vivo parte del costo real y se muestra el costo real', async () => {
@@ -2495,16 +2537,17 @@ describe('ArticuloForm', () => {
     });
 
     describe('guardar ajustes', () => {
-      it('está apagado mientras no haya cambios', async () => {
+      it('está apagado mientras no haya cambios (S5: con aria-disabled, para poder explicar)', async () => {
         await crearComponente(conLista());
 
-        expect(botonAjustes().disabled).toBe(true);
+        expect(botonAjustes().getAttribute('aria-disabled')).toBe('true');
+        expect(botonAjustes().hasAttribute('disabled')).toBe(false);
 
         await escribir('ajuste2', '');
-        expect(botonAjustes().disabled).toBe(false);
+        expect(botonAjustes().getAttribute('aria-disabled')).toBeNull();
 
         await escribir('ajuste2', '3');
-        expect(botonAjustes().disabled).toBe(true);
+        expect(botonAjustes().getAttribute('aria-disabled')).toBe('true');
       });
 
       it('está apagado con un ajuste inválido', async () => {
@@ -2512,7 +2555,8 @@ describe('ArticuloForm', () => {
 
         await escribir('ajuste1', '-100');
 
-        expect(botonAjustes().disabled).toBe(true);
+        expect(botonAjustes().getAttribute('aria-disabled')).toBe('true');
+        expect(botonAjustes().hasAttribute('disabled')).toBe(false);
       });
 
       it('si el costo guardado coincide con el de la lista guarda directo, sin aviso ni confirmación', async () => {
@@ -2745,7 +2789,8 @@ describe('ArticuloForm', () => {
 
         for (const id of ['ajuste1', 'ajuste2', 'ajuste3']) expect(input(id).disabled).toBe(true);
         expect(limpio(el().querySelector('#motivo-sin-lista')?.textContent)).toBe(MOTIVO_SIN_LISTA);
-        expect(botonAjustes().disabled).toBe(true);
+        expect(botonAjustes().getAttribute('aria-disabled')).toBe('true');
+        expect(botonAjustes().hasAttribute('disabled')).toBe(false);
       });
 
       it('con precio de lista pero sin proveedor se ve igual', async () => {
@@ -3205,6 +3250,33 @@ describe('ArticuloForm', () => {
 
         expect(el().querySelector('#motivo-ajustes')).toBeNull();
         expect(botonAjustes().getAttribute('aria-describedby')).toBe('motivo-sin-lista');
+      });
+
+      it('con el botón apagado, el clic trae el motivo a la vista y no guarda (S5)', async () => {
+        await crearComponente(conLista());
+
+        botonAjustes().click();
+        await refrescar();
+
+        const motivo = el().querySelector(':scope > .motivo-accion')!;
+        expect(motivo.getAttribute('role')).toBe('status');
+        expect(limpio(motivo.textContent)).toBe('Cambiá un ajuste para guardar');
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+        expect(botonAjustes().getAttribute('aria-disabled')).toBe('true');
+        expect(botonAjustes().hasAttribute('disabled')).toBe(false);
+      });
+
+      it('con el motivo a la vista, escribir un ajuste lo hace desaparecer sin volver a tocar el botón (S5)', async () => {
+        await crearComponente(conLista());
+
+        botonAjustes().click();
+        await refrescar();
+        expect(el().querySelector(':scope > .motivo-accion')).not.toBeNull();
+
+        await escribir('ajuste2', '');
+
+        expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
+        expect(botonAjustes().getAttribute('aria-disabled')).toBeNull();
       });
     });
 

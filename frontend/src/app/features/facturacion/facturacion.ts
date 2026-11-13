@@ -8,6 +8,7 @@ import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha, formatearFechaHora } from '../../core/formato/fecha-hora';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { AMBIENTE_ARCA_LABELS } from '../admin-ferreterias/ferreteria-admin.models';
 import { MENSAJE_CERTIFICADO_GRANDE, TAMANO_MAXIMO_CERTIFICADO, leerCertificado } from './archivo-certificado';
 import {
@@ -19,6 +20,11 @@ import {
   PruebaConexion,
 } from './facturacion.models';
 import { FacturacionService } from './facturacion.service';
+
+/** S5: lo que se explica al intentar subir o firmar un certificado antes de generar el pedido (el texto de la pantalla). */
+const MOTIVO_SIN_PEDIDO = 'Primero generá el pedido de certificado.';
+/** Las acciones de la sección del certificado que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'subirCertificado' | 'firmarSimulador';
 
 /** El detalle que acompaña al estado del certificado; null si está vigente y no hay nada que decir. */
 function detalleDelEstado(credencial: CredencialArca): string | null {
@@ -96,6 +102,17 @@ export class PaginaFacturacion implements OnInit {
   /** El último pedido generado o bajado: descargarlo o copiarlo otra vez no lo vuelve a pedir. */
   private readonly pedidoBajado = signal<PedidoCertificado | null>(null);
   protected readonly hayPedido = computed(() => this.config()?.pedido != null || this.pedidoBajado() !== null);
+  /** Por qué las acciones del certificado no se pueden usar: sin pedido no hay con qué (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => {
+    const motivo = this.hayPedido() ? null : MOTIVO_SIN_PEDIDO;
+    return { subirCertificado: motivo, firmarSimulador: motivo };
+  });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
+  /** El texto de la línea que explica por qué no hay con qué, uno solo para la línea y para el motivo. */
+  protected readonly MOTIVO_SIN_PEDIDO = MOTIVO_SIN_PEDIDO;
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
@@ -172,6 +189,13 @@ export class PaginaFacturacion implements OnInit {
     });
   }
 
+  /** «Subir certificado (.crt)» abre el selector de archivos; sin pedido, avisa el motivo (S5). */
+  protected pedirCertificado(entrada: HTMLInputElement): void {
+    if (this.motivo.mostrar('subirCertificado')) return;
+    this.motivo.limpiar();
+    entrada.click();
+  }
+
   /** «Subir certificado (.crt)» abre el selector de archivos; al elegir uno, se sube. */
   protected async alElegirCertificado(entrada: HTMLInputElement): Promise<void> {
     const archivo = entrada.files?.[0];
@@ -202,7 +226,10 @@ export class PaginaFacturacion implements OnInit {
   }
 
   protected firmarConSimulador(): void {
+    // S5: sin pedido pendiente el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('firmarSimulador')) return;
     if (this.ocupado()) return;
+    this.motivo.limpiar();
     this.limpiar();
     this.ocupado.set(true);
     this.service.firmarConSimulador().subscribe({
