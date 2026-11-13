@@ -448,7 +448,8 @@ button[type='submit'][data-tecla]::after {
   color: var(--acento-texto);
   opacity: 0.8;
 }
-button:disabled[data-tecla]::after {
+button:disabled[data-tecla]::after,
+button[aria-disabled='true'][data-tecla]::after {
   color: var(--texto-deshabilitado);
   opacity: 1;
 }
