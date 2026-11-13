@@ -1651,7 +1651,7 @@ describe('ArticuloForm', () => {
       boton.click();
       await refrescar();
 
-      const motivo = el().querySelector('.motivo-accion')!;
+      const motivo = el().querySelector(':scope > .motivo-accion')!;
       expect(motivo.getAttribute('role')).toBe('status');
       expect(motivo.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
       expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
@@ -1663,7 +1663,7 @@ describe('ArticuloForm', () => {
       const boton = el().querySelector<HTMLButtonElement>('button.ajustar-stock')!;
       expect(boton.getAttribute('aria-disabled')).toBeNull();
       expect(boton.hasAttribute('disabled')).toBe(false);
-      expect(el().querySelector('.motivo-accion')).toBeNull();
+      expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
     });
 
     it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar desde la barra', async () => {
@@ -2334,8 +2334,8 @@ describe('ArticuloForm', () => {
       await refrescar();
 
       expect(filas()).toBe(5);
-      expect(limpio(el().querySelector('.motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
-      expect(el().querySelector('.motivo-accion')?.getAttribute('role')).toBe('status');
+      expect(limpio(el().querySelector(':scope > .motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
+      expect(el().querySelector(':scope > .motivo-accion')?.getAttribute('role')).toBe('status');
     });
 
     it('con el motivo del tope a la vista, quitar un recargo lo hace desaparecer sin tocar «Agregar» (S5)', async () => {
@@ -2344,13 +2344,13 @@ describe('ArticuloForm', () => {
       for (let i = 0; i < 5; i++) await agregar();
       botonAgregar().click();
       await refrescar();
-      expect(limpio(el().querySelector('.motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
+      expect(limpio(el().querySelector(':scope > .motivo-accion')?.textContent)).toBe('Ya cargaste el máximo de recargos.');
 
       el().querySelector<HTMLButtonElement>('button.quitar-recargo-costo')!.click();
       await refrescar();
 
       expect(filas()).toBe(4);
-      expect(el().querySelector('.motivo-accion')).toBeNull();
+      expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
       expect(botonAgregar().getAttribute('aria-disabled')).toBeNull();
     });
 
@@ -3258,7 +3258,7 @@ describe('ArticuloForm', () => {
         botonAjustes().click();
         await refrescar();
 
-        const motivo = el().querySelector('.motivo-accion')!;
+        const motivo = el().querySelector(':scope > .motivo-accion')!;
         expect(motivo.getAttribute('role')).toBe('status');
         expect(limpio(motivo.textContent)).toBe('Cambiá un ajuste para guardar');
         expect(servicio.guardarAjustes).not.toHaveBeenCalled();
@@ -3271,11 +3271,11 @@ describe('ArticuloForm', () => {
 
         botonAjustes().click();
         await refrescar();
-        expect(el().querySelector('.motivo-accion')).not.toBeNull();
+        expect(el().querySelector(':scope > .motivo-accion')).not.toBeNull();
 
         await escribir('ajuste2', '');
 
-        expect(el().querySelector('.motivo-accion')).toBeNull();
+        expect(el().querySelector(':scope > .motivo-accion')).toBeNull();
         expect(botonAjustes().getAttribute('aria-disabled')).toBeNull();
       });
     });
