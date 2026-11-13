@@ -229,6 +229,27 @@ describe('Rubros', () => {
       expect(input('nombre').value).toBe('Pinturas');
     });
 
+    it('el motivo se va en cuanto elegir la fila habilita Editar, sin volver a tocar el botón (S4)', async () => {
+      await crear([buloneria, pinturas], true);
+      await clickEn('app-barra-acciones button.editar');
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      await elegir(1);
+
+      expect(barra('button.editar')!.getAttribute('aria-disabled')).toBeNull();
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+    });
+
+    it('Nuevo también saca el motivo de la vista (S4)', async () => {
+      await crear([buloneria], true);
+      await clickEn('app-barra-acciones button.editar');
+      expect(el().querySelector('.motivo-accion')).not.toBeNull();
+
+      await clickEn('app-barra-acciones button.nuevo');
+
+      expect(el().querySelector('.motivo-accion')).toBeNull();
+    });
+
     it('Enter o doble clic en la fila la editan', async () => {
       await crear([buloneria, pinturas], true);
 

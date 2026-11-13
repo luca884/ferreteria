@@ -66,10 +66,9 @@ export class Rubros implements OnInit {
   protected readonly editando = signal<Rubro | null>(null);
   protected readonly cambioDeMargen = signal<CambioDeMargen | null>(null);
   /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S4). */
-  protected readonly motivo = new MotivoDeAccion();
-  /** Por qué Editar no se puede usar: null cuando hay una fila elegida. */
-  /** Por qué Editar no se puede usar: null cuando hay una fila elegida. */
-  protected readonly motivoEditar = computed(() => (this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR));
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Por qué las acciones de la barra no se pueden usar: null en la que sí se puede (S4). */
+  protected readonly motivos = computed(() => ({ editar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR }));
   /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
   protected readonly ariaDe = ariaDe;
 
@@ -158,7 +157,7 @@ export class Rubros implements OnInit {
     if (!this.auth.esDueno()) return;
     // S4: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     if (!rubro) {
-      this.motivo.mostrar(MOTIVO_SIN_ELEGIR);
+      this.motivo.mostrar('editar');
       return;
     }
     this.motivo.limpiar();
@@ -171,6 +170,8 @@ export class Rubros implements OnInit {
   }
 
   protected cancelar(): void {
+    // El motivo de un intento anterior no corresponde a lo que se está por hacer (S5).
+    this.motivo.limpiar();
     this.vaciarFormulario();
     this.error.set(null);
   }
