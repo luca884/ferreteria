@@ -699,10 +699,31 @@ describe('Clientes', () => {
       expect(barra('.desactivar')).toBeNull();
     });
 
-    it('sin elegir a nadie, el botón está apagado', async () => {
+    it('sin elegir a nadie, el botón está apagado con aria-disabled', async () => {
       await crear();
 
+      expect(barra('.desactivar')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('.desactivar')!.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('mientras cambia, el botón sigue apagado por el disabled transitorio', async () => {
+      await crear();
+      const pendiente = new Subject<Cliente>();
+      servicio.cambiarActivo.mockReturnValue(pendiente);
+
+      await elegir(0);
+      barra('.desactivar')!.click();
+      await refrescar();
+      await confirmar();
+
       expect(barra('.desactivar')!.disabled).toBe(true);
+      expect(barra('.desactivar')!.hasAttribute('aria-disabled')).toBe(false);
+
+      pendiente.next({ ...ana, activo: false });
+      pendiente.complete();
+      await refrescar();
+
+      expect(barra('.desactivar')!.disabled).toBe(false);
     });
 
     it('si el servidor falla al desactivar, avisa y la fila no cambia', async () => {
@@ -1187,7 +1208,7 @@ describe('Clientes', () => {
         expect(texto('#motivo-desactivar')).toBe(RAZON);
       });
 
-      it('el clic en el botón con saldo no llama al servidor', async () => {
+      it('el clic en el botón con saldo no llama al servidor y repite la misma razón, sin inventar otra', async () => {
         await crear([deudor]);
         await elegir(0);
 
@@ -1196,6 +1217,7 @@ describe('Clientes', () => {
 
         expect(el().querySelector('app-confirmacion')).toBeNull();
         expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+        expect(el().querySelector('.motivo-accion')?.textContent?.trim()).toBe(RAZON);
       });
 
       it('con saldo 0 el botón funciona y no hay razón', async () => {
@@ -1252,16 +1274,17 @@ describe('Clientes', () => {
     const teclaEnFila = (i: number, key: string) =>
       filas()[i].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 
-    it('el Dueño lo ve en la barra, apagado hasta elegir una fila', async () => {
+    it('el Dueño lo ve en la barra, apagado con aria-disabled hasta elegir una fila', async () => {
       await crear();
 
       expect(cuenta()).not.toBeNull();
       expect(cuenta()!.textContent!.trim()).toBe('Cuenta corriente');
-      expect(cuenta()!.disabled).toBe(true);
+      expect(cuenta()!.getAttribute('aria-disabled')).toBe('true');
+      expect(cuenta()!.hasAttribute('disabled')).toBe(false);
 
       await elegir(1);
 
-      expect(cuenta()!.disabled).toBe(false);
+      expect(cuenta()!.hasAttribute('aria-disabled')).toBe(false);
     });
 
     it('navega a la pantalla de cuenta del cliente elegido', async () => {
@@ -1311,6 +1334,69 @@ describe('Clientes', () => {
       await refrescar();
 
       expect(navegar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('los motivos de la barra (S5)', () => {
+    const motivoDeLaPantalla = () => el().querySelector('.motivo-accion');
+
+    it('intentar Editar sin cliente elegido explica el motivo y no toca el formulario', async () => {
+      await crear();
+      expect(barra('.editar')!.getAttribute('aria-disabled')).toBe('true');
+      expect(barra('.editar')!.hasAttribute('disabled')).toBe(false);
+      expect(motivoDeLaPantalla()).toBeNull();
+
+      barra('.editar')!.click();
+      await refrescar();
+
+      const motivo = motivoDeLaPantalla()!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Elegí un cliente de la lista para editarlo.');
+      expect(el().querySelector('form h2')?.textContent?.trim()).toBe('Nuevo cliente');
+      expect(input('razon-social').value).toBe('');
+    });
+
+    it('intentar Desactivar sin cliente elegido explica el motivo y no abre la confirmación', async () => {
+      await crear();
+
+      barra('.desactivar')!.click();
+      await refrescar();
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe(
+        'Elegí un cliente de la lista para desactivarlo o reactivarlo.',
+      );
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+    });
+
+    it('intentar Cuenta corriente sin cliente elegido explica el motivo y no navega', async () => {
+      await crear();
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      barra('.cuenta')!.click();
+      await refrescar();
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe('Elegí un cliente de la lista para ver su cuenta.');
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('con el motivo a la vista, elegir un cliente lo apaga solo y deja la acción usable', async () => {
+      await crear();
+      barra('.editar')!.click();
+      await refrescar();
+      expect(motivoDeLaPantalla()).not.toBeNull();
+
+      await elegir(1);
+
+      // Nadie volvió a tocar el botón: el motivo se va porque la regla ya no rige.
+      expect(motivoDeLaPantalla()).toBeNull();
+      expect(barra('.editar')!.hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('.cuenta')!.hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('.desactivar')!.hasAttribute('aria-disabled')).toBe(false);
+
+      barra('.editar')!.click();
+      await refrescar();
+      expect(input('razon-social').value).toBe('Ferretería Norte SRL');
     });
   });
 });

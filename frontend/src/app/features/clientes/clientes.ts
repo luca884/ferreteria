@@ -20,6 +20,7 @@ import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import {
@@ -43,6 +44,13 @@ const TAMANO_PAGINA = 20;
 /** El tope del límite de cuenta corriente: el mismo que acepta el servidor (13 enteros y 2 decimales). */
 const LIMITE_MAXIMO = 9_999_999_999_999.99;
 const MOTIVO_NO_DESACTIVAR = 'No se puede desactivar: el cliente tiene saldo en cuenta corriente.';
+/** S5: lo que se explica al intentar una acción de la barra sin un cliente elegido. */
+const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un cliente de la lista para editarlo.';
+const MOTIVO_SIN_ELEGIR_ALTERNAR = 'Elegí un cliente de la lista para desactivarlo o reactivarlo.';
+const MOTIVO_SIN_ELEGIR_CUENTA = 'Elegí un cliente de la lista para ver su cuenta.';
+
+/** Las acciones de la barra que pueden estar apagadas por una regla de negocio (S5). */
+type Accion = 'editar' | 'alternar' | 'cuenta';
 
 /** El texto sin espacios de los bordes; undefined si queda vacío, así el pedido no manda campos en blanco. */
 const sinVacios = (texto: string): string | undefined => texto.trim() || undefined;
@@ -121,6 +129,17 @@ export class Clientes implements OnInit {
     const cliente = this.filas.elegido();
     return cliente?.activo && cliente.saldo !== undefined && cliente.saldo !== 0 ? MOTIVO_NO_DESACTIVAR : null;
   });
+  /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
+  protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /** Por qué cada acción de la barra no se puede usar: null en la que sí se puede (S5). */
+  protected readonly motivos = computed<Motivos<Accion>>(() => ({
+    editar: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR_EDITAR,
+    // El saldo reusa la razón de `motivoNoDesactivar`: no se inventa otro texto para la misma regla.
+    alternar: this.filas.elegido() ? this.motivoNoDesactivar() : MOTIVO_SIN_ELEGIR_ALTERNAR,
+    cuenta: this.filas.elegido() ? null : MOTIVO_SIN_ELEGIR_CUENTA,
+  }));
+  /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
+  protected readonly ariaDe = ariaDe;
   protected readonly errorLimite = signal<string | null>(null);
 
   private readonly condicionElegida = toSignal(this.form.controls.condicionIva.valueChanges, {
@@ -290,7 +309,12 @@ export class Clientes implements OnInit {
 
   /** Editar (barra, Enter o doble clic): precarga el cliente en el formulario de al lado. */
   protected editar(cliente: Cliente | null = this.filas.elegido()): void {
-    if (!cliente) return;
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación. Enter y doble clic
+    // traen su propio cliente, así que la acción mira el argumento y no la tabla.
+    if (!cliente) {
+      this.motivo.mostrar('editar');
+      return;
+    }
     this.aviso.set(null);
     this.filas.elegidoId.set(cliente.id);
     this.editando.set(cliente);
@@ -323,9 +347,12 @@ export class Clientes implements OnInit {
 
   /** Solo el Dueño: desactivar pide confirmación; reactivar es directo. */
   protected alternarActivo(): void {
+    // Mientras cambia sigue apagado por el disabled transitorio.
+    if (this.cambiando()) return;
+    // S5: sin fila elegida, o con saldo, el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('alternar')) return;
     const cliente = this.filas.elegido();
-    // Con saldo no se desactiva (el botón explica por qué); el servidor lo vuelve a controlar.
-    if (!cliente || this.cambiando() || this.motivoNoDesactivar()) return;
+    if (!cliente) return;
     if (cliente.activo) this.aDesactivar.set(cliente);
     else this.cambiarActivo(cliente);
   }
@@ -355,8 +382,11 @@ export class Clientes implements OnInit {
 
   /** Solo el Dueño: la pantalla de cuenta del cliente elegido (pendientes y cobranza). Sin atajo: Enter sigue editando. */
   protected verCuenta(): void {
+    // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
+    if (this.motivo.mostrar('cuenta')) return;
     const cliente = this.filas.elegido();
-    if (cliente) void this.router.navigate(['/clientes', cliente.id, 'cuenta']);
+    if (!cliente) return;
+    void this.router.navigate(['/clientes', cliente.id, 'cuenta']);
   }
 
   /** El documento en dos partes: el renglón se parte entre el tipo y el número, nunca dentro del número. */

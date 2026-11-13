@@ -7,7 +7,7 @@
       </svg>
       Nuevo
     </button>
-    <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
+    <button type="button" class="accion-barra editar" [attr.aria-disabled]="ariaDe(motivos().editar)" (click)="editar()">
       <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M3 13l1-3 7-7 2 2-7 7z" />
       </svg>
@@ -17,13 +17,18 @@
       type="button"
       class="accion-barra desactivar"
       [class.peligro]="filas.elegido()?.activa !== false"
-      [disabled]="!filas.elegido() || cambiando()"
+      [attr.aria-disabled]="ariaDe(motivos().alternar)"
+      [disabled]="cambiando()"
       (click)="alternarActiva()"
     >
       {{ filas.elegido()?.activa === false ? 'Activar' : 'Desactivar' }}
     </button>
   }
 </app-barra-acciones>
+
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar las formas de pago.</p>

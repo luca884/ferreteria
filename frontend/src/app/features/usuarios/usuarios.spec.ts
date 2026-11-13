@@ -427,14 +427,15 @@ describe('Usuarios', () => {
   });
 
   describe('el usuario logueado', () => {
-    it('no puede desactivarse: el botón queda deshabilitado en su fila y habilitado en las otras', async () => {
+    it('no puede desactivarse: el botón queda apagado con aria-disabled en su fila y prendido en las otras', async () => {
       await crear([dueno, vendedor]);
 
       await elegir(0);
-      expect(barra('button.desactivar').disabled).toBe(true);
+      expect(barra('button.desactivar').getAttribute('aria-disabled')).toBe('true');
+      expect(barra('button.desactivar').hasAttribute('disabled')).toBe(false);
 
       await elegir(1);
-      expect(barra('button.desactivar').disabled).toBe(false);
+      expect(barra('button.desactivar').hasAttribute('aria-disabled')).toBe(false);
     });
 
     it('no puede cambiarse el rol: el selector queda deshabilitado al editarse', async () => {
@@ -489,18 +490,93 @@ describe('Usuarios', () => {
       expect(el().querySelector('.error')).toBeNull();
     });
 
-    it('el 422 se muestra aunque se fuerce la desactivación', async () => {
+    it('el clic en Desactivar sobre uno mismo no abre la confirmación ni llama al servidor', async () => {
       await crear([dueno, vendedor]);
-      servicio.cambiarActivo.mockReturnValue(throwError(() => errorHttp(422, 'No podés desactivarte a vos mismo.')));
 
       await elegir(0);
-      barra('button.desactivar').removeAttribute('disabled');
+      barra('button.desactivar').click();
+      await refrescar();
+
+      // La razón ya está a la vista, enlazada con aria-describedby: no se repite en el motivo de la acción.
+      expect(el().querySelector('#motivo-desactivar')?.textContent?.trim()).toBe(
+        'No podés desactivarte ni cambiarte el rol a vos mismo.',
+      );
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+    });
+
+    it('el 422 del servidor se muestra como error de la pantalla', async () => {
+      await crear([dueno, vendedor]);
+      servicio.cambiarActivo.mockReturnValue(throwError(() => errorHttp(422, 'No se puede desactivar a este usuario.')));
+
+      await elegir(1);
       barra('button.desactivar').click();
       await refrescar();
       el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
       await refrescar();
 
-      expect(el().querySelector('.error')?.textContent).toContain('No podés desactivarte a vos mismo.');
+      expect(el().querySelector('.error')?.textContent).toContain('No se puede desactivar a este usuario.');
+    });
+  });
+
+  describe('los motivos de la barra (S5)', () => {
+    const motivoDeLaPantalla = () => el().querySelector('.motivo-accion');
+
+    it('intentar Editar sin usuario elegido explica el motivo y no precarga el formulario', async () => {
+      await crear([dueno, vendedor]);
+      expect(motivoDeLaPantalla()).toBeNull();
+
+      barra('button.editar').click();
+      await refrescar();
+
+      const motivo = motivoDeLaPantalla()!;
+      expect(motivo.getAttribute('role')).toBe('status');
+      expect(motivo.textContent?.trim()).toBe('Elegí un usuario de la lista para editarlo.');
+      expect(el().querySelector('form h2')?.textContent?.trim()).toBe('Nuevo usuario');
+      expect(input('nombre').value).toBe('');
+    });
+
+    it('intentar Desactivar sin usuario elegido explica el motivo y no abre la confirmación', async () => {
+      await crear([dueno, vendedor]);
+
+      barra('button.desactivar').click();
+      await refrescar();
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe(
+        'Elegí un usuario de la lista para desactivarlo o reactivarlo.',
+      );
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+    });
+
+    it('intentar Resetear contraseña sin usuario elegido explica el motivo y no abre el formulario', async () => {
+      await crear([dueno, vendedor]);
+
+      barra('button.resetear').click();
+      await refrescar();
+
+      expect(motivoDeLaPantalla()?.textContent?.trim()).toBe(
+        'Elegí un usuario de la lista para resetearle la contraseña.',
+      );
+      expect(el().querySelector('app-contrasena-form')).toBeNull();
+    });
+
+    it('con el motivo a la vista, elegir un usuario lo apaga solo y deja la acción usable', async () => {
+      await crear([dueno, vendedor]);
+      barra('button.editar').click();
+      await refrescar();
+      expect(motivoDeLaPantalla()).not.toBeNull();
+
+      await elegir(1);
+
+      // Nadie volvió a tocar el botón: el motivo se va porque la regla ya no rige.
+      expect(motivoDeLaPantalla()).toBeNull();
+      expect(barra('button.editar').hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('button.resetear').hasAttribute('aria-disabled')).toBe(false);
+      expect(barra('button.desactivar').hasAttribute('aria-disabled')).toBe(false);
+
+      await editarFila(1);
+      expect(input('nombre').value).toBe('Vendedor Uno');
     });
   });
 
@@ -556,6 +632,27 @@ describe('Usuarios', () => {
       expect(el().querySelector('app-confirmacion')).toBeNull();
       expect(servicio.cambiarActivo).toHaveBeenCalledWith(3, true);
       expect(celdas(filas()[0])[3]).toBe('Activo');
+    });
+
+    it('mientras cambia, el botón sigue apagado por el disabled transitorio', async () => {
+      await crear([dueno, vendedor]);
+      const pendiente = new Subject<Usuario>();
+      servicio.cambiarActivo.mockReturnValue(pendiente);
+
+      await elegir(1);
+      barra('button.desactivar').click();
+      await refrescar();
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
+
+      expect(barra('button.desactivar').disabled).toBe(true);
+      expect(barra('button.desactivar').hasAttribute('aria-disabled')).toBe(false);
+
+      pendiente.next({ ...vendedor, activo: false });
+      pendiente.complete();
+      await refrescar();
+
+      expect(barra('button.desactivar').disabled).toBe(false);
     });
   });
 

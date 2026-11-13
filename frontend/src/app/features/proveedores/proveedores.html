@@ -7,7 +7,7 @@
       </svg>
       Nuevo
     </button>
-    <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
+    <button type="button" class="accion-barra editar" [attr.aria-disabled]="ariaDe(motivos().editar)" (click)="editar()">
       <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M3 13l1-3 7-7 2 2-7 7z" />
       </svg>
@@ -21,7 +21,7 @@
         Reactivar
       </button>
     } @else {
-      <button type="button" class="accion-barra peligro desactivar" [disabled]="!filas.elegido()" (click)="pedirBaja()">
+      <button type="button" class="accion-barra peligro desactivar" [attr.aria-disabled]="ariaDe(motivos().baja)" (click)="pedirBaja()">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path d="M3 4h10M6 4V2.5h4V4M4.5 4l.7 9.5h5.6l.7-9.5" />
         </svg>
@@ -52,6 +52,10 @@
     Mostrar dados de baja
   </label>
 </app-barra-acciones>
+
+@if (motivo.visible(); as texto) {
+  <p class="motivo-accion" role="status">{{ texto }}</p>
+}
 
 <p class="ayuda">Los proveedores se asignan a los artículos. Al darlos de baja, los artículos conservan la referencia.</p>
 
