@@ -71,7 +71,7 @@
     </button>
     <span class="separador-barra" aria-hidden="true"></span>
   }
-  <form class="busqueda" role="search" [formGroup]="form" (ngSubmit)="buscar()">
+  <form class="busqueda solo-escritorio" role="search" [formGroup]="form" (ngSubmit)="buscar()">
     <label class="caja-busqueda" for="q">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -91,7 +91,7 @@
     </label>
     <button type="submit" class="secundario buscar">Buscar</button>
   </form>
-  <label class="casilla inactivos" for="inactivos">
+  <label class="casilla inactivos solo-escritorio" for="inactivos">
     <input
       id="inactivos"
       name="inactivos"
@@ -101,7 +101,7 @@
     />
     Mostrar dados de baja
   </label>
-  <label class="casilla en-oferta" for="en-oferta">
+  <label class="casilla en-oferta solo-escritorio" for="en-oferta">
     <input
       id="en-oferta"
       name="en-oferta"
@@ -112,6 +112,69 @@
     Solo en oferta
   </label>
 </app-barra-acciones>
+
+<!--
+  Celular (móvil-pulgar, T2): el buscador sale de la barra —que en el celular se desliza en horizontal y lo dejaba a la
+  derecha, fuera de la vista— y va en su propio renglón, pegado abajo de la barra mientras la lista scrollea. Los dos
+  filtros de la barra se pliegan detrás de «Filtros», que lleva la cuenta de los que están puestos. En escritorio y en
+  tablet no se ve nada de esto: ahí manda la barra de siempre (las copias de arriba quedan ocultas sólo en el celular).
+-->
+<div class="herramientas-movil">
+  <form class="busqueda-movil" role="search" [formGroup]="form" (ngSubmit)="buscar()">
+    <label class="caja-busqueda" for="q-movil">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" />
+        <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      </svg>
+      <span class="sr-only">Buscar artículos</span>
+      <input
+        id="q-movil"
+        name="q-movil"
+        type="search"
+        formControlName="q"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Buscar: tornillo o TOR-001…"
+        (input)="alEscribirBusqueda($any($event.target).value)"
+      />
+    </label>
+    <button type="submit" class="secundario buscar">Buscar</button>
+  </form>
+  <button type="button" class="secundario filtros" [attr.aria-expanded]="filtrosAbiertos()" (click)="alternarFiltros()">
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+      <path d="M2 4h12M4.5 8h7M6.5 12h3" />
+    </svg>
+    Filtros
+    @if (filtrosActivos(); as activos) {
+      <span class="cuenta pastilla pastilla-acento" aria-hidden="true">{{ activos }}</span>
+      <span class="sr-only">{{ activos === 1 ? '1 filtro activo' : activos + ' filtros activos' }}</span>
+    }
+  </button>
+  @if (filtrosAbiertos()) {
+    <div class="filtros-panel">
+      <label class="casilla" for="inactivos-movil">
+        <input
+          id="inactivos-movil"
+          name="inactivos-movil"
+          type="checkbox"
+          [checked]="incluirInactivos()"
+          (change)="cambiarInactivos($any($event.target).checked)"
+        />
+        Mostrar dados de baja
+      </label>
+      <label class="casilla" for="en-oferta-movil">
+        <input
+          id="en-oferta-movil"
+          name="en-oferta-movil"
+          type="checkbox"
+          [checked]="soloEnOferta()"
+          (change)="cambiarSoloEnOferta($any($event.target).checked)"
+        />
+        Solo en oferta
+      </label>
+    </div>
+  }
+</div>
 
 @if (motivo.visible(); as texto) {
   <p class="motivo-accion" role="status">{{ texto }}</p>
@@ -203,7 +266,7 @@
               (keydown)="filas.alTeclear($event, articulo, i)"
             >
               <td class="codigo" data-etiqueta="Código">{{ articulo.codigoInterno }}</td>
-              <td class="codigo-proveedor" data-etiqueta="Cód. proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
+              <td class="codigo-proveedor solo-ficha" data-etiqueta="Cód. proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
               <td class="descripcion" data-etiqueta="Descripción">
                 {{ articulo.descripcion }}
                 @if (articulo.oferta?.vigente) {
@@ -211,8 +274,8 @@
                 }
               </td>
               @if (auth.esDueno()) {
-                <td class="num costo" data-etiqueta="Costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}{{ porUnidad(articulo.unidad) }}</td>
-                <td class="num margen" data-etiqueta="Margen">
+                <td class="num costo solo-ficha" data-etiqueta="Costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}{{ porUnidad(articulo.unidad) }}</td>
+                <td class="num margen solo-ficha" data-etiqueta="Margen">
                   @if (articulo.margenPorcentaje === null) {
                     <span class="heredado">Heredado</span>
                   } @else {
@@ -220,7 +283,7 @@
                   }
                 </td>
               }
-              <td class="iva" data-etiqueta="IVA">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
+              <td class="iva solo-ficha" data-etiqueta="IVA">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
               <td class="num precio" data-etiqueta="Precio final">
                 @if (articulo.oferta?.precioOferta; as precioOferta) {
                   <span class="precio-oferta">{{ precioOferta | monto }}{{ porUnidad(articulo.unidad) }}</span>
@@ -232,7 +295,7 @@
               <td class="num stock" data-etiqueta="Stock" [class.negativo]="articulo.stockActual < 0">
                 {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
               </td>
-              <td class="costo-al" data-etiqueta="Última actualización">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
+              <td class="costo-al solo-ficha" data-etiqueta="Última actualización">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
               <td class="estado" data-etiqueta="Estado">
                 <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
                   articulo.activo ? 'Activo' : 'De baja'

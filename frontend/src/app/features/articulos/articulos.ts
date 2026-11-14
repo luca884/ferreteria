@@ -68,6 +68,15 @@ export class Articulos implements OnInit {
   protected readonly incluirInactivos = signal(false);
   /** Ofertas (S3): solo los que hoy tienen una oferta que baja el precio. */
   protected readonly soloEnOferta = signal(false);
+  /**
+   * móvil-pulgar, T2: en el celular los dos filtros de la barra se pliegan detrás de un botón con el contador de los
+   * que están puestos. En escritorio el panel no se dibuja: los dos tildes siguen en la barra, como siempre.
+   */
+  protected readonly filtrosAbiertos = signal(false);
+  /** Cuántos de esos filtros están puestos: cero, uno o los dos. */
+  protected readonly filtrosActivos = computed(
+    () => [this.incluirInactivos(), this.soloEnOferta()].filter(Boolean).length,
+  );
   /** El CSV se está bajando: Exportar queda deshabilitado. */
   protected readonly exportando = signal(false);
   /**
@@ -136,6 +145,11 @@ export class Articulos implements OnInit {
   protected cambiarInactivos(incluir: boolean): void {
     this.incluirInactivos.set(incluir);
     this.cargar(0);
+  }
+
+  /** Abre o cierra el panel de filtros del celular (T2). */
+  protected alternarFiltros(): void {
+    this.filtrosAbiertos.update((abierto) => !abierto);
   }
 
   protected cambiarSoloEnOferta(solo: boolean): void {

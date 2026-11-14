@@ -1127,6 +1127,158 @@ describe('Articulos', () => {
     });
   });
 
+  /*
+   * móvil-pulgar, T2: en el celular el buscador sale de la barra que se desliza en horizontal, los filtros se pliegan
+   * detrás de un botón con contador y la fila de la lista es una sola línea con el importe a la derecha. Vitest no
+   * evalúa media queries, así que el spec vigila la estructura que dibuja el celular: el renglón propio con el
+   * buscador, el panel de filtros y las celdas que la línea compacta deja afuera. El escritorio conserva la barra y la
+   * grilla de siempre. El dibujo en sí (la grilla de la fila, los 44 px) está en articulos.css.
+   */
+  describe('celular: buscador, filtros y fila de una línea (móvil-pulgar, T2)', () => {
+    const renglon = () => el().querySelector<HTMLElement>('.herramientas-movil');
+    const botonFiltros = () => el().querySelector<HTMLButtonElement>('.herramientas-movil button.filtros');
+    const panel = () => el().querySelector<HTMLElement>('.filtros-panel');
+    const cuenta = () => botonFiltros()?.querySelector('.cuenta')?.textContent?.trim() ?? null;
+
+    it('el buscador va en su propio renglón, fuera de la barra que se desliza', async () => {
+      await crearComponente(true);
+
+      const buscador = renglon()?.querySelector('form.busqueda-movil');
+      expect(buscador).not.toBeNull();
+      // Fuera de la barra de acciones: adentro quedaba a la derecha del scroll horizontal y había que deslizar para verlo.
+      expect(buscador!.closest('app-barra-acciones')).toBeNull();
+      expect(buscador!.querySelector<HTMLInputElement>('#q-movil')).not.toBeNull();
+      // En su propio renglón, arriba de la lista: entra en la primera pantalla sin deslizar nada.
+      const lista = el().querySelector('table')!;
+      expect(renglon()!.compareDocumentPosition(lista) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // El buscador del escritorio no se movió: sigue adentro de la barra.
+      expect(el().querySelector('app-barra-acciones form.busqueda #q')).not.toBeNull();
+    });
+
+    it('el buscador del celular busca igual que el de la barra', async () => {      await crearComponente(true);
+      servicio.buscar.mockReturnValue(of(pagina([articulo(9)], 0, 1, 1)));
+
+      const input = renglon()!.querySelector<HTMLInputElement>('#q-movil')!;
+      input.value = '  torni ';
+      input.dispatchEvent(new Event('input'));
+      renglon()!.querySelector('form.busqueda-movil')!.dispatchEvent(new Event('submit'));
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
+    });
+
+    it('el buscador del celular arranca con la búsqueda de la dirección, como el de la barra', async () => {
+      await crearComponente(true, pagina([articulo(1)]), null, '/?q=torni');
+
+      expect(renglon()!.querySelector<HTMLInputElement>('#q-movil')!.value).toBe('torni');
+    });
+
+    it('la fila es una línea con código, descripción y precio, sin los datos que sólo importan en la ficha', async () => {
+      const primera = pagina([
+        articulo(1, {
+          codigoInterno: 'TOR-001',
+          descripcion: 'Tornillo hexagonal 1/4 x 2',
+          precioFinal: 170,
+          stockActual: 12,
+        }),
+      ]);
+      await crearComponente(true, primera);
+
+      const fila = filas()[0];
+      const enLaLinea = Array.from(fila.querySelectorAll('td:not(.solo-ficha)')).map((celda) =>
+        celda.getAttribute('data-etiqueta'),
+      );
+      // Código y descripción a la izquierda; el importe y el stock a la derecha (la grilla de la línea, en articulos.css).
+      expect(enLaLinea).toEqual(['Código', 'Descripción', 'Precio final', 'Stock', 'Estado']);
+      expect(fila.querySelector('.codigo')!.textContent!.trim()).toBe('TOR-001');
+      expect(fila.querySelector('.descripcion')!.textContent).toContain('Tornillo hexagonal 1/4 x 2');
+      expect(fila.querySelector('.precio')!.textContent!.trim()).toBe(`$${NBSP}170,00`);
+      expect(fila.querySelector('.stock')!.textContent!.trim()).toBe('12 unidades');
+
+      // Lo que sólo se mira en la ficha no se dibuja en el celular, pero sigue en la fila: la tabla ancha del escritorio
+      // conserva todas sus columnas.
+      const soloFicha = Array.from(fila.querySelectorAll('td.solo-ficha')).map((celda) =>
+        celda.getAttribute('data-etiqueta'),
+      );
+      expect(soloFicha).toEqual(['Cód. proveedor', 'Costo', 'Margen', 'IVA', 'Última actualización']);
+      expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim())).toEqual([
+        'Código',
+        'Cód. proveedor',
+        'Descripción',
+        'Costo',
+        'Margen',
+        'IVA',
+        'Precio final',
+        'Stock',
+        'Última actualización',
+        'Estado',
+      ]);
+
+      // El Vendedor no ve costo ni margen: su línea compacta es la misma, sin esas dos columnas.
+      TestBed.resetTestingModule();
+      await crearComponente(false, primera);
+      expect(
+        Array.from(filas()[0].querySelectorAll('td:not(.solo-ficha)')).map((celda) =>
+          celda.getAttribute('data-etiqueta'),
+        ),
+      ).toEqual(['Código', 'Descripción', 'Precio final', 'Stock', 'Estado']);
+      expect(
+        Array.from(filas()[0].querySelectorAll('td.solo-ficha')).map((celda) => celda.getAttribute('data-etiqueta')),
+      ).toEqual(['Cód. proveedor', 'IVA', 'Última actualización']);
+    });
+
+    it('«Filtros» abre y cierra el panel y muestra cuántos filtros están activos', async () => {
+      await crearComponente(true);
+
+      expect(botonFiltros()!.textContent).toContain('Filtros');
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
+      expect(panel()).toBeNull();
+      expect(cuenta()).toBeNull();
+
+      await clickEn('.herramientas-movil button.filtros');
+
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('true');
+      // No inventa filtros: son los dos tildes que ya tenía la barra, con su mismo texto.
+      expect(
+        Array.from(panel()!.querySelectorAll('label')).map((etiqueta) =>
+          etiqueta.textContent!.replace(/\s+/g, ' ').trim(),
+        ),
+      ).toEqual(['Mostrar dados de baja', 'Solo en oferta']);
+
+      const oferta = panel()!.querySelector<HTMLInputElement>('#en-oferta-movil')!;
+      oferta.checked = true;
+      oferta.dispatchEvent(new Event('change'));
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, true);
+      expect(cuenta()).toBe('1');
+
+      const inactivos = panel()!.querySelector<HTMLInputElement>('#inactivos-movil')!;
+      inactivos.checked = true;
+      inactivos.dispatchEvent(new Event('change'));
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true, true);
+      expect(cuenta()).toBe('2');
+
+      await clickEn('.herramientas-movil button.filtros');
+
+      expect(panel()).toBeNull();
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
+      // Al cerrar, el contador sigue diciendo que hay dos filtros puestos.
+      expect(cuenta()).toBe('2');
+    });
+
+    it('el contador sale de los filtros que ya venían puestos en la dirección', async () => {
+      await crearComponente(true, pagina([articulo(1)]), null, '/?inactivos=1&oferta=1');
+
+      expect(cuenta()).toBe('2');
+      await clickEn('.herramientas-movil button.filtros');
+      expect(panel()!.querySelector<HTMLInputElement>('#inactivos-movil')!.checked).toBe(true);
+      expect(panel()!.querySelector<HTMLInputElement>('#en-oferta-movil')!.checked).toBe(true);
+    });
+  });
+
   it('muestra el aviso que dejó el formulario al guardar', async () => {
     await crearComponente(true, undefined, 'Se guardó «Tornillo».');
 
