@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-13 desde los 91 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-14 desde los 92 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 91 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~22 KB; los 92 documentos suman 1,5 MB. Leerlos todos no entra en contexto.
 
-- **89 cerradas · 2 abiertas**
+- **89 cerradas · 3 abiertas**
 
 ## Abiertas
 
@@ -15,6 +15,7 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
+| [`movil-pulgar.md`](movil-pulgar.md) | abierta (0✓/6✗) | 2026-11-14 | — | — | 5 |
 
 ## Cerradas
 
@@ -23,7 +24,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
-| [`avisos-y-accesos.md`](avisos-y-accesos.md) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | 24 |
+| [`avisos-y-accesos.md`](avisos-y-accesos.md) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | 25 |
 | [`cabos-auth-l13.md`](cabos-auth-l13.md) | 2026-11-12 | cerrar los cinco cabos que el L13 de advertencias-recorrido-dueno.md dejó como trabajo aparte al mergear el PR #46: cuatro mejoras informativas de la  | 10 |
 | [`error-de-campo-pegado.md`](error-de-campo-pegado.md) | 2026-11-12 | que el 400 del reseteo de contraseña no quede pegado bajo el campo cuando el usuario ya está escribiendo otra cosa. | 2 |
 | [`lista-ventas-serie-fiscal.md`](lista-ventas-serie-fiscal.md) | 2026-11-12 | que la lista de Ventas distinga de qué serie fiscal es cada comprobante, para que dos series distintas no se lean como la misma numeración repetida. | 3 |

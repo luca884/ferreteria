@@ -32,3 +32,6 @@ Lista/
 
 # Scratch local de las sesiones
 .scratch/
+
+# capturas del recorrido móvil (evidencia local, no se commitea)
+.recorrido-movil/

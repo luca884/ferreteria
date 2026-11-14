@@ -1,0 +1,29 @@
+{
+  "title": "Móvil usable · 390 px",
+  "brief": "Direcciones de diseño para que la app de ferretería se pueda usar en celular: listas legibles, filtros que no se comen la pantalla, datos que no se esconden y navegación al alcance del pulgar. Las dos densidades pedidas: vendedor de parado en el mostrador (velocidad) y dueño consultando (lectura).",
+  "artboards": [
+    {
+      "file": "01-barra-al-pulgar.html",
+      "title": "A · Barra al pulgar",
+      "tradeoff": "Todo al alcance del pulgar y cero scroll para llegar al dato; paga densidad (el detalle pide un toque) y 56 px de alto útil en cada pantalla.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-ficha-que-sube.html",
+      "title": "B · Ficha que sube",
+      "tradeoff": "El cambio más chico y mantiene el contexto al comparar; la hoja tapa tres cuartas partes de la pantalla al editar y la navegación sigue a dos toques.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-buscar-primero.html",
+      "title": "C · Buscar primero",
+      "tradeoff": "El caso más frecuente —buscar por código o descripción— queda a un toque y los filtros dejan de ocupar la pantalla; paga que hojear la lista completa necesite un paso más.",
+      "width": 1300,
+      "height": 1010
+    }
+  ],
+  "feature": "odd/tasks/movil-pulgar.md",
+  "chosen": "01-barra-al-pulgar.html"
+}
