@@ -154,13 +154,42 @@
   }
 
   @if (resultado(); as r) {
-    <section #resumenEl class="resumen alerta exito" role="status" tabindex="-1">
-      @if (r.conteos.modificados === 1) {
-        Se actualizó 1 artículo.
-      } @else {
-        Se actualizaron {{ r.conteos.modificados | number }} artículos.
+    <app-dialogo-detalle titulo="Resultado de la actualización" (cerrar)="cerrarResultado()">
+      <p class="resumen alerta exito" role="status">
+        @if (r.conteos.modificados === 1) {
+          Se actualizó 1 artículo.
+        } @else {
+          Se actualizaron {{ r.conteos.modificados | number }} artículos.
+        }
+      </p>
+
+      @if (r.cambios.length > 0) {
+        <table class="cambios resultado-cambios">
+          <caption>Qué cambió en cada artículo</caption>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Artículo</th>
+              <th>Antes</th>
+              <th>Ahora</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of r.cambios; track c.articuloId) {
+              <tr>
+                <td>{{ c.codigo }}</td>
+                <td>{{ c.descripcion }}</td>
+                <td>{{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}</td>
+                <td>{{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (r.detalleRecortado) {
+          <p class="ayuda resultado-recortado">Se muestran solo los primeros {{ r.cambios.length | number }} artículos.</p>
+        }
       }
-    </section>
+    </app-dialogo-detalle>
   }
 
   @if (vistaPrevia(); as vp) {

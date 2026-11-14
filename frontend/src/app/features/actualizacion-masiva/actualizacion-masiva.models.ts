@@ -119,4 +119,8 @@ export interface VistaPreviaMasiva {
 export interface ResultadoMasivo {
   conteos: ConteosMasivos;
   entradasDeHistorial: number;
+  /** Qué cambió en cada artículo, para el pop-up del resultado: como mucho las primeras 1.000 filas. */
+  cambios: CambioMasivo[];
+  /** `true` si el detalle se cortó en 1.000 filas (los contadores siempre son exactos). */
+  detalleRecortado: boolean;
 }

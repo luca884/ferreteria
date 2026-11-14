@@ -22,6 +22,7 @@ import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { ImporteInput } from '../../shared/importe-input';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
@@ -64,7 +65,7 @@ const PISTA_RUBRO_DESTINO =
 
 @Component({
   selector: 'app-actualizacion-masiva',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, CampoMoneda, ImporteInput],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, CampoMoneda, ImporteInput, DialogoDetalle],
   templateUrl: './actualizacion-masiva.html',
   styleUrl: './actualizacion-masiva.css',
 })
@@ -242,7 +243,6 @@ export class ActualizacionMasiva implements OnInit {
   /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
   protected readonly ariaDe = ariaDe;
 
-  private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
   private readonly confirmacionEl = viewChild<ElementRef<HTMLElement>>('confirmacionEl');
   private readonly confirmarEl = viewChild<ElementRef<HTMLButtonElement>>('confirmarEl');
   private readonly generarEl = viewChild<ElementRef<HTMLButtonElement>>('generarEl');
@@ -276,13 +276,6 @@ export class ActualizacionMasiva implements OnInit {
       untracked(() =>
         sinOpciones ? control.disable({ emitEvent: false }) : control.enable({ emitEvent: false }),
       );
-    });
-    // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
-    effect(() => {
-      const el = this.resumenEl()?.nativeElement;
-      if (!el) return;
-      el.focus({ preventScroll: true });
-      el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
     });
     // La confirmación se anuncia y se contesta con el teclado sin buscarla.
     effect(() => this.confirmacionEl()?.nativeElement.focus());
@@ -428,6 +421,12 @@ export class ActualizacionMasiva implements OnInit {
         afterNextRender(() => this.generarEl()?.nativeElement.focus(), { injector: this.injector });
       },
     });
+  }
+
+  /** Cierra el pop-up del resultado (T3): el foco vuelve al botón que genera la vista previa. */
+  protected cerrarResultado(): void {
+    this.resultado.set(null);
+    afterNextRender(() => this.generarEl()?.nativeElement.focus(), { injector: this.injector });
   }
 
   /** Cierra la confirmación y el foco vuelve al botón que la abrió (reaparece en el próximo render). */

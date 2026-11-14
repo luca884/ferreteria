@@ -483,6 +483,14 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         assertThat(resultado.at("/conteos/modificados").asInt()).isEqualTo(3);
         assertThat(resultado.get("entradasDeHistorial").asInt()).isEqualTo(3);
         assertThat(resultado.get("conteos")).isEqualTo(previa.get("conteos"));
+        // T3 (S1): el pop-up del resultado muestra el detalle de qué cambió, así que la respuesta lo trae.
+        assertThat(resultado.get("detalleRecortado").asBoolean()).isFalse();
+        JsonNode cambios = resultado.get("cambios");
+        assertThat(cambios).hasSize(3);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(a1);
+        assertThat(cambios.get(0).get("codigo").asText()).isEqualTo(codigoDe(a1));
+        assertThat(dec(cambios.get(0).get("precioAnterior"))).isEqualByComparingTo("160.00");
+        assertThat(dec(cambios.get(0).get("precioNuevo"))).isEqualByComparingTo("180.00");
         assertThat(decimal(a1, "costo")).isEqualByComparingTo("110.00");
         assertThat(decimal(a1, "precio_final")).isEqualByComparingTo("180.00");
         assertThat(decimal(a2, "costo")).isEqualByComparingTo("220.00");

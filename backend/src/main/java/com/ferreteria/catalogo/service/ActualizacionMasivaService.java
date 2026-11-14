@@ -154,7 +154,8 @@ public class ActualizacionMasivaService {
             historialPrecioRepository.saveAll(historial);
         }
         escribirOChocar();
-        return new ActualizacionMasivaResponse(plan.conteos(), historial.size());
+        return new ActualizacionMasivaResponse(
+                plan.conteos(), historial.size(), recortar(plan.cambios()), plan.cambios().size() > MAXIMO_DETALLE);
     }
 
     /**

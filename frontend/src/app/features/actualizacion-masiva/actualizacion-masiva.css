@@ -115,3 +115,20 @@ tr.fuerte td {
 table.cambios .detalle-fila {
   white-space: normal;
 }
+
+/*
+ * T3: el pop-up del resultado. El resumen ya no se apila abajo del formulario, y el detalle de qué cambió
+ * por artículo va en una tabla que scrollea con el cuerpo del diálogo.
+ */
+.resultado-cambios {
+  width: 100%;
+  margin-top: var(--e-3);
+}
+.resultado-cambios caption {
+  padding-bottom: var(--e-2);
+  text-align: left;
+  font-weight: 600;
+}
+.resultado-recortado {
+  margin-top: var(--e-2);
+}
