@@ -243,7 +243,6 @@ export class ActualizacionMasiva implements OnInit {
   /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
   protected readonly ariaDe = ariaDe;
 
-  private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
   private readonly confirmacionEl = viewChild<ElementRef<HTMLElement>>('confirmacionEl');
   private readonly confirmarEl = viewChild<ElementRef<HTMLButtonElement>>('confirmarEl');
   private readonly generarEl = viewChild<ElementRef<HTMLButtonElement>>('generarEl');
