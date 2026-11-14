@@ -321,12 +321,23 @@ nav a:focus-visible {
 }
 
 /*
+ * Barra inferior de destinos (móvil-pulgar, T1): en el celular lleva al pulgar las pantallas del día. En escritorio no
+ * existe: ahí el menú es la columna del grid y nada de esto se ve (S6).
+ */
+.destinos {
+  display: none;
+}
+
+/*
  * Celular y tablet (S2): el menú lateral pasa a ser un cajón sobre la pantalla, que ocupa todo el ancho. El cajón
  * cerrado queda fuera del orden de tabulación (`visibility: hidden`), y el bloque de usuario vuelve al final del scroll
  * (fijo abajo tapaba «Configurar» y «Ocultar las cotizaciones»).
  */
 @media (max-width: 1023.98px) {
   :host {
+    /* Alto útil que se come la barra de destinos abajo: la barra y el relleno del contenido salen de acá. */
+    --alto-destinos: 56px;
+
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
@@ -338,6 +349,10 @@ nav a:focus-visible {
   .contenido {
     grid-area: contenido;
     border-top: 0;
+    /* La barra de destinos es fija: el contenido deja su alto abajo para que no tape el final de la pantalla. */
+    padding-bottom: calc(
+      var(--pantalla-y) + var(--alto-destinos) + env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .lateral {
@@ -386,6 +401,71 @@ nav a:focus-visible {
     display: flex;
     align-items: center;
     min-height: 44px;
+  }
+
+  /*
+   * Barra de destinos al pulgar (T1): fija abajo, sobre el contenido y por debajo del velo y del cajón, así que al
+   * abrir el menú la tapa el velo. Cada destino ocupa todo el ancho de su columna y 56 px de alto: más que el mínimo
+   * táctil de 44×44 px. El orden y las columnas salen de cuántos destinos tiene el rol (tres o cuatro, o uno solo el
+   * super admin), sin dejar huecos.
+   */
+  .destinos {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: var(--z-barra);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    border-top: 1px solid var(--borde);
+    background: var(--superficie);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .destinos a,
+  .destinos button {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 2px;
+    min-height: var(--alto-destinos);
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--texto-tenue);
+    font: inherit;
+    font-size: var(--texto-2xs);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color var(--transicion);
+  }
+  .destinos a svg,
+  .destinos button svg {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+  .destinos a:hover,
+  .destinos button:hover {
+    background: transparent;
+    color: var(--texto);
+  }
+  /* El destino de la pantalla abierta va con el tono de su sección, el mismo del menú. */
+  .destinos a.activo,
+  .destinos a.activo:hover {
+    background: transparent;
+    color: var(--tono);
+  }
+  /* El foco del proyecto (`2px solid var(--acento)`), adentro de la barra para que el anillo no se corte abajo. */
+  .destinos a:focus-visible,
+  .destinos button:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: -2px;
   }
 }
 

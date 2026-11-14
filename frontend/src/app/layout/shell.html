@@ -95,3 +95,30 @@
   }
   <router-outlet />
 </main>
+<!--
+  Barra inferior de destinos (móvil-pulgar, T1): en el celular, las pantallas del día al alcance del pulgar. Es el
+  mismo menú filtrado por rol, y «Más» abre el cajón de siempre. En escritorio no se ve (lo resuelve el CSS).
+-->
+@if (destinos().length > 0) {
+  <nav class="destinos" aria-label="Destinos">
+    @for (destino of destinos(); track destino.ruta) {
+      <a [routerLink]="destino.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
+        <app-icono-menu [nombre]="destino.icono" />
+        {{ destino.rotulo }}
+      </a>
+    }
+    <button
+      type="button"
+      class="mas"
+      [attr.aria-expanded]="menuAbierto()"
+      aria-controls="menu-lateral"
+      (click)="alternarMenu()"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="5.6" />
+        <path d="M8 5.5v5M5.5 8h5" />
+      </svg>
+      Más
+    </button>
+  </nav>
+}

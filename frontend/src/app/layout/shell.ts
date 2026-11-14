@@ -11,10 +11,16 @@ import { AvisosALaVista } from '../shared/avisos-a-la-vista';
 import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
-import { MOSTRADOR, Seccion, gruposPara, seccionDe } from './menu';
+import { MOSTRADOR, OpcionMenu, Seccion, gruposPara, seccionDe } from './menu';
 
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
+
+/**
+ * Los destinos de la barra inferior del celular, en orden (móvil-pulgar, T1): las pantallas del día, siempre a un pulgar
+ * de distancia. «Más» no está acá: es el botón que abre el cajón con el resto del menú.
+ */
+const DESTINOS_AL_PULGAR = ['/mostrador', '/ventas', '/articulos'] as const;
 
 /** «Juan Pérez» → «JP», «ana» → «A». */
 export function iniciales(nombre: string): string {
@@ -37,6 +43,9 @@ export function iniciales(nombre: string): string {
  * Por debajo de 1024 px (S2) el menú pasa a ser un cajón que se abre con el botón «Menú» de un encabezado nuevo, que
  * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
  * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve.
+ *
+ * En el celular, además, abajo queda la barra de destinos (móvil-pulgar, T1): Mostrador, Ventas y Artículos al pulgar y
+ * «Más» para abrir el mismo cajón de siempre. El cajón no se toca: la barra es una forma más de llegar a él.
  *
  * También es donde se engancha el único observer de los avisos (S8): el que trae a la vista el aviso de una acción que
  * aparece dentro del contenido.
@@ -65,6 +74,19 @@ export class Shell {
   protected readonly avisoAlLlegar = signal<Aviso | null>(null);
 
   protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
+  /**
+   * Los destinos de la barra inferior del celular (móvil-pulgar, T1), sacados del mismo menú que se renderiza y
+   * filtrados por el rol: si el rol no puede abrir una pantalla (el Vendedor y «Ventas»), la barra no la ofrece, así no
+   * queda un enlace que rebota. Al super admin no le toca ninguna: el panel no es de una ferretería y la barra solo le
+   * deja «Más» para abrir el menú.
+   */
+  protected readonly destinos = computed<readonly OpcionMenu[]>(() => {
+    if (this.auth.esSuperAdmin()) return [];
+    const opciones = [MOSTRADOR, ...this.grupos().flatMap((grupo) => grupo.opciones)];
+    return DESTINOS_AL_PULGAR.map((ruta) => opciones.find((opcion) => opcion.ruta === ruta)).filter(
+      (opcion): opcion is OpcionMenu => !!opcion,
+    );
+  });
   private readonly url = signal(this.router.url);
   protected readonly seccion = computed(() => seccionDe(this.url()));
   private readonly abiertos = signal<ReadonlySet<Seccion>>(new Set());

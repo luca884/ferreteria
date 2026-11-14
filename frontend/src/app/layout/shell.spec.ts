@@ -109,8 +109,9 @@ describe('Shell', () => {
     marca = signal(false);
   });
 
+  // Los enlaces del menú del cajón: la barra de destinos del celular (T1) también tiene enlaces y no es esta lista.
   const enlaces = (el: HTMLElement) =>
-    Array.from(el.querySelectorAll('nav a')).map((a) => a.textContent?.trim());
+    Array.from(el.querySelectorAll('aside nav a')).map((a) => a.textContent?.trim());
 
   const grupos = (el: HTMLElement) =>
     Array.from(el.querySelectorAll('nav button.grupo')).map((g) => g.textContent?.trim());
@@ -246,7 +247,7 @@ describe('Shell', () => {
       for (const [rotulo, ruta] of Object.entries(rutas)) {
         expect(el.querySelector(`nav a[href="${ruta}"]`)?.textContent?.trim(), ruta).toBe(rotulo);
       }
-      expect(el.querySelectorAll('nav a').length).toBe(23);
+      expect(el.querySelectorAll('aside nav a').length).toBe(23);
     });
 
     it('el Vendedor ve Mostrador, Ventas (Presupuestos, Remitos, Caja, Clientes), Artículos (Artículos, Rubros) y Compras (Proveedores)', async () => {
@@ -970,6 +971,104 @@ describe('Shell', () => {
 
       expect(shiftTab.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(controles[controles.length - 1]);
+    });
+  });
+
+  describe('barra de destinos al pulgar (móvil-pulgar, T1)', () => {
+    const SUPER_ADMIN: Sesion = {
+      userId: 1,
+      nombre: 'Admin',
+      email: 'admin@demo.local',
+      rol: 'SUPER_ADMIN',
+      ferreteriaId: null,
+      ferreteriaNombre: null,
+    };
+
+    const barra = (el: HTMLElement) => el.querySelector<HTMLElement>('nav[aria-label="Destinos"]');
+
+    /** Los destinos de la barra, en orden: los enlaces y, al final, «Más». */
+    const destinos = (el: HTMLElement) =>
+      Array.from(barra(el)?.querySelectorAll('a, button') ?? []).map((destino) =>
+        destino.textContent?.trim(),
+      );
+
+    const mas = (el: HTMLElement) => barra(el)?.querySelector<HTMLButtonElement>('button.mas');
+
+    it('el Dueño tiene la barra con Mostrador, Ventas, Artículos y «Más», con nombre accesible', async () => {
+      const el = await render(true);
+
+      const nav = barra(el);
+      expect(nav, 'la barra de destinos').not.toBeNull();
+      expect(nav!.getAttribute('aria-label')).toBe('Destinos');
+      expect(destinos(el)).toEqual(['Mostrador', 'Ventas', 'Artículos', 'Más']);
+      expect(Array.from(nav!.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/mostrador',
+        '/ventas',
+        '/articulos',
+      ]);
+    });
+
+    it('el destino de la pantalla abierta lleva aria-current="page" y los demás no', async () => {
+      const el = await render(true, null, TODAS);
+      const actual = () => barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href');
+
+      await irA('/ventas');
+
+      expect(actual()).toBe('/ventas');
+      expect(barra(el)!.querySelector('a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(
+        false,
+      );
+      expect(barra(el)!.querySelector('a[href="/articulos"]')!.hasAttribute('aria-current')).toBe(
+        false,
+      );
+
+      await irA('/articulos/12');
+
+      expect(actual()).toBe('/articulos');
+      expect(barra(el)!.querySelector('a[href="/ventas"]')!.hasAttribute('aria-current')).toBe(
+        false,
+      );
+    });
+
+    it('«Más» abre el cajón del menú y, al cerrarlo, la barra vuelve al estado cerrado', async () => {
+      const el = await render(true);
+      const boton = mas(el)!;
+      expect(boton, 'el destino «Más»').not.toBeNull();
+      expect(boton.getAttribute('aria-controls')).toBe('menu-lateral');
+      const cajon = el.querySelector<HTMLElement>(`#${boton.getAttribute('aria-controls')}`)!;
+      expect(cajon.tagName).toBe('ASIDE');
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+
+      boton.click();
+      await estable();
+
+      expect(boton.getAttribute('aria-expanded')).toBe('true');
+      expect(cajon.classList.contains('abierto')).toBe(true);
+
+      el.querySelector<HTMLElement>('.velo')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await estable();
+
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+    });
+
+    it('el Vendedor no ve en la barra un destino que no puede abrir', async () => {
+      const el = await render(false);
+
+      expect(destinos(el)).toEqual(['Mostrador', 'Artículos', 'Más']);
+      expect(barra(el)!.querySelector('a[href="/ventas"]')).toBeNull();
+      expect(barra(el)!.querySelector('a[href="/articulos"]')).not.toBeNull();
+    });
+
+    it('el super admin no ve la barra: no tiene destinos de ferretería que ofrecer', async () => {
+      const el = await render(false, SUPER_ADMIN);
+
+      // Un nav con un solo «Más» es ruido: sin destinos reales, la barra no existe y el cajón sigue en el encabezado.
+      expect(barra(el)).toBeNull();
+      expect(el.querySelector('header .abrir-menu')).not.toBeNull();
     });
   });
 });
