@@ -1,0 +1,55 @@
+{
+  "title": "Móvil · Compras",
+  "brief": "Sector Compras en móvil (dirección A, tono violeta de la sección): proveedores (lista, ficha, lista de precios, baja y reactivar, estados), compras (lista y detalle antes/después) y nueva compra (comprobante con PDF, artículos, recargos, vista previa y confirmación). Sólo lo visual: lógica y textos de hoy.",
+  "artboards": [
+    {
+      "file": "01-entrada-y-proveedores.html",
+      "title": "Entrada y lista de proveedores",
+      "tradeoff": "Tarjetas con lo esencial; WhatsApp y correo quedan en la ficha para no cargar la lista.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-ficha-del-proveedor.html",
+      "title": "Ficha del proveedor",
+      "tradeoff": "Alta y edición en una ficha con lista de precios de sólo lectura; el homónimo de baja se resuelve en el mismo aviso.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-baja-reactivar-y-estados.html",
+      "title": "Baja, reactivar y estados",
+      "tradeoff": "Baja con confirmación desde el ⋯, un toque más que el botón de la barra.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-compras-lista-y-detalle.html",
+      "title": "Compras: lista y detalle",
+      "tradeoff": "El antes/después por renglón en tarjetas; se pierde la comparación en columnas.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-nueva-compra-comprobante.html",
+      "title": "Nueva compra: comprobante",
+      "tradeoff": "Una pantalla larga con secciones plegables y PDF por selector; menos a la vista a la vez.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-nueva-compra-articulos.html",
+      "title": "Nueva compra: artículos y recargos",
+      "tradeoff": "Tarjeta por renglón con teclado numérico; cargar muchos renglones es más lento que en planilla.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "07-nueva-compra-vista-previa.html",
+      "title": "Nueva compra: vista previa y confirmar",
+      "tradeoff": "Vista previa en tarjetas con totales fijos; revisar muchos renglones lleva más scroll.",
+      "width": 1300,
+      "height": 1010
+    }
+  ]
+}
