@@ -605,7 +605,7 @@ app-barra-acciones .inactivos {
     padding: 0 var(--pantalla-x);
   }
   /*
-   * Los botones pasan a una sola línea (tecla o ícono al lado del nombre) y a 40 px de alto, que es lo que pide el dedo:
+   * Los botones pasan a una sola línea (tecla o ícono al lado del nombre) y a 44 px de alto, el objetivo táctil de S5:
    * con la tecla arriba y 54 px de alto entraban tres o cuatro por fila y la barra medía 130 a 280 px.
    */
   app-barra-acciones .accion-barra,
@@ -614,7 +614,7 @@ app-barra-acciones .inactivos {
     flex-direction: row;
     gap: 6px;
     min-width: 0;
-    min-height: 40px;
+    min-height: 44px;
     padding: 0 10px;
     font-size: var(--texto-base);
   }
