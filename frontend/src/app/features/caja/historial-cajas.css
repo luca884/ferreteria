@@ -35,3 +35,64 @@
   gap: var(--e-3);
   margin-bottom: var(--e-4);
 }
+
+/*
+ * En el celular cada caja es una tarjeta apilada (S4, T6), con el patrón de `.tabla-tarjetas` (styles.css): la apertura
+ * primero, después los importes con el nombre de su columna y el botón del detalle en el tamaño del dedo. Va sólo en
+ * pantalla y hasta 640 px: la tabla ancha no cambia. El `.tabla-scroll` de adelante le gana a la tarjeta de styles.css,
+ * que tiene la misma especificidad.
+ */
+@media screen and (max-width: 639.98px) {
+  .tabla-scroll .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'apertura apertura'
+      'diferencia diferencia'
+      'cierre cierre'
+      'abrio cerro'
+      'esperado contado'
+      'accion accion';
+    column-gap: var(--e-3);
+    row-gap: 2px;
+  }
+  td.apertura {
+    grid-area: apertura;
+    font-weight: 600;
+  }
+  td.cierre {
+    grid-area: cierre;
+  }
+  td.abrio {
+    grid-area: abrio;
+  }
+  td.cerro {
+    grid-area: cerro;
+  }
+  td.esperado {
+    grid-area: esperado;
+  }
+  td.contado {
+    grid-area: contado;
+  }
+  td.diferencia {
+    grid-area: diferencia;
+  }
+  td.accion {
+    grid-area: accion;
+  }
+  /* La fecha que identifica la caja y el botón se leen sin la etiqueta (`.tabla-scroll` de más para ganarle a la global). */
+  .tabla-scroll .tabla-tarjetas td:is(.apertura, .accion)::before {
+    content: none;
+  }
+  /* El botón que abre el detalle, con el ancho y el alto del dedo (S5). */
+  td.accion button.detalle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* El anillo de foco del proyecto, también acá: el botón se toca con el dedo y el resplandor se pierde. */
+  td.accion button.detalle:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+}

@@ -34,7 +34,7 @@
         </nav>
       }
       <div class="tabla-scroll">
-        <table class="cajas">
+        <table class="cajas tabla-tarjetas">
           <caption class="sr-only">
             Cajas cerradas, las más nuevas primero. Elegí una para ver su detalle.
           </caption>
@@ -53,17 +53,19 @@
           <tbody>
             @for (caja of actual.items; track caja.id) {
               <tr [class.elegida]="elegida() === caja.id" (click)="elegir(caja)">
-                <td>{{ fechaHora(caja.fechaApertura) }}</td>
-                <td>{{ fechaHora(caja.fechaCierre) }}</td>
-                <td>{{ caja.abiertaPor }}</td>
-                <td>{{ caja.cerradaPor }}</td>
-                <td class="num">{{ caja.efectivoEsperado | monto }}</td>
-                <td class="num">{{ caja.efectivoContado | monto }}</td>
-                <td [class.falta]="caja.diferencia < 0" [class.sobra]="caja.diferencia > 0">
+                <td class="apertura" data-etiqueta="Apertura">{{ fechaHora(caja.fechaApertura) }}</td>
+                <td class="cierre" data-etiqueta="Cierre">{{ fechaHora(caja.fechaCierre) }}</td>
+                <td class="abrio" data-etiqueta="Abrió">{{ caja.abiertaPor }}</td>
+                <td class="cerro" data-etiqueta="Cerró">{{ caja.cerradaPor }}</td>
+                <td class="num esperado" data-etiqueta="Esperado">{{ caja.efectivoEsperado | monto }}</td>
+                <td class="num contado" data-etiqueta="Contado">{{ caja.efectivoContado | monto }}</td>
+                <td class="diferencia" data-etiqueta="Diferencia" [class.falta]="caja.diferencia < 0" [class.sobra]="caja.diferencia > 0">
                   {{ textoDiferencia(caja.diferencia) }}
                 </td>
-                <td>
-                  <button type="button" class="secundario chico" [attr.aria-pressed]="elegida() === caja.id">Ver detalle</button>
+                <td class="accion" data-etiqueta="Detalle">
+                  <button type="button" class="secundario chico detalle" [attr.aria-pressed]="elegida() === caja.id">
+                    Ver detalle
+                  </button>
                 </td>
               </tr>
             }

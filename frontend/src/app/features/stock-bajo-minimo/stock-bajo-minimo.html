@@ -57,7 +57,7 @@
         <p class="ayuda estado-vacio" role="status">No hay artículos bajo el stock mínimo.</p>
       } @else {
         <div class="tabla-scroll">
-          <table>
+          <table class="tabla-tarjetas">
             <caption class="sr-only">
               Artículos activos con stock menor al mínimo y cuánto reponer de cada uno.
             </caption>
@@ -78,18 +78,18 @@
             <tbody>
               @for (f of lista; track f.articuloId) {
                 <tr>
-                  <td class="codigo">{{ f.codigoInterno }}</td>
-                  <td class="codigo-proveedor">{{ f.codigoProveedor ?? '—' }}</td>
-                  <td>{{ f.descripcion }}</td>
-                  <td>{{ f.rubro ?? '—' }}</td>
-                  <td>{{ f.proveedor ?? '—' }}</td>
-                  <td class="ultima-compra">
+                  <td class="codigo" data-etiqueta="Código">{{ f.codigoInterno }}</td>
+                  <td class="codigo-proveedor" data-etiqueta="Cód. proveedor">{{ f.codigoProveedor ?? '—' }}</td>
+                  <td class="descripcion" data-etiqueta="Descripción">{{ f.descripcion }}</td>
+                  <td class="rubro" data-etiqueta="Rubro">{{ f.rubro ?? '—' }}</td>
+                  <td class="proveedor" data-etiqueta="Proveedor">{{ f.proveedor ?? '—' }}</td>
+                  <td class="ultima-compra" data-etiqueta="Última compra">
                     @if (ultimaCompra(f); as u) {<span class="fecha">{{ u.fecha }}</span> · {{ u.proveedor }}} @else {—}
                   </td>
-                  <td class="num">{{ costo(f) }}</td>
-                  <td class="num" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
-                  <td class="num">{{ numero(f.stockMinimo) }}</td>
-                  <td class="num reponer">{{ numero(f.aReponer) }}</td>
+                  <td class="num costo" data-etiqueta="Costo">{{ costo(f) }}</td>
+                  <td class="num stock" data-etiqueta="Stock" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
+                  <td class="num minimo" data-etiqueta="Mínimo">{{ numero(f.stockMinimo) }}</td>
+                  <td class="num reponer" data-etiqueta="A reponer">{{ numero(f.aReponer) }}</td>
                 </tr>
               }
             </tbody>

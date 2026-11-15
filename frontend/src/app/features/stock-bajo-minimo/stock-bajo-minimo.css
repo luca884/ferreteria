@@ -63,6 +63,64 @@ table {
   font-weight: 700;
 }
 
+/*
+ * En el celular la fila es una tarjeta apilada (S4, T6), con el patrón de `.tabla-tarjetas` (styles.css): cada celda ya
+ * lleva el nombre de su columna en `data-etiqueta` y la tabla deja de ser grilla. El código y la descripción son el
+ * título; abajo va lo que se mira para reponer —stock, mínimo, costo y cuánto reponer— y al final la ficha del
+ * proveedor. Va sólo en pantalla y hasta 640 px: la tabla ancha y la hoja de impresión (`@media print`, en styles.css)
+ * quedan igual. El `.tabla-scroll` de adelante le gana a la tarjeta de styles.css, que tiene la misma especificidad.
+ */
+@media screen and (max-width: 639.98px) {
+  .tabla-scroll .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'codigo codigo'
+      'descripcion descripcion'
+      'stock minimo'
+      'costo reponer'
+      'codproveedor rubro'
+      'proveedor compra';
+    column-gap: var(--e-3);
+    row-gap: 2px;
+  }
+  td.codigo {
+    grid-area: codigo;
+  }
+  td.descripcion {
+    grid-area: descripcion;
+    font-weight: 600;
+  }
+  td.stock {
+    grid-area: stock;
+  }
+  td.minimo {
+    grid-area: minimo;
+  }
+  td.costo {
+    grid-area: costo;
+  }
+  td.reponer {
+    grid-area: reponer;
+  }
+  td.codigo-proveedor {
+    grid-area: codproveedor;
+  }
+  td.rubro {
+    grid-area: rubro;
+  }
+  td.proveedor {
+    grid-area: proveedor;
+  }
+  td.ultima-compra {
+    grid-area: compra;
+  }
+  /* El título de la tarjeta se lee sin la etiqueta de la columna (`.tabla-scroll` de más para ganarle a la global). */
+  .tabla-scroll .tabla-tarjetas td:is(.codigo, .descripcion)::before {
+    content: none;
+  }
+}
+
 @media print {
   .orden,
   .emitido {
