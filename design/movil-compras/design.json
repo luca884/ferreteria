@@ -50,6 +50,13 @@
       "tradeoff": "Vista previa en tarjetas con totales fijos; revisar muchos renglones lleva más scroll.",
       "width": 1300,
       "height": 1010
+    },
+    {
+      "file": "08-alternativas-de-renglones.html",
+      "title": "Alternativas para mostrar los renglones",
+      "tradeoff": "A es la más liviana pero pide un toque para ver el detalle; B muestra el detalle sin salir pero alarga la pantalla; C no esconde nada pero obliga a deslizar.",
+      "width": 1300,
+      "height": 1010
     }
   ]
 }
