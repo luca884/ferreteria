@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "comments": [
+    {
+      "id": "rdkswv6f",
+      "file": "08-cuenta-corriente.html",
+      "selector": "body > main > div:nth-of-type(1) > section:nth-of-type(2) > div > div:nth-of-type(3)",
+      "excerpt": "Saldo inicial 98.200,00 Total debe 50.000,00 Total haber 52.000,00 Saldo final 148.200,00 Factura B 00001-00000019 Debe 50.000,00 10/11 · Venta · Marta saldo 148.200,00 Recibo 0001-00000007 Haber 40.000,00 09/11 · Cobro · Luca saldo 98.200,00 Recibo 0001-00000006 Haber 12.000,00 07/11 · Cobro · Luca",
+      "comment": "hay unos errores con los numeros de la derecha que estan con colores no estan en una misma columa algnas se van mucho a la derecha o a la izquierda, despues todo lo demas me parece correcto",
+      "createdAt": "2026-11-15T23:12:03.451Z",
+      "status": "open",
+      "sentAt": "2026-11-15T23:12:03.462Z",
+      "resolvedAt": null
+    }
+  ]
+}
