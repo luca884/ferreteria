@@ -808,4 +808,95 @@ describe('Usuarios', () => {
       expect(el().querySelector('form.alta')).not.toBeNull();
     });
   });
+
+  /*
+   * Responsive, S2/S4/T7: en el celular cada usuario es una tarjeta apilada con el nombre adelante. Vitest no evalúa
+   * media queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada celda) y
+   * que la regla de la tarjeta viva sólo en la pantalla del celular: la tabla ancha no cambia.
+   */
+  describe('la fila apilada del celular (T7)', () => {
+    /**
+     * Las reglas del documento que tocan `selector`, con la consulta de medios que las envuelve ('' si no tiene): así se
+     * puede afirmar que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular le agrega
+     * a cada selector el atributo del componente: se lo quita antes de comparar.
+     */
+    function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+      const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+      const recorrer = (reglas: CSSRuleList, consulta: string) => {
+        Array.from(reglas).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          const hijas = (regla as CSSMediaRule).cssRules;
+          if (media && hijas) {
+            recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+            return;
+          }
+          const selectorText = (regla as CSSStyleRule).selectorText?.replace(/\[_ng(content|host)-[^\]]+\]/g, '');
+          if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        });
+      };
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          // Una hoja que no se deja leer no es la de Usuarios.
+        }
+      });
+      return encontradas;
+    }
+
+    it('cada celda lleva el nombre de su columna en data-etiqueta y el nombre va primero', async () => {
+      await crear([dueno, vendedor]);
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => (th.textContent ?? '').replace(/\s+/g, ' ').trim());
+      expect(el().querySelector('table[role="grid"]')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filas()) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // Lo que el Dueño mira para decidir: quién es, con qué email entra, su rol, si está activo y su tope.
+      const primera = filas()[0];
+      expect(primera.querySelector('td')!.classList).toContain('nombre');
+      expect(celdas(primera)).toEqual(['Dueño El Tornillo', 'dueno@tornillo.demo', 'Dueño', 'Activo', '—', '—']);
+    });
+
+    it('la tarjeta vive sólo en la pantalla del celular y el nombre es su título, sin repetir la columna', async () => {
+      await crear([dueno, vendedor]);
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      // Ninguna regla de la tarjeta queda fuera del celular: la tablet y el escritorio siguen siendo la grilla.
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+
+      // El nombre ocupa el ancho de la tarjeta y no repite el nombre de la columna; el email va entero abajo.
+      const titulo = reglasDe('td.nombre');
+      expect(titulo.length).toBeGreaterThan(0);
+      expect(titulo.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
+      const email = reglasDe('td.email');
+      expect(email.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+      expect(email.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
+      const sinEtiqueta = reglasDe('td.nombre::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+    });
+
+    // S5: el botón de desactivar sigue apagado con su motivo enlazado. No está en la tarjeta sino en la barra: la fila
+    // apilada no lo esconde ni lo achica.
+    it('el «Desactivar» apagado sigue explicando el motivo en la tarjeta del celular', async () => {
+      await crear([dueno, vendedor]);
+
+      await elegir(0);
+
+      const desactivar = barra('button.desactivar');
+      expect(el().querySelector('tbody tr button')).toBeNull();
+      expect(desactivar.getAttribute('aria-disabled')).toBe('true');
+      expect(desactivar.hasAttribute('disabled')).toBe(false);
+      const motivo = el().querySelector(`#${desactivar.getAttribute('aria-describedby')}`)!;
+      expect(motivo.textContent!.trim()).toBe('No podés desactivarte ni cambiarte el rol a vos mismo.');
+    });
+  });
 });

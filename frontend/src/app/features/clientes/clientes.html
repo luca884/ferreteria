@@ -115,7 +115,7 @@
         </nav>
       }
       <div class="grilla-marco">
-        <table role="grid" aria-label="Clientes">
+        <table role="grid" aria-label="Clientes" class="tabla-tarjetas">
           <thead>
             <tr>
               <th>Razón social</th>
@@ -143,17 +143,17 @@
                 (dblclick)="editar(cliente)"
                 (keydown)="filas.alTeclear($event, cliente, i)"
               >
-                <td class="nombre">{{ cliente.razonSocial }}</td>
-                <td class="documento">
+                <td class="nombre" data-etiqueta="Razón social">{{ cliente.razonSocial }}</td>
+                <td class="documento" data-etiqueta="Documento">
                   @if (partesDocumento(cliente); as doc) {{{ doc.tipo }}&ngsp;<span class="numero-documento">{{ doc.numero }}</span>}
                 </td>
-                <td>{{ etiquetaCondicion[cliente.condicionIva] }}</td>
-                <td class="estado">{{ cliente.activo ? 'Activo' : 'Inactivo' }}</td>
+                <td data-etiqueta="Condición de IVA">{{ etiquetaCondicion[cliente.condicionIva] }}</td>
+                <td class="estado" data-etiqueta="Estado">{{ cliente.activo ? 'Activo' : 'Inactivo' }}</td>
                 @if (auth.esDueno()) {
-                  <td class="num" [class.debe]="(cliente.saldo ?? 0) > 0">{{ saldoTexto(cliente) }}</td>
-                  <td class="num">{{ limiteTexto(cliente) }}</td>
+                  <td class="num" data-etiqueta="Saldo" [class.debe]="(cliente.saldo ?? 0) > 0">{{ saldoTexto(cliente) }}</td>
+                  <td class="num" data-etiqueta="Límite">{{ limiteTexto(cliente) }}</td>
                 }
-                <td class="contacto">{{ contacto(cliente) }}</td>
+                <td class="contacto" data-etiqueta="Contacto">{{ contacto(cliente) }}</td>
               </tr>
             }
           </tbody>
