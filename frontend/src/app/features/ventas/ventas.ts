@@ -117,6 +117,20 @@ export class Ventas implements OnInit {
   private vigentes: Omit<FiltroVentas, 'page'> = {};
   protected readonly filtrada = signal(false);
 
+  /**
+   * móvil-pulgar, T3: en el celular los seis filtros se pliegan detrás de un botón con el contador de los que están
+   * puestos, porque abiertos ocupaban la primera pantalla y no dejaban ver ni una venta. En escritorio y tablet el panel
+   * se dibuja siempre: la clase del formulario no cambia nada ahí.
+   */
+  protected readonly filtrosAbiertos = signal(false);
+  /** Cuántos de esos filtros están escritos en el panel: de cero a seis. */
+  protected readonly filtrosActivos = computed(
+    () =>
+      [this.numero(), this.numeroFactura(), this.clienteBuscado(), this.desde(), this.hasta(), this.fiscal()].filter(
+        (valor) => valor.trim() !== '',
+      ).length,
+  );
+
   protected readonly elegida = signal<number | null>(null);
   protected readonly detalle = signal<VentaConsultada | null>(null);
   protected readonly errorDetalle = signal<string | null>(null);
@@ -291,6 +305,8 @@ export class Ventas implements OnInit {
     }
     this.errorFiltros.set(null);
     this.resultadoAccion.set(null);
+    // Buscar deja la lista a la vista: el panel del celular se cierra con los filtros ya puestos.
+    this.filtrosAbiertos.set(false);
     const cliente = this.clienteBuscado().trim();
     const numeroFiscal = this.numeroFactura().trim();
     const fiscal = this.fiscal();
@@ -317,12 +333,18 @@ export class Ventas implements OnInit {
     this.resultadoAccion.set(null);
     this.aplicados = {};
     this.filtrada.set(false);
+    this.filtrosAbiertos.set(false);
     this.cargar(0);
   }
 
   /** El valor del select «Facturas»: uno que no es de la bandeja vuelve a «Todas». */
   protected elegirFiscal(valor: string): void {
     this.fiscal.set(FILTROS_FISCALES.find((f) => f === valor) ?? '');
+  }
+
+  /** Abre o cierra el panel de filtros del celular (T3). */
+  protected alternarFiltros(): void {
+    this.filtrosAbiertos.update((abierto) => !abierto);
   }
 
   protected cerrarDetalle(): void {

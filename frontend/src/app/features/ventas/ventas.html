@@ -5,7 +5,31 @@
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">La consulta de ventas es solo del dueño.</p>
 } @else {
-  <form class="filtros" (submit)="buscar($event)">
+  <!--
+    Celular (móvil-pulgar, T3): los seis filtros se pliegan detrás de «Filtros», que lleva la cuenta de los que están
+    puestos, porque abiertos ocupaban la primera pantalla y no dejaban ver ni una venta. El panel es el mismo formulario
+    —una sola copia de los campos—: en el celular arranca cerrado y se abre por clase; en escritorio y tablet no se toca
+    nada y sigue a la vista.
+  -->
+  <div class="herramientas-movil">
+    <button
+      type="button"
+      class="secundario filtros"
+      aria-controls="filtros-ventas"
+      [attr.aria-expanded]="filtrosAbiertos()"
+      (click)="alternarFiltros()"
+    >
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M2 4h12M4.5 8h7M6.5 12h3" />
+      </svg>
+      Filtros
+      @if (filtrosActivos(); as activos) {
+        <span class="cuenta pastilla pastilla-acento" aria-hidden="true">{{ activos }}</span>
+        <span class="sr-only">{{ activos === 1 ? '1 filtro activo' : activos + ' filtros activos' }}</span>
+      }
+    </button>
+  </div>
+  <form id="filtros-ventas" class="filtros" [class.abiertos]="filtrosAbiertos()" (submit)="buscar($event)">
     <label>
       N.º
       <input
@@ -115,7 +139,7 @@
           <tbody>
             @for (fila of actual.items; track fila.ventaId) {
               <tr [class.elegida]="elegida() === fila.ventaId" (click)="elegir(fila)">
-                <td data-etiqueta="N.º">
+                <td class="numero" data-etiqueta="N.º">
                   <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
                     {{ fila.numero }}
                   </button>
@@ -143,8 +167,9 @@
                   }
                 </td>
                 <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
-                <td data-etiqueta="Cliente">{{ cliente(fila.clienteNombre) }}</td>
-                <td data-etiqueta="Usuario">{{ fila.usuario ?? '—' }}</td>
+                <td class="cliente" data-etiqueta="Cliente">{{ cliente(fila.clienteNombre) }}</td>
+                <!-- El usuario no entra en la línea del celular, pero sigue en la fila: la tabla ancha conserva sus columnas. -->
+                <td class="usuario solo-escritorio" data-etiqueta="Usuario">{{ fila.usuario ?? '—' }}</td>
                 <td class="num" data-etiqueta="Total">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
               </tr>
             }
