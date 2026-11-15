@@ -1,0 +1,62 @@
+{
+  "title": "Móvil · Precios",
+  "brief": "Sector Precios en móvil (dirección A, barra al pulgar, tono verde de la sección; sólo Dueño): importar lista de precios (subida, mapeo de columnas, revisar cambios, confirmar, errores), actualizar precios masivo, margen y redondeo, y cotización.",
+  "artboards": [
+    {
+      "file": "01-entrada-y-subida.html",
+      "title": "Entrada y subida del archivo",
+      "tradeoff": "Un botón grande reemplaza el arrastre y llega a Archivos, Drive o WhatsApp; la lectura de listas grandes sigue siendo lenta.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-mapeo-de-columnas.html",
+      "title": "Mapeo de columnas",
+      "tradeoff": "Muestra de filas y hoja de columnas en lugar de la grilla con zoom; el mapeo fino queda detrás de «Más ajustes».",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-revisar-cambios.html",
+      "title": "Revisar cambios (vista previa)",
+      "tradeoff": "Los conteos son el filtro y cada fila es una tarjeta; revisar cientos de filas es más lento que en una planilla ancha.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-confirmar-resultado-y-errores.html",
+      "title": "Confirmar, resultado y errores",
+      "tradeoff": "Una sola decisión y errores con su salida a mano; el historial sigue siendo el filtro de Actualizar precios.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-actualizar-precios.html",
+      "title": "Actualizar precios",
+      "tradeoff": "Filtros y cambio en una pantalla y confirmación de impacto; la vista previa recorta a lo que entra en tarjetas.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-operaciones-y-resultado.html",
+      "title": "Operaciones y resultado",
+      "tradeoff": "Operaciones explicadas en una hoja y resultado antes→ahora; los 6 modos siguen siendo mucho para elegir en el celular.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "07-margen-y-redondeo.html",
+      "title": "Margen y redondeo",
+      "tradeoff": "Ejemplo en vivo y confirmación con ejemplos; recalcula miles de precios desde un celular.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "08-cotizacion.html",
+      "title": "Cotización",
+      "tradeoff": "Interruptor y motivo visible del recálculo; el desvío grande obliga a confirmar.",
+      "width": 1300,
+      "height": 1010
+    }
+  ]
+}

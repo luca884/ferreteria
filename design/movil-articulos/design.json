@@ -1,0 +1,92 @@
+{
+  "title": "Móvil · Artículos",
+  "brief": "Categoría Artículos en móvil (dirección A, barra al pulgar). Elegida: lista «Tocá la fila» + selección múltiple. Cada artboard es una pantalla o flujo: selección, ficha, alta/errores/oferta, ajuste de stock y movimientos, clientes/baja/exportar, stock bajo mínimo, etiquetas, controles de datos y rubros. Los artboards 01-03 son las tres opciones de la lista; 01 es la elegida.",
+  "feature": "odd/tasks/movil-pulgar.md",
+  "artboards": [
+    {
+      "file": "01-toca-la-fila.html",
+      "title": "1 · Tocá la fila",
+      "tradeoff": "Lista limpia y escáner de cámara a un toque; las acciones sobre un artículo exigen entrar a la ficha (un toque más).",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-mas-por-fila.html",
+      "title": "2 · ⋯ por fila",
+      "tradeoff": "Las acciones del escritorio quedan a dos toques sin salir de la lista; la fila pierde 44 px de ancho y al Vendedor le sobra el menú.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-deslizar-y-elegir.html",
+      "title": "3 · Deslizar y mantener",
+      "tradeoff": "Fila a todo el ancho y ajuste de stock de un gesto; los gestos no se descubren ni son accesibles sin un camino alternativo.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-seleccion-multiple.html",
+      "title": "Selección múltiple",
+      "tradeoff": "Se mantiene apretado para elegir varios y la única acción masiva real es Etiquetas; el gesto necesita pista y un camino alternativo.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-ficha.html",
+      "title": "Ficha del artículo",
+      "tradeoff": "Stock y accesos arriba y secciones plegables; es una pantalla larga y el Dueño edita acordeones en vez de ver todo a la vez.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-alta-errores-oferta.html",
+      "title": "Alta, errores y oferta",
+      "tradeoff": "Errores en dos niveles y confirmaciones centradas; más pasos que en escritorio para llegar a Oferta, que vive abajo.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "07-stock-y-movimientos.html",
+      "title": "Ajustar stock y movimientos",
+      "tradeoff": "Ajuste en pantalla completa con cantidad grande; sale de la lista (un paso más que una hoja inferior).",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "08-clientes-baja-exportar.html",
+      "title": "Clientes, baja y exportar",
+      "tradeoff": "Lo destructivo queda detrás del ⋯ con confirmación; Exportar entrega el archivo a un aviso en vez de una descarga visible.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "09-stock-bajo-minimo.html",
+      "title": "Stock bajo mínimo",
+      "tradeoff": "Una tarjeta por artículo con «A reponer» grande; se pierden costo y código del proveedor para entrar en 390 px.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "10-etiquetas.html",
+      "title": "Etiquetas",
+      "tradeoff": "Lista con copias por stepper y alta por cámara o selección; imprimir una hoja A4 depende del diálogo del sistema.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "11-controles-de-datos.html",
+      "title": "Controles de datos",
+      "tradeoff": "Control elegido como tarjetas con conteo; la tabla de 7 columnas se resume a precio y dato en falta.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "12-rubros.html",
+      "title": "Rubros",
+      "tradeoff": "Margen visible en la lista y confirmación con antes/después; la edición ocupa toda la pantalla.",
+      "width": 1300,
+      "height": 1010
+    }
+  ],
+  "chosen": "01-toca-la-fila.html"
+}
