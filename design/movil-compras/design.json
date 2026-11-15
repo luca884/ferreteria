@@ -57,6 +57,27 @@
       "tradeoff": "A es la más liviana pero pide un toque para ver el detalle; B muestra el detalle sin salir pero alarga la pantalla; C no esconde nada pero obliga a deslizar.",
       "width": 1300,
       "height": 1010
+    },
+    {
+      "file": "09-opcion-a-lista-de-dos-renglones.html",
+      "title": "Opción A · Lista de dos renglones (interactiva)",
+      "tradeoff": "Lo esencial a la vista y el detalle en una hoja; pide un toque.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "10-opcion-b-renglon-desplegable.html",
+      "title": "Opción B · Renglón que se despliega (interactiva)",
+      "tradeoff": "El detalle sin salir de la pantalla; alarga la lista.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "11-opcion-c-planilla.html",
+      "title": "Opción C · Planilla con el artículo fijo (interactiva)",
+      "tradeoff": "No esconde nada; obliga a deslizar.",
+      "width": 1300,
+      "height": 1010
     }
   ]
 }
