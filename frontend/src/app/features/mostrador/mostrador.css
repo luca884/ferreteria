@@ -191,6 +191,20 @@ app-caja-busqueda {
   color: inherit;
 }
 
+/*
+ * móvil-pulgar, T4 · los avisos del celular. La franja es la única línea visible arriba del ticket: dice cuántos avisos
+ * hay, los abre en el panel y deja a un toque la acción de la caja, que es la que destraba la venta. En el escritorio la
+ * franja no se dibuja y los dos contenedores no ocupan lugar (`display: contents`), así los avisos se ven como hasta
+ * hoy: mismos renglones, mismo aire.
+ */
+.avisos-mostrador,
+.avisos-panel {
+  display: contents;
+}
+.franja-avisos {
+  display: none;
+}
+
 .zona-ticket {
   grid-area: ticket;
   position: relative;
@@ -252,6 +266,10 @@ app-totales-ticket {
   fill: none;
   stroke: var(--borde-fuerte);
   stroke-width: 1.6;
+}
+/* La ilustración del celular (móvil-pulgar, T4): sólo se dibuja en la pantalla angosta. */
+.ficha-vacia .ilustracion-movil {
+  display: none;
 }
 .ficha-vacia p {
   margin: 0;
@@ -339,5 +357,127 @@ app-totales-ticket {
   .fila-codigo .rotulo,
   .fila-codigo .pista-codigo {
     display: none;
+  }
+}
+
+/*
+ * móvil-pulgar, T4 · el celular del mostrador. La pista de teclado ya se esconde en el bloque de arriba y en
+ * styles.css (pantalla táctil), así que acá sólo van los avisos en una franja y el estado vacío.
+ */
+@media screen and (max-width: 639.98px) {
+  /*
+   * Los avisos, una sola franja. La cuenta a la izquierda abre el panel; la acción de la caja —la que destraba la
+   * venta— va a la derecha, a un toque. Todo lo que se toca mide 44 px de alto y el texto de la cuenta se corta con
+   * puntos suspensivos, así la franja nunca pasa a un segundo renglón.
+   */
+  .avisos-mostrador {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-2);
+  }
+  .franja-avisos {
+    display: flex;
+    align-items: center;
+    gap: var(--e-2);
+    padding: var(--e-1) var(--e-2) var(--e-1) var(--e-3);
+    border: 1px solid var(--advertencia-borde);
+    border-left: 4px solid var(--advertencia-marca);
+    border-radius: var(--radio);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+  }
+  .franja-avisos-icono {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+  .franja-avisos-cuenta {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--e-2);
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--e-1);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--texto-sm);
+    font-weight: 600;
+    text-align: left;
+  }
+  .franja-avisos-texto {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .franja-avisos-ver {
+    flex: none;
+    font-size: var(--texto-xs);
+    font-weight: 700;
+    text-decoration: underline;
+  }
+  /* La acción de la caja: el alto del dedo en el renglón, sin robarle ancho a la cuenta. */
+  .franja-avisos .btn {
+    flex: none;
+    min-height: 44px;
+    padding: 0 var(--e-3);
+    font-size: var(--texto-sm);
+  }
+  /* El anillo de foco del proyecto, con el contorno que también se ve en forced-colors. */
+  .franja-avisos :is(button, a):focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+    border-radius: var(--radio);
+  }
+  /* Plegado no ocupa lugar: después de la franja arranca el ticket, no los tres bloques de avisos. */
+  .avisos-panel {
+    display: none;
+    flex-direction: column;
+    gap: var(--e-2);
+  }
+  .avisos-panel.abiertos {
+    display: flex;
+  }
+  /* Abierto, cada aviso se toca cómodo, como el resto de la pantalla en el celular. */
+  .avisos-panel .aviso-caja .btn {
+    min-height: 44px;
+  }
+
+  /*
+   * El estado vacío: la ilustración a la izquierda y el texto a la derecha, en un renglón, en vez del código de barras
+   * de 44 px que a esta altura se leía como barras sueltas. El texto es el de siempre.
+   */
+  .ficha-vacia {
+    flex-direction: row;
+    gap: var(--e-3);
+    padding: var(--e-3);
+    text-align: left;
+  }
+  .ficha-vacia .ilustracion-escritorio {
+    display: none;
+  }
+  .ficha-vacia .ilustracion-movil {
+    display: block;
+    flex: none;
+    width: 48px;
+    height: 48px;
+    stroke: var(--borde-fuerte);
+    stroke-width: 1.5;
+  }
+  .ficha-vacia .ilustracion-movil .marco {
+    fill: var(--superficie);
+  }
+  .ficha-vacia .ilustracion-movil .barra {
+    fill: var(--texto-tenue);
+    stroke: none;
+  }
+  .ficha-vacia p {
+    max-width: none;
   }
 }
