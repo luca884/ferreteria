@@ -68,7 +68,7 @@
         <p class="ayuda estado-vacio">Todavía no hay formas de pago.</p>
       } @else {
         <div class="grilla-marco">
-          <table role="grid" aria-label="Formas de pago">
+          <table class="tabla-tarjetas" role="grid" aria-label="Formas de pago">
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -91,11 +91,11 @@
                   (dblclick)="editar(forma)"
                   (keydown)="filas.alTeclear($event, forma, i)"
                 >
-                  <td class="nombre">{{ forma.nombre }}</td>
-                  <td>{{ etiquetaMedio[forma.medio] }}</td>
-                  <td class="num">{{ recargoTexto(forma) }}</td>
-                  <td class="num">{{ descuentoTexto(forma) }}</td>
-                  <td class="estado">
+                  <td class="nombre" data-etiqueta="Nombre">{{ forma.nombre }}</td>
+                  <td class="medio" data-etiqueta="Medio">{{ etiquetaMedio[forma.medio] }}</td>
+                  <td class="num recargo" data-etiqueta="Recargo">{{ recargoTexto(forma) }}</td>
+                  <td class="num descuento" data-etiqueta="Descuento">{{ descuentoTexto(forma) }}</td>
+                  <td class="estado" data-etiqueta="Estado">
                     {{ forma.activa ? 'Activa' : 'Inactiva' }}
                     @if (esperaActivacion(forma)) {
                       <small class="pista-activar">Activala con «Activar» para vender a cuenta corriente.</small>

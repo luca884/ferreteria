@@ -22,3 +22,44 @@ tr.inactiva td {
   white-space: normal;
   color: var(--texto-suave);
 }
+
+/*
+ * En el celular cada forma de pago es una tarjeta apilada (S2, S4, T8), con el patrón de `.tabla-tarjetas` (styles.css):
+ * el nombre adelante como título, el medio abajo y el recargo y el descuento uno al lado del otro, que es como se
+ * comparan. Así no hay que deslizar de costado para leer una fila. Va sólo en pantalla y hasta 640 px: la tabla del
+ * escritorio y la tablet quedan igual. El `.grilla-marco` de adelante le gana a la tarjeta de styles.css, que tiene la
+ * misma especificidad.
+ */
+@media screen and (max-width: 639.98px) {
+  .grilla-marco .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'nombre nombre'
+      'medio medio'
+      'recargo descuento'
+      'estado estado';
+    column-gap: var(--e-3);
+    row-gap: 2px;
+  }
+  .grilla-marco .tabla-tarjetas td.nombre {
+    grid-area: nombre;
+  }
+  .grilla-marco .tabla-tarjetas td.medio {
+    grid-area: medio;
+  }
+  .grilla-marco .tabla-tarjetas td.recargo {
+    grid-area: recargo;
+  }
+  .grilla-marco .tabla-tarjetas td.descuento {
+    grid-area: descuento;
+  }
+  .grilla-marco .tabla-tarjetas td.estado {
+    grid-area: estado;
+  }
+  /* El nombre es el título de la tarjeta: no repite el nombre de la columna (`.grilla-marco` de más para ganarle a la
+     regla global de styles.css). */
+  .grilla-marco .tabla-tarjetas td.nombre::before {
+    content: none;
+  }
+}

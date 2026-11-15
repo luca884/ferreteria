@@ -94,7 +94,7 @@
       <p class="ayuda estado-vacio">Ningún proveedor coincide con «{{ filtro().trim() }}».</p>
     } @else {
       <div class="grilla-marco">
-        <table [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Proveedores">
+        <table class="tabla-tarjetas" [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Proveedores">
           <thead>
             <tr>
               <th>Nombre</th>
@@ -118,17 +118,17 @@
                 (dblclick)="editar(proveedor)"
                 (keydown)="filas.alTeclear($event, proveedor, i)"
               >
-                <td class="nombre">
+                <td class="nombre" data-etiqueta="Nombre">
                   {{ proveedor.nombre }}
                   @if (!proveedor.activo) {
                     <span class="etiqueta de-baja">De baja</span>
                   }
                 </td>
-                <td class="cuit" [class.mono]="!!proveedor.cuit">{{ proveedor.cuit || '—' }}</td>
-                <td class="contacto">{{ proveedor.contacto || '—' }}</td>
-                <td class="telefono">{{ proveedor.telefono || '—' }}</td>
-                <td class="whatsapp">{{ proveedor.whatsapp || '—' }}</td>
-                <td class="correo">{{ proveedor.email || '—' }}</td>
+                <td class="cuit" data-etiqueta="CUIT" [class.mono]="!!proveedor.cuit">{{ proveedor.cuit || '—' }}</td>
+                <td class="contacto" data-etiqueta="Contacto">{{ proveedor.contacto || '—' }}</td>
+                <td class="telefono" data-etiqueta="Teléfono">{{ proveedor.telefono || '—' }}</td>
+                <td class="whatsapp" data-etiqueta="WhatsApp">{{ proveedor.whatsapp || '—' }}</td>
+                <td class="correo" data-etiqueta="Correo">{{ proveedor.email || '—' }}</td>
               </tr>
             }
           </tbody>

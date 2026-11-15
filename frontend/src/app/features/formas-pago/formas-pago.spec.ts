@@ -766,4 +766,81 @@ describe('FormasPago', () => {
 
     expect(input('nombre').value).toBe('Visa 6 cuotas');
   });
+
+  /*
+   * Responsive, S2/S4/T8: en el celular cada forma de pago es una tarjeta apilada con el nombre adelante. Vitest no
+   * evalúa media queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada
+   * celda) y que la regla de la tarjeta viva sólo en la pantalla del celular: la tabla ancha no cambia.
+   */
+  describe('la fila apilada del celular (T8)', () => {
+    /**
+     * Las reglas de la hoja de Formas de pago que tocan `selector`, con la consulta de medios que las envuelve ('' si
+     * no tiene): así se afirma que una regla es sólo del celular y que la base —tablet y escritorio— no se movió.
+     * Angular le agrega a cada selector el atributo del componente, por eso la comparación es por `includes`.
+     */
+    function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+      const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+      const recorrer = (reglas: CSSRuleList, consulta: string) => {
+        Array.from(reglas).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          const hijas = (regla as CSSMediaRule).cssRules;
+          if (media && hijas) {
+            recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+            return;
+          }
+          // Angular deja espacios de más donde estaba el atributo: se normalizan para comparar el selector entero.
+          const selectorText = (regla as CSSStyleRule).selectorText
+            ?.replace(/\[_ng(content|host)-[^\]]+\]/g, '')
+            .replace(/\s+/g, ' ');
+          if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        });
+      };
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          // Una hoja que no se deja leer no es la de Formas de pago.
+        }
+      });
+      return encontradas;
+    }
+
+    it('cada celda lleva el nombre de su columna en data-etiqueta y el nombre va primero', async () => {
+      await crear([efectivo, visa6, mercadoPago]);
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+      expect(el().querySelector('table')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filas()) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // Lo que el Dueño mira para decidir: cómo se llama, con qué medio cobra y cuánto suma o resta.
+      const visa = filas()[1];
+      expect(visa.querySelector('td')!.classList).toContain('nombre');
+      expect(visa.querySelector('td.nombre')!.textContent!.trim()).toBe('Visa 6 cuotas');
+      expect(visa.querySelector('td.medio')!.textContent!.trim()).toBe('Crédito');
+      expect(visa.querySelectorAll('td.num')[0].textContent).toContain('18,5');
+      expect(visa.querySelectorAll('td.num')[1].textContent!.trim()).toBe('Sin descuento');
+      expect(visa.querySelector('td.estado')!.textContent!.trim()).toBe('Activa');
+    });
+
+    it('la tarjeta vive sólo en la pantalla del celular y el nombre es su título, sin repetir la columna', async () => {
+      await crear([efectivo, mercadoPago]);
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+
+      // El nombre es el título de la tarjeta y no repite el nombre de la columna.
+      const titulo = reglasDe('td.nombre');
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-area') === 'nombre')).toBe(true);
+      const sinEtiqueta = reglasDe('td.nombre::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+    });
+  });
 });

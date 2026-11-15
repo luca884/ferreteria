@@ -114,3 +114,56 @@
   padding-left: var(--e-5);
   color: var(--texto-suave);
 }
+
+/*
+ * En el celular cada remito es una tarjeta apilada (S2, S4, T8), con el patrón de `.tabla-tarjetas` (styles.css): el
+ * número adelante como título, el cliente abajo y la fecha con el total en el mismo renglón; al final, el estado. Así no
+ * hay que deslizar de costado para leer una fila. Va sólo en pantalla y hasta 640 px: la tabla del escritorio y la
+ * tablet quedan igual (y el detalle mantiene su propia tabla). El `.tabla-scroll` de adelante le gana a la tarjeta de
+ * styles.css, que tiene la misma especificidad.
+ */
+@media screen and (max-width: 639.98px) {
+  .tabla-scroll .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'numero numero'
+      'cliente cliente'
+      'fecha total'
+      'situacion situacion';
+    column-gap: var(--e-3);
+    row-gap: 2px;
+  }
+  .tabla-scroll .tabla-tarjetas td.numero {
+    grid-area: numero;
+  }
+  .tabla-scroll .tabla-tarjetas td.cliente {
+    grid-area: cliente;
+  }
+  .tabla-scroll .tabla-tarjetas td.fecha {
+    grid-area: fecha;
+  }
+  .tabla-scroll .tabla-tarjetas td.total {
+    grid-area: total;
+  }
+  .tabla-scroll .tabla-tarjetas td.situacion {
+    grid-area: situacion;
+  }
+  /* El número es el título de la tarjeta: no repite el nombre de la columna (`.tabla-scroll` de más para ganarle a la
+     regla global de styles.css). */
+  .tabla-scroll .tabla-tarjetas td.numero::before {
+    content: none;
+  }
+  /* El número es el botón que abre el detalle, con el ancho y el alto del dedo (S5). */
+  .tabla-scroll .tabla-tarjetas td.numero .enlace {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* El anillo de foco del proyecto, también acá: el botón se toca con el dedo y el resplandor se pierde. */
+  .tabla-scroll .tabla-tarjetas td.numero .enlace:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+}
