@@ -45,12 +45,47 @@ class PantallaCotizacion {}
 @Component({ template: '<h1>Clientes</h1>' })
 class PantallaClientes {}
 
+/** Una pantalla con un título medio: el más largo de las nueve que el recorrido del celular marcó (móvil-pulgar, T5). */
+@Component({ template: '<h1>Stock bajo mínimo</h1>' })
+class PantallaStock {}
+
 /** Rutas con pantallas que tienen `h1`: sirven para el título del encabezado y para navegar entre dos títulos. */
 const CON_TITULO: Routes = [
   { path: 'configuracion/cotizacion', component: PantallaCotizacion },
   { path: 'clientes', component: PantallaClientes },
+  { path: 'stock-bajo-minimo', component: PantallaStock },
   { path: '**', component: Vacia },
 ];
+
+/**
+ * Las reglas del documento que tocan `selector`, con la consulta de medios que las envuelve ('' si no tiene): así se
+ * puede afirmar que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular le agrega a
+ * cada selector el atributo del componente, por eso la comparación es por `includes`.
+ */
+function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+  const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+  const recorrer = (reglas: CSSRuleList, consulta: string) => {
+    Array.from(reglas).forEach((regla) => {
+      const media = (regla as CSSMediaRule).media;
+      const hijas = (regla as CSSMediaRule).cssRules;
+      if (media && hijas) {
+        recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+        return;
+      }
+      if ((regla as CSSStyleRule).selectorText?.includes(selector)) {
+        encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+      }
+    });
+  };
+  Array.from(document.styleSheets).forEach((hoja) => {
+    try {
+      recorrer(hoja.cssRules, '');
+    } catch {
+      // Una hoja que no se deja leer no es la del shell.
+    }
+  });
+  return encontradas;
+}
 
 describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
@@ -940,6 +975,25 @@ describe('Shell', () => {
       await irA('/clientes');
       await despuesDeObservar();
       expect(titulo()).toBe('Clientes');
+    });
+
+    it('en el celular el título puede ocupar dos líneas en vez de recortarse a una', async () => {
+      const el = await render(true, null, CON_TITULO);
+      await irA('/stock-bajo-minimo');
+      await despuesDeObservar();
+
+      // El título se lee entero en el encabezado, que en el celular es la única línea visible del título.
+      const titulo = el.querySelector('.encabezado .titulo-pantalla')!;
+      expect(titulo.textContent?.trim()).toBe('Stock bajo mínimo');
+
+      // Y la clase que lleva el título tiene la regla del celular: hasta dos líneas, en vez de una sola con puntos
+      // suspensivos. La base (tablet y escritorio) queda como está.
+      const reglas = reglasDe('titulo-pantalla');
+      const base = reglas.find((regla) => regla.consulta === '');
+      const celular = reglas.find((regla) => regla.consulta.includes('max-width: 639.98px'));
+      expect(base?.estilo.getPropertyValue('white-space')).toBe('nowrap');
+      expect(celular?.estilo.getPropertyValue('-webkit-line-clamp')).toBe('2');
+      expect(celular?.estilo.getPropertyValue('white-space')).toBe('normal');
     });
 
     it('el título cubre sin h1, dos h1 y un cambio sin navegar', async () => {

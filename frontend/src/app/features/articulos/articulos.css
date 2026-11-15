@@ -115,6 +115,13 @@ th.actualizacion {
 .paginacion .separador {
   flex: 1;
 }
+/*
+ * La flecha del paginador es sólo del celular (móvil-pulgar, T5): en la tablet y en el escritorio los botones siguen
+ * diciendo «Anterior» y «Siguiente».
+ */
+.flecha-pagina {
+  display: none;
+}
 /* El motivo de Ajustar stock deshabilitado, entre el paginador y la grilla; la línea está siempre, para que la grilla
    no salte al elegir un artículo dado de baja (como en Clientes). */
 .motivo-linea {
@@ -126,18 +133,45 @@ th.actualizacion {
 }
 
 /*
- * responsive S11 (T9): a 390 px la cuenta de la página y «Anterior» entraban justo en el primer renglón y «Siguiente»
- * caía solo al segundo, alineado a la izquierda (el paginador medía 108 px de alto). Debajo de 640 px: sin el
- * separador elástico, la cuenta de la página va en su renglón y los dos botones quedan juntos abajo (86,8 px).
- * En escritorio no cambia nada.
+ * responsive S11 (T9) y móvil-pulgar (T5): a 390 px el paginador medía ~90 px de alto —la cuenta de la página en un
+ * renglón y los dos botones en otro— arriba de la lista. Debajo de 640 px queda en una sola línea de 44 px: la cuenta,
+ * que se anuncia cuando cambia, y las dos flechas del pulgar. En escritorio y en tablet no cambia nada.
  */
 @media screen and (max-width: 639.98px) {
+  .paginacion {
+    flex-wrap: nowrap;
+    gap: var(--e-2);
+    padding-block: 0;
+  }
   .paginacion .separador {
     display: none;
   }
-  .paginacion > span:not(.separador) {
-    flex: 1 1 100%;
+  /* La cuenta de la página se queda con lo que sobra del renglón; el elegido sigue arriba, en el suyo. */
+  .paginacion > span:not(.separador, .elegido) {
+    flex: 1 1 auto;
     min-width: 0;
+  }
+  .paginacion > .elegido {
+    flex: 1 1 100%;
+  }
+  .paginacion button.chico {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+  /* El rótulo se lee por lector de pantalla y en la pantalla va la flecha: el botón conserva su nombre. */
+  .paginacion .rotulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .paginacion .flecha-pagina {
+    display: block;
   }
   /*
    * El buscador de la barra: el formulario se encogía a 0 (la barra no parte de renglón) y la caja, de 244 px, se

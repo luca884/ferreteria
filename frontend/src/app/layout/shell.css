@@ -311,6 +311,23 @@ nav a:focus-visible {
   white-space: nowrap;
 }
 
+/*
+ * móvil-pulgar (T5): en el celular el título ocupa hasta dos líneas, así que un título medio entra entero y sólo uno
+ * largo se corta, recién en la segunda. La tablet y el escritorio siguen en una línea, como hasta hoy. El alto del
+ * encabezado no cambia: dos renglones (2 × 20,3 px) siguen entrando en los 44 px del botón «Menú».
+ */
+@media (max-width: 639.98px) {
+  .titulo-pantalla {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    text-overflow: ellipsis;
+    white-space: normal;
+  }
+}
+
 /* Velo del cajón: solo se ve con el cajón abierto, por debajo de 1024 px. */
 .velo {
   display: none;

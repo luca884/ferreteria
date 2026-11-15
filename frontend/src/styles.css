@@ -1340,6 +1340,53 @@ ul.error {
   }
 }
 
+/*
+ * móvil-pulgar (T5): lo que en el celular se toca con el dedo llega a 44×44 px. Va sólo por debajo de 640 px: en la
+ * tablet y en el escritorio la densidad sigue siendo la de siempre (S6).
+ */
+@media screen and (max-width: 639.98px) {
+  /*
+   * El paginador de los listados (Ventas, Presupuestos, Remitos, Compras, Clientes, el historial de cajas) en una sola
+   * línea: los dos botones miden 44 px de alto y el contador de la página se queda con lo que sobra, sin partirse.
+   */
+  .paginas {
+    flex-wrap: nowrap;
+    gap: var(--e-2);
+  }
+  .paginas > span {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .paginas button {
+    flex: none;
+    min-height: 44px;
+    padding: 0 var(--e-2);
+  }
+  /*
+   * El número que abre la ficha (la columna «N.º» de Ventas, Presupuestos y Remitos) medía 9 a 18 px de ancho: el texto
+   * solo, sin relleno. Ahora el control mide los 44 px del dedo y el número va centrado adentro.
+   */
+  table :is(button.enlace, a) {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+  /*
+   * La casilla sigue siendo el `<input>` de siempre, dibujado un poco más grande (20 px), y lo que se toca es la
+   * etiqueta que la envuelve: 44 px de alto, como el resto de los controles del celular.
+   */
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px;
+    height: 20px;
+  }
+  label:has(input[type='checkbox'], input[type='radio']),
+  .casilla,
+  .hojas label {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

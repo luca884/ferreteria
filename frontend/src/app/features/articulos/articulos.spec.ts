@@ -124,6 +124,36 @@ describe('Articulos', () => {
     await refrescar();
   }
 
+  /**
+   * Las reglas del documento que tocan `selector`, con la consulta de medios que las envuelve ('' si no tiene): así se
+   * puede afirmar que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular le agrega
+   * a cada selector el atributo del componente, por eso la comparación es por `includes`.
+   */
+  function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+    const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+    const recorrer = (reglas: CSSRuleList, consulta: string) => {
+      Array.from(reglas).forEach((regla) => {
+        const media = (regla as CSSMediaRule).media;
+        const hijas = (regla as CSSMediaRule).cssRules;
+        if (media && hijas) {
+          recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+          return;
+        }
+        if ((regla as CSSStyleRule).selectorText?.includes(selector)) {
+          encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        }
+      });
+    };
+    Array.from(document.styleSheets).forEach((hoja) => {
+      try {
+        recorrer(hoja.cssRules, '');
+      } catch {
+        // Una hoja que no se deja leer no es la de Artículos.
+      }
+    });
+    return encontradas;
+  }
+
   /** Clic en una celda de la fila: la elige. */
   async function elegir(fila: number) {
     (filas()[fila].querySelector('.descripcion') as HTMLElement).click();
@@ -1276,6 +1306,76 @@ describe('Articulos', () => {
       await clickEn('.herramientas-movil button.filtros');
       expect(panel()!.querySelector<HTMLInputElement>('#inactivos-movil')!.checked).toBe(true);
       expect(panel()!.querySelector<HTMLInputElement>('#en-oferta-movil')!.checked).toBe(true);
+    });
+  });
+
+  describe('paginador del celular: una línea al pulgar (móvil-pulgar, T5)', () => {
+    const paginador = () => el().querySelector<HTMLElement>('nav.paginacion');
+    const anterior = () => el().querySelector<HTMLButtonElement>('button.anterior')!;
+    const siguiente = () => el().querySelector<HTMLButtonElement>('button.siguiente')!;
+    const cuenta = () => paginador()?.querySelector<HTMLElement>('[aria-live]');
+
+    it('los dos botones llevan la flecha y conservan su rótulo como nombre accesible', async () => {
+      await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+
+      // En el celular el botón queda en 44×44 (por `chico`, que es la clase que mide styles.css) y en la pantalla va la
+      // flecha; el rótulo sigue en el DOM —oculto a la vista— y es lo que le da el nombre al botón.
+      for (const [boton, rotulo] of [
+        [anterior(), 'Anterior'],
+        [siguiente(), 'Siguiente'],
+      ] as const) {
+        expect(boton.tagName).toBe('BUTTON');
+        // Está en el orden de Tab: se llega con el teclado además de con el dedo.
+        expect(boton.tabIndex).toBe(0);
+        expect(boton.classList.contains('chico')).toBe(true);
+        expect(boton.querySelector('.flecha-pagina')?.getAttribute('aria-hidden')).toBe('true');
+        expect(boton.querySelector('.rotulo')?.textContent?.trim()).toBe(rotulo);
+      }
+      // La cuenta de la página va en el mismo renglón y se anuncia cuando cambia.
+      expect(cuenta()?.getAttribute('aria-live')).toBe('polite');
+      expect(paginador()?.textContent).toContain('Página 1 de 3');
+    });
+
+    it('la flecha avanza y vuelve, y la cuenta dice la página nueva', async () => {
+      await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+      servicio.buscar.mockReturnValue(of(pagina([articulo(21)], 1, 3, 45)));
+
+      await clickEn('button.siguiente');
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 1, 20, false, false);
+      expect(cuenta()?.textContent).toContain('Página 2 de 3');
+
+      servicio.buscar.mockReturnValue(of(pagina([articulo(1)], 0, 3, 45)));
+      await clickEn('button.anterior');
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, false);
+      expect(cuenta()?.textContent).toContain('Página 1 de 3');
+    });
+
+    it('el paginador es una sola línea en el celular y en el escritorio queda como hoy', async () => {
+      await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+
+      const reglas = reglasDe('.paginacion');
+      const base = reglas.filter((regla) => regla.consulta === '');
+      const celular = reglas.filter((regla) => regla.consulta.includes('max-width: 639.98px'));
+      // La base hace wrap libre; el celular no parte el renglón: la cuenta y las dos flechas van juntas.
+      expect(base.some((regla) => regla.estilo.getPropertyValue('flex-wrap') === 'wrap')).toBe(true);
+      expect(celular.some((regla) => regla.estilo.getPropertyValue('flex-wrap') === 'nowrap')).toBe(true);
+      // Y los dos botones miden lo del dedo.
+      const botones = reglasDe('button.chico').filter((regla) => regla.consulta.includes('max-width: 639.98px'));
+      expect(botones.some((regla) => regla.estilo.getPropertyValue('min-width') === '44px')).toBe(true);
+      expect(botones.some((regla) => regla.estilo.getPropertyValue('min-height') === '44px')).toBe(true);
+    });
+
+    it('los tildes del celular siguen siendo un input de verdad dentro de su etiqueta', async () => {
+      await crearComponente(true);
+      await clickEn('.herramientas-movil button.filtros');
+
+      const check = el().querySelector<HTMLInputElement>('.filtros-panel input#en-oferta-movil')!;
+      expect(check.tagName).toBe('INPUT');
+      expect(check.type).toBe('checkbox');
+      // La etiqueta que lo envuelve es el área de toque: la que se agranda en el celular, no el cuadradito.
+      expect(check.closest('label')?.classList.contains('casilla')).toBe(true);
     });
   });
 

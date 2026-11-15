@@ -209,12 +209,25 @@
         </span>
       }
       <span class="separador"></span>
-      <span>
+      <span aria-live="polite">
         Página {{ resultado.page + 1 }} de {{ resultado.totalPages }} · {{ resultado.totalElements }}
         {{ resultado.totalElements === 1 ? 'artículo' : 'artículos' }}
       </span>
       <button type="button" class="secundario chico anterior" [disabled]="resultado.page === 0" (click)="anterior()">
-        Anterior
+        <svg
+          class="flecha-pagina"
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M10 3 5 8l5 5" />
+        </svg>
+        <span class="rotulo">Anterior</span>
       </button>
       <button
         type="button"
@@ -222,7 +235,20 @@
         [disabled]="resultado.page + 1 >= resultado.totalPages"
         (click)="siguiente()"
       >
-        Siguiente
+        <svg
+          class="flecha-pagina"
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M6 3l5 5-5 5" />
+        </svg>
+        <span class="rotulo">Siguiente</span>
       </button>
     </nav>
     <!-- El motivo de Ajustar stock deshabilitado, en su línea (reservada, para que la grilla no salte): dentro del
