@@ -1,0 +1,48 @@
+{
+  "title": "Móvil · Configuración",
+  "brief": "Configuración en el celular (dirección barra al pulgar): formas de pago, Consumidor Final, datos de la ferretería, facturación con ARCA y usuarios. Sólo visual; reglas y textos de hoy; sólo Dueño.",
+  "artboards": [
+    {
+      "file": "01-entrada-y-permisos.html",
+      "title": "Entrada: Configuración en «Más» y permisos",
+      "tradeoff": "Un grupo propio en «Más» (rosa) con estado visible; el Vendedor no lo ve",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-formas-de-pago.html",
+      "title": "Formas de pago: lista, alta y desactivar",
+      "tradeoff": "Tarjeta por forma de pago con el ajuste a la derecha; alta en pantalla completa",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-consumidor-final-y-datos.html",
+      "title": "Consumidor Final y datos de la ferretería",
+      "tradeoff": "Un formulario corto por pantalla, con guardado fijo abajo",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-facturacion-arca.html",
+      "title": "Facturación: estado, certificado y conexión",
+      "tradeoff": "Tres tarjetas en lugar de una página larga: estado, certificado, prueba",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-obtener-o-renovar-certificado.html",
+      "title": "Obtener o renovar el certificado",
+      "tradeoff": "Una guía de tres pasos, cada uno en su pantalla, con la acción principal fija abajo",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-usuarios.html",
+      "title": "Usuarios: lista, alta y desactivar",
+      "tradeoff": "Una tarjeta por usuario; la ficha concentra editar, resetear contraseña y desactivar",
+      "width": 1300,
+      "height": 1010
+    }
+  ]
+}
