@@ -49,7 +49,7 @@
       "title": "Nueva compra: vista previa y confirmar",
       "tradeoff": "Vista previa en tarjetas con totales fijos; revisar muchos renglones lleva más scroll.",
       "width": 1300,
-      "height": 1010
+      "height": 1060
     },
     {
       "file": "08-alternativas-de-renglones.html",
@@ -67,7 +67,7 @@
     },
     {
       "file": "10-opcion-b-renglon-desplegable.html",
-      "title": "Opción B · Renglón que se despliega (interactiva)",
+      "title": "Opción B · Renglón que se despliega (ELEGIDA)",
       "tradeoff": "El detalle sin salir de la pantalla; alarga la lista.",
       "width": 1300,
       "height": 1010
