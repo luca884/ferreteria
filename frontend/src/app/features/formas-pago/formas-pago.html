@@ -35,8 +35,10 @@
 } @else {
   <p class="ayuda">
     El recargo se suma al total de lo que el cliente paga con esa forma (por ejemplo, Visa 6 cuotas) y el descuento se
-    resta (por ejemplo, Efectivo). Una forma lleva uno o el otro. El medio es el que cuenta la caja. Las formas no se
-    borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.
+    resta (por ejemplo, Efectivo). Una forma lleva uno o el otro. El medio es el que cuenta la caja.
+    <!-- Dos versiones de la misma frase: la barra de botones sólo existe en el escritorio; en el celular «Desactivar» está en la ficha. -->
+    <span class="texto-escritorio">Las formas no se borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.</span>
+    <span class="texto-celular">Las formas no se borran: se desactivan desde su ficha, con «Desactivar», y dejan de ofrecerse al cobrar.</span>
   </p>
 
   @if (aviso(); as mensaje) {
@@ -99,7 +101,10 @@
                   <td class="estado" data-etiqueta="Estado">
                     <span class="etiqueta-estado">{{ forma.activa ? 'Activa' : 'Inactiva' }}</span>
                     @if (esperaActivacion(forma)) {
-                      <small class="pista-activar">Activala con «Activar» para vender a cuenta corriente.</small>
+                      <small class="pista-activar">
+                      <span class="texto-escritorio">Activala con «Activar» para vender a cuenta corriente.</span>
+                      <span class="texto-celular">Tocá la forma y activala con «Activar» para vender a cuenta corriente.</span>
+                    </small>
                     }
                   </td>
                 </tr>

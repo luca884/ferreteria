@@ -1666,7 +1666,16 @@ ul.error {
 .desactivar-ficha,
 .resetear-ficha,
 .cancelar-ficha,
-.motivo-ficha {
+.motivo-ficha,
+.ficha-barra.solo-celular {
+  display: none;
+}
+/* El envoltorio de una ficha de varias pantallas (datos de la ferretería) no genera caja: en el escritorio todo sigue en la página. */
+.ficha-flujo {
+  display: contents;
+}
+/* Un texto con dos versiones (S5 y L8 de movil-sectores): una nombra la barra de botones del escritorio, la otra el control del celular. */
+.texto-celular {
   display: none;
 }
 @media screen and (max-width: 639.98px) {
@@ -1693,6 +1702,40 @@ ul.error {
   .ficha-pantalla > :not(.ficha-barra, .ficha-pie) {
     flex: none;
     margin-inline: var(--pantalla-x);
+  }
+  /* Las dos versiones de un texto: en el celular se ve la del celular. */
+  .texto-escritorio {
+    display: none;
+  }
+  .texto-celular {
+    display: inline;
+  }
+  /*
+   * Ficha de varias pantallas (datos de la ferretería): el envoltorio cubre toda la pantalla y scrollea por dentro, con la
+   * barra «Volver» arriba y el pie fijo abajo, como `form.alta.ficha-pantalla`. Lo de cada hijo lo ajusta el componente.
+   */
+  .ficha-flujo {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--superficie);
+  }
+  .ficha-barra.solo-celular {
+    display: flex;
+  }
+  .ficha-flujo .ficha-barra h2 {
+    min-width: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .ficha-flujo .ficha-pie {
+    margin: auto calc(var(--pantalla-x) * -1) 0;
   }
   .ficha-barra {
     position: sticky;

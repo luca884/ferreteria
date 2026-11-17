@@ -503,7 +503,13 @@ describe('FormasPago', () => {
 
       expect(filas()[1].textContent).toContain('Cuenta corriente');
       expect(filas()[1].textContent).toContain('Inactiva');
-      expect(texto('tbody tr:nth-child(2) .pista-activar')).toBe('Activala con «Activar» para vender a cuenta corriente.');
+      expect(texto('tbody tr:nth-child(2) .pista-activar .texto-escritorio')).toBe(
+        'Activala con «Activar» para vender a cuenta corriente.',
+      );
+      // En el celular «Activar» está en la ficha de la forma, no en una barra: la pista dice cómo llegar.
+      expect(texto('tbody tr:nth-child(2) .pista-activar .texto-celular')).toBe(
+        'Tocá la forma y activala con «Activar» para vender a cuenta corriente.',
+      );
       expect(filas()[0].textContent).not.toContain('Activala');
     });
 
@@ -674,9 +680,25 @@ describe('FormasPago', () => {
     it('el texto de la pantalla dice cómo se desactivan', async () => {
       await crear([efectivo]);
 
+      expect(texto('p.ayuda .texto-escritorio')).toBe(
+        'Las formas no se borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.',
+      );
       expect(texto('p.ayuda')).toContain(
         'Las formas no se borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.',
       );
+    });
+
+    // movil-sectores T3 (L8): en el celular la barra no se ve; el texto nombra el control que sí hay (la ficha).
+    it('en el celular el mismo texto nombra la ficha y no la barra: las dos versiones están en el DOM', async () => {
+      await crear([efectivo]);
+
+      const celular = texto('p.ayuda .texto-celular')!;
+      expect(celular).toBe('Las formas no se borran: se desactivan desde su ficha, con «Desactivar», y dejan de ofrecerse al cobrar.');
+      expect(celular).not.toContain('barra');
+      // El resto del texto es de las dos pantallas y no se duplica.
+      expect(el().querySelectorAll('p.ayuda .texto-escritorio')).toHaveLength(1);
+      expect(el().querySelectorAll('p.ayuda .texto-celular')).toHaveLength(1);
+      expect(texto('p.ayuda')).toContain('El medio es el que cuenta la caja.');
     });
 
     it('«Desactivar» pide confirmación; al confirmar manda el PUT con activa false y marca la fila', async () => {

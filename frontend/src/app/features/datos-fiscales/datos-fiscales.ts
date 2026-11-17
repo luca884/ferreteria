@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Location } from '@angular/common';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, inject, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -27,11 +28,25 @@ function inicioActividadesValido(control: AbstractControl<string>): ValidationEr
   return control.value < INICIO_ACTIVIDADES_MINIMO ? { anterior: true } : null;
 }
 
+/** Las dos pantallas del celular (como el artboard): el emisor y el local donde se factura. */
+type Pantalla = 'emisor' | 'local';
+
+/** Los campos de la pantalla del emisor; el resto de los que se validan son del local. */
+const CAMPOS_DEL_EMISOR: readonly CampoFiscal[] = ['razonSocial', 'ingresosBrutos'];
+
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const enElCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+
 const textoONulo = (texto: string) => (texto.trim() === '' ? null : texto.trim());
 
 /**
  * Configuración › Datos de la ferretería (solo el Dueño, CU-01 paso 1): los datos del emisor que lleva cada factura. El
  * super admin carga razón social, CUIT y condición de IVA en el alta; después los edita solo el Dueño, y el CUIT no cambia.
+ *
+ * En el celular son dos pantallas (S2, S7 de movil-sectores): el emisor y el local donde se factura, con «Volver» arriba y
+ * el pie fijo. Es un solo formulario (las dos tarjetas están siempre en el DOM): `pantalla` sólo la lee el CSS del celular,
+ * que deja la tarjeta `.activa`; el escritorio ve las dos tarjetas juntas.
  */
 @Component({
   selector: 'app-datos-fiscales',
@@ -41,6 +56,9 @@ const textoONulo = (texto: string) => (texto.trim() === '' ? null : texto.trim()
 })
 export class PaginaDatosFiscales implements OnInit {
   private readonly service = inject(DatosFiscalesService);
+  private readonly location = inject(Location);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly condiciones = CONDICIONES_IVA_FERRETERIA;
@@ -65,6 +83,8 @@ export class PaginaDatosFiscales implements OnInit {
   /** Lo que el backend rechazó, un mensaje por campo (400 de validación). */
   protected readonly erroresGuardado = signal<string[]>([]);
   protected readonly errorGuardado = signal<string | null>(null);
+  /** La pantalla del celular que se ve: el emisor o el local donde se factura. */
+  protected readonly pantalla = signal<Pantalla>('emisor');
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
@@ -92,6 +112,7 @@ export class PaginaDatosFiscales implements OnInit {
     this.errorGuardado.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.mostrarPantallaDelError();
       return;
     }
     const valores = this.form.getRawValue();
@@ -119,6 +140,48 @@ export class PaginaDatosFiscales implements OnInit {
           else this.errorGuardado.set(mensajeDe(err, 'No se pudieron guardar los datos de la ferretería.'));
         },
       });
+  }
+
+  /** La fila de Emisor que abre la pantalla del local (sólo del celular). */
+  protected irALocal(): void {
+    this.pantalla.set('local');
+    this.enfocar('.ficha-barra .ficha-volver');
+  }
+
+  /** «Volver» de la flecha: en el local regresa al emisor con lo escrito; en el emisor sale y descarta lo escrito. */
+  protected volver(): void {
+    if (this.pantalla() === 'local') {
+      this.pantalla.set('emisor');
+      this.enfocar('.ir-local');
+      return;
+    }
+    this.cancelar();
+  }
+
+  /** «Cancelar» (de cualquiera de las dos pantallas): descarta lo escrito y sale de Datos de la ferretería. */
+  protected cancelar(): void {
+    const guardados = this.guardados();
+    if (guardados !== null) this.mostrar(guardados);
+    this.pantalla.set('emisor');
+    this.aviso.set(null);
+    this.erroresGuardado.set([]);
+    this.errorGuardado.set(null);
+    this.location.back();
+  }
+
+  /** El domicilio que muestra la fila del emisor, para saber qué hay en la otra pantalla sin abrirla. */
+  protected resumenLocal(): string {
+    return this.form.controls.domicilioComercial.value.trim() || 'Sin completar';
+  }
+
+  /**
+   * El aviso de arriba «Completalo para poder facturar.» (sólo del celular): la misma condición que los avisos de cada
+   * campo, o sea, algún dato para facturar que está vacío en lo guardado.
+   */
+  protected incompleto(): boolean {
+    return (['ingresosBrutos', 'domicilioComercial', 'inicioActividades'] as const).some((campo) =>
+      this.faltaParaFacturar(campo),
+    );
   }
 
   /** El mensaje del campo, una vez tocado; null si está bien. */
@@ -158,6 +221,23 @@ export class PaginaDatosFiscales implements OnInit {
       ...(campo !== 'razonSocial' && this.faltaParaFacturar(campo) ? [`${campo}-aviso`] : []),
     ];
     return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  /** Con un error de validación, el celular pasa a la pantalla donde está el primer campo con error (el emisor va primero). */
+  private mostrarPantallaDelError(): void {
+    const delEmisor = CAMPOS_DEL_EMISOR.some((campo) => this.form.controls[campo].invalid);
+    const destino: Pantalla = delEmisor ? 'emisor' : 'local';
+    if (destino === this.pantalla()) return;
+    this.pantalla.set(destino);
+    // En el escritorio las dos tarjetas se ven juntas: el foco no se mueve.
+    if (enElCelular()) this.enfocar('form.fiscales [aria-invalid="true"]');
+  }
+
+  /** Después de pintar, enfoca el primer elemento que coincida. */
+  private enfocar(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 
   private mostrar(datos: DatosFiscales): void {

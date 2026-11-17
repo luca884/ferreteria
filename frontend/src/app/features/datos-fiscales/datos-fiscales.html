@@ -10,6 +10,24 @@
     factura. Para facturar hacen falta todos.
   </p>
 
+  <!--
+    En el celular esto es la pantalla completa (S2, S7): la barra con «Volver» arriba, el aviso, la tarjeta de la pantalla
+    activa y el pie fijo. En el escritorio `.ficha-flujo` no genera caja y la barra y el aviso están escondidos.
+  -->
+  <div class="ficha-flujo">
+  <div class="ficha-barra solo-celular">
+    <button type="button" class="ficha-volver" aria-label="Volver" (click)="volver()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m15 6-6 6 6 6" />
+      </svg>
+    </button>
+    <h2>Datos de la ferretería</h2>
+  </div>
+
+  @if (pantalla() === 'emisor' && incompleto()) {
+    <p class="alerta advertencia aviso-incompleto" role="status">Completalo para poder facturar.</p>
+  }
+
   @if (aviso(); as mensaje) {
     <p class="alerta exito" role="status">{{ mensaje }}</p>
   }
@@ -35,7 +53,7 @@
     </div>
   } @else {
     <form class="fiscales" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-      <fieldset class="seccion">
+      <fieldset class="seccion" [class.activa]="pantalla() === 'emisor'">
         <legend>Emisor</legend>
 
         <div class="campo">
@@ -90,7 +108,20 @@
         </div>
       </fieldset>
 
-      <fieldset class="seccion">
+      <!-- Sólo del celular: lleva a la pantalla del local (en el escritorio las dos tarjetas se ven juntas). -->
+      @if (pantalla() === 'emisor') {
+        <button type="button" class="ir-local" (click)="irALocal()">
+          <span class="ir-local-texto">
+            <b>Local donde se factura</b>
+            <small>{{ resumenLocal() }}</small>
+          </span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+      }
+
+      <fieldset class="seccion" [class.activa]="pantalla() === 'local'">
         <legend>Local donde se factura</legend>
 
         <div class="campo">
@@ -132,10 +163,12 @@
         </div>
       </fieldset>
 
-      <!-- En el celular «Guardar» queda fijo abajo, sobre la barra de destinos (S7). -->
-      <div class="acciones-form ficha-pie en-pagina">
+      <!-- En el celular «Cancelar» y «Guardar» quedan fijos abajo, como el pie de las demás fichas (S7). -->
+      <div class="acciones-form ficha-pie">
         <button type="submit" [disabled]="guardando()">Guardar</button>
+        <button type="button" class="secundario cancelar-ficha" (click)="cancelar()">Cancelar</button>
       </div>
     </form>
   }
+  </div>
 }
