@@ -5530,4 +5530,126 @@ describe('Mostrador', () => {
       expect(leerProvisorias).toHaveBeenCalledTimes(1);
     });
   });
+
+  /*
+   * móvil-pulgar, T4: en el celular los avisos del mostrador se juntan en una franja de una línea que dice cuántos hay,
+   * los abre desde ahí y deja a un toque la acción de la caja, que es la que destraba la venta. Vitest no evalúa media
+   * queries, así que el spec vigila la estructura que dibuja el celular —la franja arriba del ticket, la cuenta, el panel
+   * plegado por clase y la acción a un toque—; el dibujo (la franja de 44 px, el anillo de foco y la ilustración del
+   * estado vacío) está en mostrador.css. El escritorio conserva los avisos como hasta hoy.
+   */
+  describe('celular: los avisos en una franja de una línea (móvil-pulgar, T4)', () => {
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const franja = () => el().querySelector<HTMLElement>('.franja-avisos');
+    const cuenta = () => franja()?.querySelector<HTMLButtonElement>('.franja-avisos-cuenta');
+    const texto = () => normal(cuenta()?.querySelector('.franja-avisos-texto')?.textContent);
+    const panel = () => el().querySelector<HTMLElement>('.avisos-panel');
+    const abierto = () => panel()!.classList.contains('abiertos');
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
+    const deAyer: CajaVigente = {
+      estado: 'DE_OTRO_DIA',
+      caja: {
+        id: 3,
+        estado: 'DE_OTRO_DIA',
+        fechaApertura: '2026-10-15T08:00:00',
+        abiertaPor: 'Ana',
+        efectivoInicial: 0,
+      },
+      efectivoPropuesto: 0,
+      hayCierreAnterior: true,
+    };
+
+    async function alternar() {
+      cuenta()!.click();
+      await refrescar();
+    }
+
+    it('los avisos del celular son una franja de una línea con la cuenta y el panel plegado: el ticket arranca más arriba', async () => {
+      avisosDelServidor = { rechazadas: 2, pendientesViejas: 0, enRevision: 0, bloqueo: null };
+      await crear(deAyer, FORMAS_BASE, 'DUENO');
+
+      // La caja de otro día y una factura para revisar: dos avisos arriba del ticket, dichos en un renglón.
+      expect(franja()).not.toBeNull();
+      expect(texto()).toBe('2 avisos');
+      // La franja va antes del ticket: el ticket arranca donde termina una línea, no tres bloques de avisos.
+      expect(
+        franja()!.compareDocumentPosition(el().querySelector('.zona-ticket')!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // La cuenta manda el panel: arranca plegado, así no ocupa lugar, y el botón anuncia cuánto hay adentro.
+      expect(cuenta()!.getAttribute('aria-expanded')).toBe('false');
+      expect(cuenta()!.getAttribute('aria-controls')).toBe('avisos-mostrador');
+      expect(panel()!.id).toBe('avisos-mostrador');
+      expect(abierto()).toBe(false);
+      // Los avisos siguen enteros adentro del panel, a un toque: no se escondió ninguno.
+      expect(panel()!.querySelector('.aviso-caja')).not.toBeNull();
+      expect(panel()!.querySelector('.aviso-facturacion.cuentas')).not.toBeNull();
+    });
+
+    it('la franja abre los avisos a un toque y los vuelve a plegar', async () => {
+      avisosDelServidor = { rechazadas: 0, pendientesViejas: 1, enRevision: 0, bloqueo: null };
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+
+      expect(texto()).toBe('1 aviso');
+      await alternar();
+
+      expect(cuenta()!.getAttribute('aria-expanded')).toBe('true');
+      expect(abierto()).toBe(true);
+      expect(normal(cuenta()!.querySelector('.franja-avisos-ver')?.textContent)).toBe('Ocultar');
+      // Abierto, el aviso del Dueño se lee con su enlace a Ventas, como en el escritorio.
+      expect(panel()!.querySelector('.aviso-facturacion.cuentas a')!.getAttribute('href')).toBe(
+        '/ventas?fiscal=PENDIENTES',
+      );
+
+      await alternar();
+
+      expect(cuenta()!.getAttribute('aria-expanded')).toBe('false');
+      expect(abierto()).toBe(false);
+      expect(normal(cuenta()!.querySelector('.franja-avisos-ver')?.textContent)).toBe('Ver');
+    });
+
+    it('la acción de la caja que destraba la venta está en la franja, a un toque', async () => {
+      await crear(sinCaja);
+
+      expect(texto()).toBe('1 aviso');
+      const enlace = franja()!.querySelector<HTMLAnchorElement>('a')!;
+      expect(normal(enlace.textContent)).toBe('Abrir la caja');
+      expect(enlace.getAttribute('href')).toBe('/caja');
+      // El aviso de siempre sigue en el panel con su texto y su enlace: la franja lo abre, no lo reemplaza.
+      const aviso = panel()!.querySelector<HTMLElement>('.aviso-caja')!;
+      expect(normal(aviso.textContent)).toContain('Abrí la caja para vender.');
+      expect(aviso.querySelector('a')!.getAttribute('href')).toBe('/caja');
+
+      // Con la caja de otro día, el caso que también frena la venta, la franja ofrece cerrarla.
+      TestBed.resetTestingModule();
+      await crear(deAyer);
+      expect(normal(franja()!.querySelector('a')!.textContent)).toBe('Cerrar la caja');
+    });
+
+    it('sin nada que revisar la franja no ocupa lugar', async () => {
+      await crear();
+
+      expect(franja()).toBeNull();
+      expect(panel()!.querySelector('.aviso-caja')).toBeNull();
+      expect(panel()!.querySelector('.aviso-facturacion')).toBeNull();
+    });
+
+    it('el estado vacío dibuja un código de barras adentro de su marco y conserva el texto de siempre', async () => {
+      await crear();
+
+      const vacia = el().querySelector<HTMLElement>('.ficha-vacia')!;
+      expect(normal(vacia.querySelector('p')?.textContent)).toBe(
+        'Escaneá o buscá un artículo para ver su precio, stock y ubicación.',
+      );
+      // La ilustración del celular: el código de barras adentro de su marco, no las barras sueltas de antes.
+      const movil = vacia.querySelector<SVGElement>('.ilustracion-movil')!;
+      expect(movil.getAttribute('aria-hidden')).toBe('true');
+      expect(movil.querySelectorAll('rect.barra')).toHaveLength(8);
+      expect(movil.querySelector('rect.marco')).not.toBeNull();
+      // El código de barras del escritorio queda igual: en la fila del celular se dibuja la ilustración de arriba.
+      expect(vacia.querySelector('.ilustracion-escritorio path')!.getAttribute('d')).toBe(
+        'M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M21 5v14M18.5 5v14',
+      );
+    });
+  });
 });

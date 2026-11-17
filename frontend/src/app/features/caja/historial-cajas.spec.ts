@@ -77,6 +77,35 @@ describe('HistorialCajas (CU-10)', () => {
   const el = () => fixture.nativeElement as HTMLElement;
   const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
 
+  /**
+   * Las reglas del CSS que mencionan `selector` y la consulta media en la que viven (`''` es la base). El
+   * `_ngcontent-…` que Angular le agrega a cada selector al compilar el CSS del componente se saca, así se busca el
+   * selector tal como está escrito en la hoja. Vitest no evalúa media queries: esto es lo que deja verlas.
+   */
+  function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+    const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+    const recorrer = (reglas: CSSRuleList, consulta: string) => {
+      Array.from(reglas).forEach((regla) => {
+        const media = (regla as CSSMediaRule).media;
+        const hijas = (regla as CSSMediaRule).cssRules;
+        if (media && hijas) {
+          recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+          return;
+        }
+        const selectorText = (regla as CSSStyleRule).selectorText?.replace(/\[_ng(content|host)-[^\]]+\]/g, '');
+        if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+      });
+    };
+    Array.from(document.styleSheets).forEach((hoja) => {
+      try {
+        recorrer(hoja.cssRules, '');
+      } catch {
+        // Una hoja que no se deja leer no es la del historial.
+      }
+    });
+    return encontradas;
+  }
+
   it('el dueño ve las cajas cerradas con su diferencia', async () => {
     await crear(true);
 
@@ -199,6 +228,62 @@ describe('HistorialCajas (CU-10)', () => {
         'No se pudo cargar el detalle de la caja.',
       );
       expect(popup()!.querySelector('.dialogo-detalle-pie .pie-acciones button.primario')).toBeNull();
+    });
+  });
+
+  /*
+   * Responsive, S4/T6: en el celular cada caja es una tarjeta apilada con la fecha adelante, sus importes con etiqueta
+   * y el botón del detalle en el tamaño del dedo. Vitest no evalúa media queries, así que el spec vigila el contrato de
+   * datos que la dibuja y que la regla de la tarjeta viva sólo en la pantalla del celular (la tabla ancha no cambia).
+   */
+  describe('la fila apilada del celular (T6)', () => {
+    it('cada celda lleva el nombre de su columna en data-etiqueta y la apertura va primero', async () => {
+      await crear(true);
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => normal(th.textContent));
+      expect(el().querySelector('table.cajas')!.classList).toContain('tabla-tarjetas');
+      const filas = Array.from(el().querySelectorAll('tbody tr'));
+      for (const fila of filas) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // La fecha con la que se identifica la caja, y los importes que se deciden en la tarjeta.
+      const primera = filas[0];
+      expect(primera.querySelector('td')!.classList).toContain('apertura');
+      expect(normal(primera.querySelector('td.apertura')!.textContent)).toBe('15/10 08:00');
+      expect(normal(primera.querySelector('td.esperado')!.textContent)).toContain('$ 5.000,00');
+      expect(normal(primera.querySelector('td.contado')!.textContent)).toContain('$ 5.100,00');
+      expect(normal(primera.querySelector('td.diferencia')!.textContent)).toBe('Sobran $ 100,00');
+    });
+
+    it('el botón del detalle mide 44×44 con anillo de foco y la tarjeta vive sólo en la pantalla del celular', async () => {
+      await crear(true);
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      // Ninguna regla de la tarjeta queda fuera del celular: ni en la base (tablet y escritorio) ni en papel.
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('max-width: 639.98px');
+        expect(regla.consulta).not.toContain('print');
+      }
+
+      // El botón que abre el detalle, con el alto y el ancho del dedo y el anillo de foco del proyecto.
+      const boton = reglasDe('button.detalle');
+      expect(boton.some((regla) => regla.estilo.getPropertyValue('min-width') === '44px')).toBe(true);
+      expect(boton.some((regla) => regla.estilo.getPropertyValue('min-height') === '44px')).toBe(true);
+      const foco = reglasDe('button.detalle:focus-visible');
+      expect(foco).toHaveLength(1);
+      expect(foco[0].consulta).toContain('max-width: 639.98px');
+      expect(foco[0].estilo.getPropertyValue('outline')).not.toBe('');
+
+      // La fecha y el botón son el título y la acción de la tarjeta: no repiten el nombre de la columna.
+      const sinEtiqueta = reglasDe('td:is(.apertura, .accion)::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+
+      // Y sigue en la fila, donde estaba: la tarjeta no pierde ninguna columna.
+      expect(el().querySelectorAll('table.cajas tbody tr button.detalle')).toHaveLength(2);
     });
   });
 

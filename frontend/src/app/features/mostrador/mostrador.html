@@ -27,27 +27,60 @@
     <span class="pista-codigo" aria-hidden="true">Enter agrega · ↑↓ elige</span>
   </div>
 
-  @if (avisoCaja(); as sinCaja) {
-    <div class="aviso-caja" role="status">
-      <span>{{ sinCaja }}</span>
-      <a class="btn primario" routerLink="/caja">{{ accionCaja() }}</a>
+  <!--
+    móvil-pulgar, T4: en el celular los avisos se juntan en una franja de una línea —cuántos hay, la acción de la caja a
+    un toque y el panel plegado—, así el ticket arranca más arriba. En el escritorio los dos contenedores no ocupan lugar
+    y los avisos se ven como hasta hoy.
+  -->
+  <div class="avisos-mostrador">
+    @if (cuentaDeAvisos() > 0) {
+      <div class="franja-avisos">
+        <svg class="franja-avisos-icono" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 9v4M12 17h.01" />
+        </svg>
+        <button
+          type="button"
+          class="franja-avisos-cuenta"
+          [attr.aria-expanded]="avisosAbiertos()"
+          [attr.aria-controls]="avisosPanelId"
+          (click)="alternarAvisos()"
+        >
+          <span class="franja-avisos-texto">{{ textoAvisos() }}</span>
+          <span class="franja-avisos-ver">{{ avisosAbiertos() ? 'Ocultar' : 'Ver' }}</span>
+        </button>
+        @if (avisoCaja(); as sinCaja) {
+          <a class="btn primario franja-avisos-caja" routerLink="/caja">{{ accionCaja() }}</a>
+        }
+      </div>
+    }
+
+    <div class="avisos-panel" [id]="avisosPanelId" [class.abiertos]="avisosAbiertos()">
+      @if (avisoCaja(); as sinCaja) {
+        <div class="aviso-caja" role="status">
+          <span>{{ sinCaja }}</span>
+          <a class="btn primario" routerLink="/caja">{{ accionCaja() }}</a>
+        </div>
+      }
+
+      @if (vencimientoCertificado(); as vencimiento) {
+        <p class="aviso-certificado" role="status">
+          El certificado de ARCA {{ vencimiento.vencido ? 'venció' : 'vence' }} el {{ vencimiento.fecha }}: renovalo en
+          <a routerLink="/configuracion/facturacion">Facturación</a>.
+        </p>
+      }
+
+      <!-- Rama 7: lo que el Dueño tiene que revisar de la facturación (C4). No frena la venta. -->
+      <app-avisos-facturacion (cantidad)="contarAvisos($event)" />
     </div>
-  }
 
-  @if (vencimientoCertificado(); as vencimiento) {
-    <p class="aviso-certificado" role="status">
-      El certificado de ARCA {{ vencimiento.vencido ? 'venció' : 'vence' }} el {{ vencimiento.fecha }}: renovalo en
-      <a routerLink="/configuracion/facturacion">Facturación</a>.
-    </p>
-  }
+    <!-- El CAE que llegó tarde (C7): es una buena noticia que pide reimprimir, y se queda a la vista. -->
+    @if (hayCajaAbierta()) {
+      <app-avisos-cae [puedeAbrir]="sinDialogo" (abrir)="reimprimirLlegada($event)" (cerrado)="alCerrarAviso()" />
+    }
 
-  <!-- Rama 7: lo que el Dueño tiene que revisar de la facturación (C4) y el CAE que llegó tarde (C7). No frenan la venta. -->
-  <app-avisos-facturacion />
-  @if (hayCajaAbierta()) {
-    <app-avisos-cae [puedeAbrir]="sinDialogo" (abrir)="reimprimirLlegada($event)" (cerrado)="alCerrarAviso()" />
-  }
-
-  <app-primeros-pasos />
+    <app-primeros-pasos />
+  </div>
 
   @if (ticket.ticket().clienteNombre; as cliente) {
     <p class="cliente-ticket">
@@ -119,8 +152,20 @@
     <app-ficha-articulo [articulo]="articulo" />
   } @else {
     <div class="ficha-vacia">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+      <svg class="ilustracion-escritorio" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M21 5v14M18.5 5v14" />
+      </svg>
+      <!-- móvil-pulgar, T4: el código de barras adentro de su marco; a 44 px las barras sueltas se leían como un error. -->
+      <svg class="ilustracion-movil" viewBox="0 0 64 64" aria-hidden="true">
+        <rect class="marco" x="6" y="10" width="52" height="44" rx="6" />
+        <rect class="barra" x="14" y="20" width="3" height="24" rx="1" />
+        <rect class="barra" x="19" y="20" width="2" height="24" rx="1" />
+        <rect class="barra" x="23" y="20" width="4" height="24" rx="1" />
+        <rect class="barra" x="29" y="20" width="2" height="24" rx="1" />
+        <rect class="barra" x="33" y="20" width="3" height="24" rx="1" />
+        <rect class="barra" x="38" y="20" width="2" height="24" rx="1" />
+        <rect class="barra" x="42" y="20" width="4" height="24" rx="1" />
+        <rect class="barra" x="48" y="20" width="2" height="24" rx="1" />
       </svg>
       <p>Escaneá o buscá un artículo para ver su precio, stock y ubicación.</p>
     </div>

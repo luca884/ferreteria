@@ -1354,4 +1354,170 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       );
     });
   });
+
+  /*
+   * móvil-pulgar, T3: en el celular los seis filtros se pliegan detrás de «Filtros», con la cuenta de los que están
+   * puestos, y cada venta es una línea con el importe a la derecha para poder comparar dos totales de un vistazo.
+   * Vitest no evalúa media queries, así que el spec vigila la estructura que dibuja el celular —el renglón con el botón,
+   * el panel plegado por clase y las celdas de la línea—; el dibujo (la grilla de la fila, los 44 px, el mono tabular)
+   * está en ventas.css. El escritorio conserva la tabla de seis columnas y los filtros a la vista.
+   */
+  describe('celular: filtros plegados y una línea por venta (móvil-pulgar, T3)', () => {
+    const anulacion = {
+      notaId: 14,
+      numero: 14,
+      interna: false,
+      motivo: null,
+      usuario: 'Dueño de Prueba',
+      fecha: '2026-10-29T14:05:00',
+    };
+    const renglon = () => el().querySelector<HTMLElement>('.herramientas-movil');
+    const botonFiltros = () => el().querySelector<HTMLButtonElement>('.herramientas-movil button.filtros');
+    const formulario = () => el().querySelector<HTMLFormElement>('form.filtros');
+    const cuenta = () => botonFiltros()?.querySelector('.cuenta')?.textContent?.trim() ?? null;
+    /** El panel está abierto cuando el formulario lleva la clase con la que el celular lo dibuja. */
+    const abierto = () => formulario()!.classList.contains('abiertos');
+    const campos = () =>
+      Array.from(formulario()!.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')).map(
+        (campo) => campo.name,
+      );
+    const tocarFiltros = async () => {
+      botonFiltros()!.click();
+      await refrescar();
+    };
+
+    it('los filtros arrancan plegados en un renglón propio: la lista se ve sin abrir nada', async () => {
+      await crear();
+
+      expect(renglon()).not.toBeNull();
+      // El botón manda el panel: están enlazados y el panel arranca cerrado, así que no ocupa la primera pantalla.
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
+      expect(botonFiltros()!.getAttribute('aria-controls')).toBe(formulario()!.id);
+      expect(formulario()!.id).toBe('filtros-ventas');
+      expect(abierto()).toBe(false);
+      // El renglón va arriba de la lista: la primera venta entra sin deslizar ni tocar nada.
+      expect(
+        renglon()!.compareDocumentPosition(el().querySelector('table.ventas')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // El panel no es una copia: son los seis campos de siempre, una sola vez en la pantalla.
+      expect(campos()).toEqual(['numero', 'numeroFiscal', 'cliente', 'desde', 'hasta', 'fiscal']);
+      expect(filas()).toHaveLength(2);
+    });
+
+    it('«Filtros» abre y cierra el panel, con la cuenta de los filtros que están puestos', async () => {
+      await crear();
+
+      // Sin filtros puestos no hay cuenta: el botón dice sólo «Filtros».
+      expect(normal(botonFiltros()!.textContent)).toBe('Filtros');
+      expect(cuenta()).toBeNull();
+
+      await tocarFiltros();
+
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('true');
+      expect(abierto()).toBe(true);
+      // Adentro está lo de siempre, con «Buscar» y «Limpiar» a mano.
+      expect(boton('Buscar', formulario()!)).toBeDefined();
+      expect(boton('Limpiar', formulario()!)).toBeDefined();
+
+      campo('numero', '15');
+      campo('cliente', 'Pérez');
+      await refrescar();
+
+      expect(cuenta()).toBe('2');
+      // La cuenta se anuncia con palabras, no sólo con el número.
+      expect(normal(renglon()!.querySelector('.sr-only')?.textContent)).toBe('2 filtros activos');
+
+      await tocarFiltros();
+
+      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
+      expect(abierto()).toBe(false);
+      // Cerrado, la cuenta sigue diciendo lo que hay puesto adentro.
+      expect(cuenta()).toBe('2');
+    });
+
+    it('los filtros del panel filtran igual y Buscar deja la lista a la vista; «Limpiar» deja la cuenta en cero', async () => {
+      await crear();
+      await tocarFiltros();
+      campo('desde', '2026-10-01');
+      campo('hasta', '2026-10-22');
+
+      await buscar();
+
+      expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-01', hasta: '2026-10-22' });
+      // Con los filtros aplicados el panel se pliega solo: los resultados vuelven a la primera pantalla.
+      expect(abierto()).toBe(false);
+      expect(cuenta()).toBe('2');
+
+      // Un filtro que no se puede mandar deja el panel abierto para corregirlo.
+      await tocarFiltros();
+      campo('numero', '1,5');
+      await buscar();
+      expect(normal(el().querySelector('[role="alert"]')?.textContent)).toBe('El número tiene que ser un entero.');
+      expect(abierto()).toBe(true);
+
+      boton('Limpiar', formulario()!)!.click();
+      await refrescar();
+
+      expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
+      expect(cuenta()).toBeNull();
+      expect(abierto()).toBe(false);
+    });
+
+    it('cada venta es una línea: número y cliente a la izquierda, el total a la derecha, factura y fecha abajo', async () => {
+      await crear([
+        resumenDePrueba(5, {
+          fiscal: {
+            letra: 'B',
+            puntoVenta: 1,
+            numero: 12,
+            estado: 'AUTORIZADO',
+            ambiente: 'PRODUCCION',
+            validoComoFactura: true,
+          },
+        }),
+      ]);
+
+      const fila = filas()[0];
+      expect(normal(fila.querySelector('.numero')!.textContent)).toBe('5');
+      expect(normal(fila.querySelector('.cliente')!.textContent)).toBe('Cliente 5');
+      // El importe, en su celda con el mono tabular que lo alinea con los de arriba y abajo (ventas.css).
+      expect(normal(fila.querySelector('.num')!.textContent)).toBe('$ 3.000,00');
+      // La factura y la fecha son el renglón chico de la línea.
+      expect(normal(fila.querySelector('.factura')!.textContent)).toBe('B 00001-00000012');
+      expect(normal(fila.querySelector('.fecha')!.textContent)).toBe('22/10/2026 16:05');
+
+      // El usuario no entra en la línea del celular, pero sigue en la fila: la tabla ancha conserva sus seis columnas.
+      expect(
+        Array.from(fila.querySelectorAll('td:not(.solo-escritorio)')).map((celda) => celda.getAttribute('data-etiqueta')),
+      ).toEqual(['N.º', 'Factura', 'Fecha', 'Cliente', 'Total']);
+      expect(
+        Array.from(fila.querySelectorAll('td.solo-escritorio')).map((celda) => celda.getAttribute('data-etiqueta')),
+      ).toEqual(['Usuario']);
+      expect(Array.from(el().querySelectorAll('thead th')).map((th) => normal(th.textContent))).toEqual([
+        'N.º',
+        'Factura',
+        'Fecha',
+        'Cliente',
+        'Usuario',
+        'Total',
+      ]);
+    });
+
+    it('las marcas de la no facturable, la nota y la anulada siguen en la línea del celular', async () => {
+      await crear([
+        resumenDePrueba(5, { anulacion }),
+        resumenDePrueba(15, { tipo: 'NOTA_CREDITO', ventaAnulada: { id: 40, numero: 4 }, fiscal: null }),
+        resumenDePrueba(4, { facturable: false }),
+      ]);
+
+      // Van en la celda del número, que es la primera de la línea: se leen sin abrir el detalle.
+      expect(normal(filas()[0].querySelector('.numero .marca.anulada')?.textContent)).toBe('Anulada');
+      expect(normal(filas()[1].querySelector('.numero .marca.nota')?.textContent)).toBe('Anulación · Venta N.º 4');
+      expect(normal(filas()[2].querySelector('.numero .marca')?.textContent)).toBe('No facturable');
+      // Nada de eso quedó en una celda que el celular esconde.
+      for (const marca of Array.from(el().querySelectorAll('.numero .marca'))) {
+        expect(marca.closest('.solo-escritorio')).toBeNull();
+      }
+    });
+  });
 });

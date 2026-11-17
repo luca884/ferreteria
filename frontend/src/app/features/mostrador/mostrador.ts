@@ -67,6 +67,8 @@ import { VencimientoCertificado, vencimientoParaElMostrador } from '../facturaci
 import { FacturacionService } from '../facturacion/facturacion.service';
 
 const ESPERA_MS = 250;
+/** Id del panel de avisos que la franja del celular abre y cierra (móvil-pulgar, T4). */
+const AVISOS_PANEL_ID = 'avisos-mostrador';
 /** Cuánto queda a la vista el aviso de venta cobrada. */
 const AVISO_COBRADA_MS = 5000;
 const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
@@ -289,6 +291,26 @@ export class Mostrador {
    * está vigente, si no hay certificado o si no se pudo leer.
    */
   protected readonly vencimientoCertificado = signal<VencimientoCertificado | null>(null);
+  /**
+   * La franja de avisos del celular (móvil-pulgar, T4): con el panel cerrado los avisos no ocupan lugar y el ticket
+   * arranca arriba; la franja los abre a un toque. En el escritorio la franja no se dibuja.
+   */
+  protected readonly avisosAbiertos = signal(false);
+  /** El id del panel: lo comparten el `aria-controls` de la franja y el panel. */
+  protected readonly avisosPanelId = AVISOS_PANEL_ID;
+  /** Cuántos avisos informó AvisosFacturacion: la franja suma ese número a los que sabe el mostrador. */
+  private readonly avisosDeFacturacion = signal(0);
+  /** Cuántos avisos hay arriba del ticket: la caja que frena la venta, el certificado del Dueño y lo de facturación. */
+  protected readonly cuentaDeAvisos = computed(
+    () =>
+      (this.avisoCaja() === null ? 0 : 1) +
+      (this.vencimientoCertificado() === null ? 0 : 1) +
+      this.avisosDeFacturacion(),
+  );
+  /** «1 aviso», «2 avisos»: lo que dice la franja del celular. */
+  protected readonly textoAvisos = computed(() =>
+    this.cuentaDeAvisos() === 1 ? '1 aviso' : `${this.cuentaDeAvisos()} avisos`,
+  );
   /** La guarda de escaneo del diálogo de la factura: un Enter del lector no imprime. */
   private readonly guardaFactura = new GuardaLector();
   protected readonly esEscaneo = (evento: KeyboardEvent) => this.guardaFactura.alTeclear(evento);
@@ -828,6 +850,16 @@ export class Mostrador {
   /** Se cerró un aviso con su botón: el foco vuelve al buscador, para el lector. */
   protected alCerrarAviso(): void {
     this.enfocarSinDialogo();
+  }
+
+  /** Abre o cierra los avisos desde la franja del celular (móvil-pulgar, T4). */
+  protected alternarAvisos(): void {
+    this.avisosAbiertos.update((abiertos) => !abiertos);
+  }
+
+  /** La cuenta de AvisosFacturacion cambió: la franja del celular la suma a la suya. */
+  protected contarAvisos(cantidad: number): void {
+    this.avisosDeFacturacion.set(cantidad);
   }
 
   /** «Venta N.º 7 cobrada: $ 3.000,00»; a cuenta corriente lo dice, y en un pago mixto cuánto fue a cuenta. */

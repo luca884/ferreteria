@@ -73,7 +73,7 @@
       </nav>
     }
     <div class="tabla-scroll">
-      <table class="presupuestos">
+      <table class="presupuestos tabla-tarjetas">
         <caption class="sr-only">
           Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.
         </caption>
@@ -90,16 +90,16 @@
         <tbody>
           @for (fila of actual.items; track fila.presupuestoId) {
             <tr [class.elegida]="elegido() === fila.presupuestoId" (click)="elegir(fila)">
-              <td>
+              <td class="numero" data-etiqueta="N.º">
                 <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.presupuestoId">
                   {{ fila.numero }}
                 </button>
               </td>
-              <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
-              <td>{{ fila.clienteNombre ?? '—' }}</td>
-              <td class="num">{{ fila.total | monto }}</td>
-              <td class="fecha">{{ dia(fila.vence) }}</td>
-              <td>
+              <td class="fecha" data-etiqueta="Fecha">{{ fechaHora(fila.fecha) }}</td>
+              <td class="cliente" data-etiqueta="Cliente">{{ fila.clienteNombre ?? '—' }}</td>
+              <td class="num total" data-etiqueta="Total">{{ fila.total | monto }}</td>
+              <td class="fecha vence" data-etiqueta="Vence">{{ dia(fila.vence) }}</td>
+              <td class="situacion" data-etiqueta="Estado">
                 {{ etiqueta[fila.estado] }}
                 @if (fila.vencido) {
                   <span class="vencido">· Vencido</span>

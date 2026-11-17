@@ -391,4 +391,91 @@ describe('Compras', () => {
       expect(navegar).toHaveBeenCalledWith('/articulos/15');
     });
   });
+
+  /*
+   * Responsive, S2/S4/T8: en el celular cada compra es una tarjeta apilada con el comprobante adelante. Vitest no evalúa
+   * media queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada celda) y
+   * que la regla de la tarjeta viva sólo en la pantalla del celular: la tabla ancha no cambia.
+   */
+  describe('la fila apilada del celular (T8)', () => {
+    /**
+     * Las reglas de la hoja de Compras que tocan `selector`, con la consulta de medios que las envuelve ('' si no
+     * tiene): así se afirma que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular
+     * le agrega a cada selector el atributo del componente, por eso la comparación es por `includes`.
+     */
+    function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+      const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+      const recorrer = (reglas: CSSRuleList, consulta: string) => {
+        Array.from(reglas).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          const hijas = (regla as CSSMediaRule).cssRules;
+          if (media && hijas) {
+            recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+            return;
+          }
+          // Angular deja espacios de más donde estaba el atributo: se normalizan para comparar el selector entero.
+          const selectorText = (regla as CSSStyleRule).selectorText
+            ?.replace(/\[_ng(content|host)-[^\]]+\]/g, '')
+            .replace(/\s+/g, ' ');
+          if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        });
+      };
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          // Una hoja que no se deja leer no es la de Compras.
+        }
+      });
+      return encontradas;
+    }
+
+    it('cada celda lleva el nombre de su columna en data-etiqueta y el comprobante va primero', async () => {
+      await crear();
+
+      const filas = Array.from(el().querySelectorAll<HTMLElement>('table.compras tbody tr'));
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+      expect(el().querySelector('table.compras')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filas) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // El comprobante es lo que identifica la compra y lo que se toca para abrir el detalle, aunque en la tabla vaya
+      // segundo: la tarjeta lo pone arriba con `order`.
+      const primera = filas[0];
+      expect(primera.querySelector('td.comprobante button.enlace')!.textContent!.trim()).toBe('Factura A 00003-00000002');
+      expect(primera.querySelector('td.fecha')!.textContent!.trim()).toBe('20/10/2026');
+      expect(primera.querySelector('td.proveedor')!.textContent!.trim()).toBe('Bulonera Sur');
+      expect(primera.querySelector('td.renglones')!.textContent!.trim()).toBe('2');
+      expect(primera.querySelector('td.neto')!.textContent).toContain('2.200,00');
+    });
+
+    it('la tarjeta vive sólo en la pantalla del celular, el comprobante es su título y el botón mide el dedo', async () => {
+      await crear();
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+
+      // El comprobante sube al primer renglón, ocupa el ancho y no repite el nombre de la columna.
+      const titulo = reglasDe('td.comprobante');
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('order') === '-1')).toBe(true);
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
+      const sinEtiqueta = reglasDe('td.comprobante::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+
+      // S5: el botón que abre el detalle mide 44×44 y el foco se ve, también en la tarjeta.
+      const accion = reglasDe('td.comprobante .enlace');
+      expect(accion.some((regla) => regla.estilo.getPropertyValue('min-height') === '44px')).toBe(true);
+      expect(accion.some((regla) => regla.estilo.getPropertyValue('min-width') === '44px')).toBe(true);
+      const foco = reglasDe('td.comprobante .enlace:focus-visible');
+      expect(foco).toHaveLength(1);
+      expect(foco[0].estilo.getPropertyValue('outline')).toContain('var(--acento)');
+    });
+  });
 });

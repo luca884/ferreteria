@@ -165,11 +165,155 @@
   gap: var(--e-2);
 }
 
-/* Por debajo de 640 px la fila es una tarjeta (S5): el dato va a la izquierda y la factura puede partirse. */
+/*
+ * móvil-pulgar, T3 · el celular usa la misma dirección que Artículos (T2): el dato antes que los controles. Los seis
+ * filtros se pliegan detrás de «Filtros», que lleva la cuenta de los que están puestos, y cada venta es una línea con el
+ * importe a la derecha para comparar dos totales de un vistazo. El escritorio y la tablet no cambian: ahí el formulario
+ * está siempre a la vista y la tabla muestra sus seis columnas.
+ */
+.herramientas-movil {
+  display: none;
+}
+
 @media screen and (max-width: 639.98px) {
-  table .num,
-  table .factura {
-    text-align: left;
+  /* El renglón del botón, arriba de la lista: la primera venta entra sin abrir nada. */
+  .herramientas-movil {
+    display: flex;
+    gap: var(--e-2);
+    margin-bottom: var(--e-2);
+  }
+  .herramientas-movil .filtros {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: 44px;
+    padding: 0 var(--e-3);
+  }
+  /*
+   * Plegado por defecto: los seis campos no ocupan la primera pantalla. Es el formulario: el botón «Filtros» también
+   * lleva la clase y lo dibuja la regla de arriba, que tiene más peso.
+   */
+  .filtros {
+    display: none;
+  }
+  /* Abierto, el panel es una columna: cada campo toma el renglón entero y el N.º de factura ya no corta su valor. */
+  .filtros.abiertos {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--e-3);
+    margin-bottom: var(--e-4);
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  .filtros label {
+    gap: var(--e-1);
+  }
+  .filtros input,
+  .filtros select {
+    width: 100%;
+    min-height: 44px;
+  }
+  /* Los dos campos que el escritorio mide en `rem` (N.º y N.º de factura) también toman el renglón entero. */
+  .filtros input[name='numero'],
+  .filtros input[name='numeroFiscal'] {
+    width: 100%;
+  }
+  /* Cada botón del panel, con el alto del dedo. */
+  .filtros button {
+    min-height: 44px;
+  }
+  /* El anillo de foco del proyecto, también en los campos: se tocan con el dedo y el resplandor de escritorio se pierde. */
+  .filtros input:focus-visible,
+  .filtros select:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+
+  /*
+   * La fila es una línea (T3): número y cliente a la izquierda, el importe a la derecha en mono tabular, y factura y
+   * fecha chiquitas en el renglón de abajo. Las marcas (no facturable, nota, anulada) siguen en la celda del número, así
+   * que se leen en la línea. El `.tabla-scroll` de adelante le gana a la tarjeta de styles.css, que tiene la misma
+   * especificidad.
+   */
+  .tabla-scroll .tabla-tarjetas > tbody > tr {
+    display: grid;
+    /*
+     * El número tiene ancho fijo: con `fit-content` una venta con marca larga («No facturable») corría el cliente
+     * a la derecha y cada renglón arrancaba en otro lado. Columna estable = se lee en vertical.
+     */
+    grid-template-columns: 6rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      'numero cliente total'
+      'factura factura fecha';
+    column-gap: var(--e-3);
+    row-gap: 2px;
+    align-items: center;
+    min-height: 60px;
+    padding: var(--e-2) var(--e-3);
+  }
+  /* Cada celda ya tiene su lugar en la línea: la etiqueta «N.º:» de la tarjeta no hace falta. */
+  .tabla-scroll .tabla-tarjetas > tbody > tr > td::before {
+    content: none;
+  }
+  /* El usuario no entra en la línea del celular; sigue en la fila, para la tabla ancha. */
+  .tabla-tarjetas > tbody > tr > td.usuario {
+    display: none;
+  }
+  /*
+   * Número y marcas: el número es el botón que abre el detalle, con el alto del dedo, y la marca se lee al lado. Si la
+   * marca es larga («Nota de crédito · Venta N.º 4») la celda se acota al 40 % de la línea y sigue en un segundo renglón.
+   */
+  .tabla-tarjetas > tbody > tr > td.numero {
+    grid-area: numero;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--e-2);
+    min-width: 0;
+  }
+  .tabla-tarjetas > tbody > tr > td.numero .enlace {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* La marca ya tiene la separación del `gap`. */
+  .tabla-tarjetas > tbody > tr > td.numero .marca {
+    margin-left: 0;
+  }
+  /* El cliente, en el renglón del número: lo que no entra se corta con puntos suspensivos, como en Artículos. */
+  .tabla-tarjetas > tbody > tr > td.cliente {
+    grid-area: cliente;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* El importe, a la derecha y en mono tabular: dos totales se comparan de un vistazo. */
+  .tabla-tarjetas > tbody > tr > td.num {
+    grid-area: total;
+    justify-self: end;
+    text-align: right;
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  /* La factura ocupa el renglón chico con su marca de estado: si no entra, se parte antes que tapar la fecha. */
+  .tabla-tarjetas > tbody > tr > td.factura {
+    grid-area: factura;
+    min-width: 0;
+    font-size: var(--texto-xs);
     white-space: normal;
+  }
+  .tabla-tarjetas > tbody > tr > td.fecha {
+    grid-area: fecha;
+    justify-self: end;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    white-space: nowrap;
   }
 }

@@ -115,6 +115,13 @@ th.actualizacion {
 .paginacion .separador {
   flex: 1;
 }
+/*
+ * La flecha del paginador es sólo del celular (móvil-pulgar, T5): en la tablet y en el escritorio los botones siguen
+ * diciendo «Anterior» y «Siguiente».
+ */
+.flecha-pagina {
+  display: none;
+}
 /* El motivo de Ajustar stock deshabilitado, entre el paginador y la grilla; la línea está siempre, para que la grilla
    no salte al elegir un artículo dado de baja (como en Clientes). */
 .motivo-linea {
@@ -126,18 +133,45 @@ th.actualizacion {
 }
 
 /*
- * responsive S11 (T9): a 390 px la cuenta de la página y «Anterior» entraban justo en el primer renglón y «Siguiente»
- * caía solo al segundo, alineado a la izquierda (el paginador medía 108 px de alto). Debajo de 640 px: sin el
- * separador elástico, la cuenta de la página va en su renglón y los dos botones quedan juntos abajo (86,8 px).
- * En escritorio no cambia nada.
+ * responsive S11 (T9) y móvil-pulgar (T5): a 390 px el paginador medía ~90 px de alto —la cuenta de la página en un
+ * renglón y los dos botones en otro— arriba de la lista. Debajo de 640 px queda en una sola línea de 44 px: la cuenta,
+ * que se anuncia cuando cambia, y las dos flechas del pulgar. En escritorio y en tablet no cambia nada.
  */
 @media screen and (max-width: 639.98px) {
+  .paginacion {
+    flex-wrap: nowrap;
+    gap: var(--e-2);
+    padding-block: 0;
+  }
   .paginacion .separador {
     display: none;
   }
-  .paginacion > span:not(.separador) {
-    flex: 1 1 100%;
+  /* La cuenta de la página se queda con lo que sobra del renglón; el elegido sigue arriba, en el suyo. */
+  .paginacion > span:not(.separador, .elegido) {
+    flex: 1 1 auto;
     min-width: 0;
+  }
+  .paginacion > .elegido {
+    flex: 1 1 100%;
+  }
+  .paginacion button.chico {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+  /* El rótulo se lee por lector de pantalla y en la pantalla va la flecha: el botón conserva su nombre. */
+  .paginacion .rotulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .paginacion .flecha-pagina {
+    display: block;
   }
   /*
    * El buscador de la barra: el formulario se encogía a 0 (la barra no parte de renglón) y la caja, de 244 px, se
@@ -151,5 +185,149 @@ th.actualizacion {
   }
   .caja-busqueda {
     min-width: 286px;
+  }
+}
+
+/*
+ * móvil-pulgar, T2 · el celular usa la dirección «barra al pulgar»: el buscador es lo primero que se alcanza y los
+ * filtros no ocupan la primera pantalla. El renglón del buscador y el botón con su contador son sólo del celular; el
+ * escritorio y la tablet siguen con la barra de siempre, en la que el buscador y los tildes van adentro de
+ * app-barra-acciones, como hasta hoy.
+ */
+.herramientas-movil {
+  display: none;
+}
+
+@media screen and (max-width: 639.98px) {
+  /* Las copias de la barra se van: en el celular el buscador y los tildes viven en .herramientas-movil. */
+  app-barra-acciones .solo-escritorio {
+    display: none;
+  }
+  /*
+   * El renglón del buscador queda pegado abajo de la barra —que ya es sticky arriba del contenido— mientras la lista
+   * scrollea: los 60 px son el alto de la barra en el celular (styles.css).
+   */
+  .herramientas-movil {
+    position: sticky;
+    top: 60px;
+    z-index: var(--z-desplegable);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-2);
+    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-2);
+    padding: var(--e-2) var(--pantalla-x);
+    background: var(--fondo);
+  }
+  /* El buscador se queda con el renglón: la caja con lo que sobra y el botón con el alto del dedo (44 px). */
+  .herramientas-movil .busqueda-movil {
+    display: flex;
+    gap: var(--e-2);
+  }
+  .herramientas-movil .busqueda-movil .caja-busqueda {
+    min-width: 0;
+    height: 44px;
+  }
+  .herramientas-movil .busqueda-movil .buscar {
+    flex: none;
+    height: 44px;
+    min-width: 44px;
+  }
+  /* «Filtros», con la cuenta de los que están puestos, a la izquierda del renglón. */
+  .herramientas-movil .filtros {
+    align-self: flex-start;
+    min-height: 44px;
+    padding: 0 var(--e-3);
+  }
+  /* El panel con los dos tildes de la barra, cada uno con su renglón de 44 px para el pulgar. */
+  .herramientas-movil .filtros-panel {
+    display: grid;
+    gap: var(--e-1);
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  .herramientas-movil .filtros-panel .casilla {
+    min-height: 44px;
+  }
+
+  /*
+   * La fila es una línea (T2): código y descripción a la izquierda, el importe a la derecha en mono tabular y el stock
+   * chiquito debajo. Los datos que sólo se miran en la ficha (cód. proveedor, costo, margen, IVA y última
+   * actualización) no se dibujan en el celular, pero siguen en la fila: la grilla del escritorio conserva sus columnas.
+   * El `.grilla-marco` de adelante le gana a la tarjeta de styles.css, que tiene la misma especificidad.
+   */
+  .grilla-marco .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'descripcion descripcion precio'
+      'codigo estado stock';
+    column-gap: var(--e-3);
+    align-items: center;
+    min-height: 56px;
+    padding: var(--e-2) var(--e-3);
+  }
+  /* Cada celda ya tiene su lugar en la línea: la etiqueta «Código:» de la tarjeta no hace falta. */
+  .grilla-marco .tabla-tarjetas > tbody > tr > td::before {
+    content: none;
+  }
+  .tabla-tarjetas .solo-ficha {
+    display: none;
+  }
+  .tabla-tarjetas .codigo {
+    grid-area: codigo;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    white-space: nowrap;
+  }
+  /* La descripción no se parte en tres renglones: lo que no entra se corta con puntos suspensivos. */
+  .tabla-tarjetas .descripcion {
+    grid-area: descripcion;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tabla-tarjetas .precio {
+    grid-area: precio;
+    text-align: right;
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tabla-tarjetas .stock {
+    grid-area: stock;
+    color: var(--texto-tenue);
+    text-align: right;
+    font-size: var(--texto-xs);
+    white-space: nowrap;
+  }
+  /* El stock negativo sigue en rojo: el tono tenue de arriba es el de un stock normal. */
+  .tabla-tarjetas .stock.negativo {
+    color: var(--error);
+  }
+  .tabla-tarjetas .estado {
+    grid-area: estado;
+    justify-self: start;
+  }
+  /*
+   * La elegida pinta la fila entera: con la grilla, las celdas dejaban huecos blancos entre los datos. La barra a la
+   * izquierda marca cuál está elegida, porque la línea ya no tiene una columna que la identifique.
+   */
+  .tabla-tarjetas > tbody > tr.elegible[aria-selected='true'] {
+    background: var(--acento-suave);
+    box-shadow: inset 3px 0 0 var(--acento);
+  }
+  .tabla-tarjetas > tbody > tr.elegible[aria-selected='true'] > td,
+  .tabla-tarjetas > tbody > tr:hover > td {
+    background: transparent;
+  }
+  /* La barra de la elegida va en la fila, no repetida adentro de la primera celda. */
+  .tabla-tarjetas > tbody > tr.elegible[aria-selected='true'] > td:first-child {
+    box-shadow: none;
+  }
+  .tabla-tarjetas > tbody > tr:hover {
+    background: var(--superficie-2);
   }
 }

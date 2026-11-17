@@ -125,3 +125,25 @@ td.debe {
   align-items: center;
   gap: var(--e-2);
 }
+
+/*
+ * En el celular cada cliente es una tarjeta apilada (S2, S4, T7), con el patrón de `.tabla-tarjetas` (styles.css): la
+ * razón social adelante como título y el resto en dos columnas de «columna: valor», así no hay que deslizar de costado
+ * para leer una fila. Va sólo en pantalla y hasta 640 px: la grilla del escritorio y la tablet quedan igual. El
+ * `.grilla-marco` de adelante le gana a la tarjeta de styles.css, que tiene la misma especificidad.
+ */
+@media screen and (max-width: 639.98px) {
+  .grilla-marco .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--e-3);
+    row-gap: 2px;
+  }
+  /* La razón social es el título de la tarjeta: ocupa el ancho y no repite el nombre de la columna. */
+  .grilla-marco .tabla-tarjetas td.nombre {
+    grid-column: 1 / -1;
+  }
+  .grilla-marco .tabla-tarjetas td.nombre::before {
+    content: none;
+  }
+}

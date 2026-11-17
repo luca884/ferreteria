@@ -77,6 +77,35 @@ describe('StockBajoMinimo', () => {
   const filasTabla = () => Array.from(el().querySelectorAll('tbody tr'));
   const celdas = (fila: number) => Array.from(filasTabla()[fila].querySelectorAll('td')).map((c) => c.textContent?.trim());
 
+  /**
+   * Las reglas del CSS que mencionan `selector` y la consulta media en la que viven (`''` es la base). El
+   * `_ngcontent-…` que Angular le agrega a cada selector al compilar el CSS del componente se saca, así se busca el
+   * selector tal como está escrito en la hoja. Vitest no evalúa media queries: esto es lo que deja verlas.
+   */
+  function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+    const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+    const recorrer = (reglas: CSSRuleList, consulta: string) => {
+      Array.from(reglas).forEach((regla) => {
+        const media = (regla as CSSMediaRule).media;
+        const hijas = (regla as CSSMediaRule).cssRules;
+        if (media && hijas) {
+          recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+          return;
+        }
+        const selectorText = (regla as CSSStyleRule).selectorText?.replace(/\[_ng(content|host)-[^\]]+\]/g, '');
+        if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+      });
+    };
+    Array.from(document.styleSheets).forEach((hoja) => {
+      try {
+        recorrer(hoja.cssRules, '');
+      } catch {
+        // Una hoja que no se deja leer no es la de Stock bajo mínimo.
+      }
+    });
+    return encontradas;
+  }
+
   afterEach(() => vi.restoreAllMocks());
 
   it('el título va en la barra y pide el listado ordenado por descripción', async () => {
@@ -214,6 +243,54 @@ describe('StockBajoMinimo', () => {
     await refrescar();
 
     expect(filasTabla()).toHaveLength(2);
+  });
+
+  /*
+   * Responsive, S4/T6: en el celular cada fila es una tarjeta apilada con el código adelante. Vitest no evalúa media
+   * queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada celda) y que la
+   * regla de la tarjeta viva sólo en la pantalla del celular: la hoja de impresión es la misma tabla de siempre.
+   */
+  describe('la fila apilada del celular (T6)', () => {
+    it('cada celda lleva el nombre de su columna en data-etiqueta y el código va primero', async () => {
+      await crear();
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+      expect(el().querySelector('table')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filasTabla()) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // Lo que se mira para reponer —stock, mínimo y costo— se lee en la tarjeta, cada uno con su etiqueta.
+      const fila = filasTabla()[1];
+      expect(fila.querySelector('td')!.classList).toContain('codigo');
+      expect(fila.querySelector('td.stock')!.textContent!.trim()).toBe('12,5');
+      expect(fila.querySelector('td.minimo')!.textContent!.trim()).toBe('50');
+      expect(fila.querySelector('td.costo')!.textContent!.trim()).toBe(formatearCosto(10.5, 'USD'));
+    });
+
+    it('la tarjeta existe sólo en la pantalla del celular: la tabla y la hoja de impresión quedan como hoy', async () => {
+      await crear();
+
+      const reglas = reglasDe('.tabla-tarjetas');
+      expect(reglas.length).toBeGreaterThan(0);
+      // Ninguna regla de la tarjeta queda fuera del celular: ni en la base (tablet y escritorio) ni en papel.
+      for (const regla of reglas) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+        expect(regla.consulta).not.toContain('print');
+      }
+      expect(reglas.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+
+      // El código y la descripción son el título de la tarjeta: no repiten el nombre de la columna.
+      const sinEtiqueta = reglasDe('td:is(.codigo, .descripcion)::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+
+      // El imprimible sigue siendo la grilla de diez columnas con su encabezado, la misma que se imprime.
+      const impreso = el().querySelector('.stock-imprimible table')!;
+      expect(impreso.querySelectorAll('thead th')).toHaveLength(10);
+      expect(impreso.querySelectorAll('tbody tr')[0].querySelectorAll('td')).toHaveLength(10);
+    });
   });
 
   it('al Vendedor le avisa que es del Dueño y no pide nada', async () => {

@@ -1399,4 +1399,81 @@ describe('Clientes', () => {
       expect(input('razon-social').value).toBe('Ferretería Norte SRL');
     });
   });
+
+  /*
+   * Responsive, S2/S4/T7: en el celular cada cliente es una tarjeta apilada con la razón social adelante. Vitest no
+   * evalúa media queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada
+   * celda) y que la regla de la tarjeta viva sólo en la pantalla del celular: la tabla ancha no cambia.
+   */
+  describe('la fila apilada del celular (T7)', () => {
+    /**
+     * Las reglas del documento que tocan `selector`, con la consulta de medios que las envuelve ('' si no tiene): así se
+     * puede afirmar que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular le agrega
+     * a cada selector el atributo del componente, por eso la comparación es por `includes` y se lo quita antes.
+     */
+    function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+      const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+      const recorrer = (reglas: CSSRuleList, consulta: string) => {
+        Array.from(reglas).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          const hijas = (regla as CSSMediaRule).cssRules;
+          if (media && hijas) {
+            recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+            return;
+          }
+          const selectorText = (regla as CSSStyleRule).selectorText?.replace(/\[_ng(content|host)-[^\]]+\]/g, '');
+          if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        });
+      };
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          // Una hoja que no se deja leer no es la de Clientes.
+        }
+      });
+      return encontradas;
+    }
+
+    it('cada celda lleva el nombre de su columna en data-etiqueta y la razón social va primero', async () => {
+      await crear();
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => normalizar(th.textContent));
+      expect(el().querySelector('table[role="grid"]')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filas()) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // Lo que el Dueño mira para atender: quién es, su documento, su condición de IVA, si está activo y sus cifras.
+      const primera = filas()[0];
+      expect(primera.querySelector('td')!.classList).toContain('nombre');
+      expect(normalizar(primera.querySelector('td.nombre')!.textContent)).toBe('Ana Gómez');
+      expect(normalizar(primera.querySelector('td.documento')!.textContent)).toBe('DNI 12.345.678');
+      expect(normalizar(primera.querySelectorAll('td')[2].textContent)).toBe('Consumidor final');
+      expect(normalizar(primera.querySelector('td.estado')!.textContent)).toBe('Activo');
+      expect(normalizar(primera.querySelector('td.contacto')!.textContent)).toBe('2234567890');
+    });
+
+    it('la tarjeta vive sólo en la pantalla del celular y la razón social es su título, sin repetir la columna', async () => {
+      await crear();
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      // Ninguna regla de la tarjeta queda fuera del celular: la tablet y el escritorio siguen siendo la grilla.
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+
+      // La razón social ocupa el ancho de la tarjeta y no repite el nombre de la columna.
+      const titulo = reglasDe('td.nombre');
+      expect(titulo.length).toBeGreaterThan(0);
+      expect(titulo.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
+      const sinEtiqueta = reglasDe('td.nombre::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+    });
+  });
 });

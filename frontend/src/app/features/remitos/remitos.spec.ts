@@ -1118,4 +1118,89 @@ describe('Remitos', () => {
       expect(pastilla.classList).toContain(`pastilla-${color}`);
     });
   });
+
+  /*
+   * Responsive, S2/S4/T8: en el celular cada remito es una tarjeta apilada con el número adelante. Vitest no evalúa
+   * media queries, así que el spec vigila el contrato de datos que la dibuja (el nombre de la columna en cada celda) y
+   * que la regla de la tarjeta viva sólo en la pantalla del celular: la tabla ancha no cambia.
+   */
+  describe('la fila apilada del celular (T8)', () => {
+    /**
+     * Las reglas de la hoja de Remitos que tocan `selector`, con la consulta de medios que las envuelve ('' si no
+     * tiene): así se afirma que una regla es sólo del celular y que la base —tablet y escritorio— no se movió. Angular
+     * le agrega a cada selector el atributo del componente, por eso la comparación es por `includes`.
+     */
+    function reglasDe(selector: string): { consulta: string; estilo: CSSStyleDeclaration }[] {
+      const encontradas: { consulta: string; estilo: CSSStyleDeclaration }[] = [];
+      const recorrer = (reglas: CSSRuleList, consulta: string) => {
+        Array.from(reglas).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          const hijas = (regla as CSSMediaRule).cssRules;
+          if (media && hijas) {
+            recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
+            return;
+          }
+          // Angular deja espacios de más donde estaba el atributo: se normalizan para comparar el selector entero.
+          const selectorText = (regla as CSSStyleRule).selectorText
+            ?.replace(/\[_ng(content|host)-[^\]]+\]/g, '')
+            .replace(/\s+/g, ' ');
+          if (selectorText?.includes(selector)) encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
+        });
+      };
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          // Una hoja que no se deja leer no es la de Remitos.
+        }
+      });
+      return encontradas;
+    }
+
+    it('cada celda lleva el nombre de su columna en data-etiqueta y el número va primero', async () => {
+      await crear();
+
+      const cabeceras = Array.from(el().querySelectorAll('thead th')).map((th) => normal(th.textContent));
+      expect(el().querySelector('table.remitos')!.classList).toContain('tabla-tarjetas');
+      for (const fila of filas()) {
+        expect(Array.from(fila.querySelectorAll('td')).map((td) => td.getAttribute('data-etiqueta'))).toEqual(cabeceras);
+      }
+
+      // El número es lo que se toca para abrir el detalle; abajo va lo que hace falta para decidir.
+      const primera = filas()[0];
+      expect(primera.querySelector('td')!.classList).toContain('numero');
+      expect(normal(primera.querySelector('td.numero button.enlace')!.textContent)).toBe('5');
+      expect(normal(primera.querySelector('td.fecha')!.textContent)).toBe('18/10 16:03');
+      expect(normal(primera.querySelector('td.cliente')!.textContent)).toBe('Cliente 5');
+      expect(normal(primera.querySelector('td.total')!.textContent)).toBe('$ 3.000,00');
+      expect(normal(primera.querySelector('td.situacion')!.textContent)).toBe('Emitido');
+    });
+
+    it('la tarjeta vive sólo en la pantalla del celular, el número es su título y el botón mide el dedo', async () => {
+      await crear();
+
+      const tarjeta = reglasDe('.tabla-tarjetas');
+      expect(tarjeta.length).toBeGreaterThan(0);
+      expect(tarjeta.some((regla) => regla.estilo.getPropertyValue('display') === 'grid')).toBe(true);
+      for (const regla of tarjeta) {
+        expect(regla.consulta).toContain('screen');
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+
+      // El número ocupa el ancho de la tarjeta y no repite el nombre de la columna.
+      const titulo = reglasDe('td.numero');
+      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-area') === 'numero')).toBe(true);
+      const sinEtiqueta = reglasDe('td.numero::before');
+      expect(sinEtiqueta).toHaveLength(1);
+      expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
+
+      // S5: el botón que abre el detalle mide 44×44 y el foco se ve, también en la tarjeta.
+      const accion = reglasDe('td.numero .enlace');
+      expect(accion.some((regla) => regla.estilo.getPropertyValue('min-height') === '44px')).toBe(true);
+      expect(accion.some((regla) => regla.estilo.getPropertyValue('min-width') === '44px')).toBe(true);
+      const foco = reglasDe('td.numero .enlace:focus-visible');
+      expect(foco).toHaveLength(1);
+      expect(foco[0].estilo.getPropertyValue('outline')).toContain('var(--acento)');
+    });
+  });
 });

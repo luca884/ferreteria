@@ -147,4 +147,28 @@ describe('AvisosFacturacion (avisos del Dueño en el mostrador, CU-16 punto 8, C
 
     expect(leer).toHaveBeenCalledTimes(1);
   });
+
+  /*
+   * móvil-pulgar, T4: la franja del celular dice cuántos avisos hay arriba del ticket, así que el mostrador suma la cuenta
+   * de este componente a la suya. Se informa después de la detección de cambios, cuando el mostrador ya escucha: por eso
+   * el caso mira las lecturas siguientes y no la de abrir.
+   */
+  it('informa la cuenta de avisos al mostrador, para la franja del celular (móvil-pulgar, T4)', async () => {
+    await crear();
+    const informadas: number[] = [];
+    const suscripcion = fixture.componentInstance.cantidad.subscribe((cantidad) =>
+      informadas.push(cantidad),
+    );
+
+    respuesta = { rechazadas: 2, pendientesViejas: 1, enRevision: 1, bloqueo: BLOQUEO };
+    await avanzar(INTERVALO_AVISOS_MS);
+
+    // Tres cuentas para revisar y la facturación bloqueada: cuatro avisos para la franja del celular.
+    expect(informadas).toEqual([4]);
+
+    respuesta = sinNada;
+    await avanzar(INTERVALO_AVISOS_MS);
+    expect(informadas).toEqual([4, 0]);
+    suscripcion.unsubscribe();
+  });
 });

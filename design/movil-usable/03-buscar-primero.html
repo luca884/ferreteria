@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dirección C · Buscar primero</title>
+<style>
+  :root {
+    --acento: #2563eb; --acento-fuerte: #1d4ed8; --acento-profundo: #1e3a8a; --acento-suave: #eff6ff;
+    --acento-anillo: #dbeafe; --acento-borde: #bfdbfe; --acento-texto: #fff; --profundo-texto-tenue: #bfdbfe;
+    --fondo: #f4f6fa; --superficie: #fff; --superficie-2: #f8fafc; --superficie-3: #f1f5f9;
+    --borde: #e2e8f0; --borde-fuerte: #cbd5e1;
+    --texto: #0f172a; --texto-suave: #475569; --texto-tenue: #5b6b82; --texto-deshabilitado: #94a3b8;
+    --exito: #047857; --advertencia: #92400e; --advertencia-fondo: #fffbeb; --advertencia-borde: #fde68a;
+    --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --fuente-mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    --sombra-2: 0 8px 24px rgb(15 23 42 / .1);
+    --radio-sm: 4px; --radio: 8px; --radio-lg: 10px; --radio-xl: 14px;
+    /* Pastilla: el proyecto ya la usa en `.pastilla` (frontend/src/styles.css:1469). */
+    --radio-pastilla: 999px;
+  }
+  * { box-sizing: border-box; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+  body { margin: 0; padding: 32px; background: var(--fondo); color: var(--texto); font-family: var(--fuente); font-size: 14px; line-height: 1.45; }
+  .tablero { display: flex; gap: 32px; align-items: flex-start; }
+  .columna { width: 390px; }
+  .rotulo { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-tenue); }
+  .rotulo b { color: var(--texto); text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .telefono { width: 390px; height: 760px; background: var(--fondo); border-radius: var(--radio-xl); border: 1px solid var(--borde-fuerte); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--sombra-2); }
+  .barra-app { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde); }
+  .barra-app h2 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+  .barra-app a { display: inline-flex; align-items: center; min-height: 44px; color: var(--acento-fuerte); text-decoration: none; font-size: 13px; font-weight: 600; padding: 0; }
+  .barra-app a:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; border-radius: var(--radio-sm); }
+  /* La pantalla entera es un buscador: el campo es el protagonista. */
+  .buscador-grande { background: var(--superficie); padding: 12px 16px 14px; border-bottom: 1px solid var(--borde); }
+  .campo { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 14px; border: 2px solid var(--acento); border-radius: var(--radio-xl); background: var(--superficie); box-shadow: 0 0 0 4px var(--acento-anillo); }
+  .campo input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; font: inherit; font-size: 17px; color: var(--texto); appearance: none; }
+  .campo input::placeholder { color: var(--texto-tenue); opacity: 1; }
+  .campo input::-webkit-search-cancel-button { display: none; }
+  .campo input:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: -1px; border-radius: var(--radio-lg); }
+  .campo .limpiar { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: var(--superficie-3); border-radius: var(--radio-pastilla); color: var(--texto-suave); font: inherit; font-size: 15px; cursor: pointer; }
+  .campo .limpiar:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; }
+  .pista { margin: 10px 0 0; font-size: 12px; color: var(--texto-tenue); }
+  .cuerpo { flex: 1; overflow: hidden; }
+  .grupo { margin: 0; padding: 14px 16px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-tenue); background: var(--fondo); }
+  .resultado { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 14px 16px; min-height: 72px; background: var(--superficie); border-bottom: 1px solid var(--superficie-3); }
+  /* Las filas que se tocan son botones: mismos colores y medidas, sin el cromo del control. */
+  button.resultado { width: 100%; border: 0; border-bottom: 1px solid var(--superficie-3); color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+  button.resultado:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: -3px; }
+  .resultado .plata > span { display: block; }
+  .resultado .desc { font-weight: 500; font-size: 15px; }
+  .resultado .segunda { display: flex; gap: 10px; font-family: var(--fuente-mono); font-size: 11px; color: var(--texto-tenue); }
+  .resultado .plata { grid-row: 1 / span 2; grid-column: 2; text-align: right; }
+  .resultado .precio { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
+  .resultado .stock { font-size: 11px; color: var(--texto-tenue); }
+  .resultado .stock.cero { color: var(--advertencia); font-weight: 600; }
+  .pie-busqueda { margin-top: auto; padding: 14px 16px; background: var(--superficie); border-top: 1px solid var(--borde); display: grid; gap: 8px; }
+  .pie-busqueda a { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 2px; color: var(--texto); text-decoration: none; font-weight: 500; }
+  .pie-busqueda a:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; border-radius: var(--radio-sm); }
+  .pie-busqueda a span { color: var(--texto-tenue); font-weight: 400; font-size: 12px; }
+  /* Ventas: el mismo gesto, buscar en vez de filtrar. */
+  .venta { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 14px 16px; min-height: 72px; background: var(--superficie); border-bottom: 1px solid var(--superficie-3); }
+  .venta .quien { font-weight: 500; font-size: 15px; }
+  .venta .cuando { font-family: var(--fuente-mono); font-size: 11px; color: var(--texto-tenue); }
+  .venta .total { grid-row: 1; grid-column: 2; text-align: right; font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
+  .venta .estado { grid-row: 2; grid-column: 2; text-align: right; font-size: 11px; color: var(--exito); }
+  .chips { display: flex; gap: 8px; padding: 10px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde); overflow: hidden; }
+  .chips .chip-filtro { position: relative; flex: none; height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border: 0; border-radius: var(--radio-pastilla); background: var(--superficie-3); color: var(--texto-suave); font: inherit; font-size: 12px; cursor: pointer; }
+  .chips .chip-filtro.activo { background: var(--acento); color: #fff; }
+  /* Área táctil de 44px de alto sin cambiar el alto visible del filtro. */
+  .chips .chip-filtro::before { content: ""; position: absolute; inset: -6px 0; }
+  .chips .chip-filtro:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; }
+  /* Mostrador: la misma superficie de búsqueda, con el último ticket a mano. */
+  .franja { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--advertencia-fondo); border-bottom: 1px solid var(--advertencia-borde); color: var(--advertencia); font-size: 12px; }
+  .total-barra { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--acento-profundo); color: #fff; }
+  .total-barra .etq { font-size: 11px; letter-spacing: .08em; color: var(--profundo-texto-tenue); }
+  .total-barra .monto { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; font-size: 20px; }
+  .total-barra .cobrar { height: 48px; padding: 0 20px; border: 0; border-radius: var(--radio-lg); background: var(--acento); color: #fff; font: inherit; font-weight: 600; }
+  .total-barra .cobrar:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; }
+  .notas { margin-top: 20px; max-width: 1290px; color: var(--texto-suave); font-size: 13px; }
+  .notas h2 { margin: 0 0 6px; font-size: 15px; color: var(--texto); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<h1 class="sr-only">Dirección C · Buscar primero</h1>
+<main>
+<div class="tablero">
+
+  <section class="columna" aria-label="Artículos · se busca, no se hojea">
+    <p class="rotulo"><b>Artículos</b> · se busca, no se hojea</p>
+    <div class="telefono">
+      <div class="barra-app">
+        <h2>Buscar artículo</h2>
+        <a href="#todos">Ver todos</a>
+      </div>
+      <div class="buscador-grande">
+        <div class="campo" role="search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <label class="sr-only" for="c-buscar-articulos">Buscar artículo por descripción</label>
+          <input id="c-buscar-articulos" type="search" readonly value="exprim" />
+          <button class="limpiar" aria-label="Limpiar la búsqueda">✕</button>
+        </div>
+        <p class="pista">3 resultados · tocá para agregar al ticket</p>
+      </div>
+      <div class="cuerpo">
+        <p class="grupo">Coincide en la descripción</p>
+        <button class="resultado">
+          <span class="desc">EXPRIM-O BLANCO (01-00510-01)</span>
+          <span class="segunda"><span>1200003</span><span>Bazar</span></span>
+          <span class="plata"><span class="precio">220.715,50</span><span class="stock cero">sin stock</span></span>
+        </button>
+        <button class="resultado">
+          <span class="desc">EXPRIM-O NARANJA (01-00510-02)</span>
+          <span class="segunda"><span>1200004</span><span>Bazar</span></span>
+          <span class="plata"><span class="precio">220.715,50</span><span class="stock cero">sin stock</span></span>
+        </button>
+        <button class="resultado">
+          <span class="desc">EXPRIM-O NEGRO (01-00510-06)</span>
+          <span class="segunda"><span>1200006</span><span>Bazar</span></span>
+          <span class="plata"><span class="precio">220.715,50</span><span class="stock cero">sin stock</span></span>
+        </button>
+      </div>
+      <div class="pie-busqueda">
+        <a href="#todos">Ver los 4.149 artículos <span>por código</span></a>
+        <a href="#nuevo">Crear un artículo nuevo <span>+</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="columna" aria-label="Ventas · se busca en vez de filtrar">
+    <p class="rotulo"><b>Ventas</b> · se busca en vez de filtrar</p>
+    <div class="telefono">
+      <div class="barra-app">
+        <h2>Ventas</h2>
+        <a href="#reportes">Reportes</a>
+      </div>
+      <div class="buscador-grande">
+        <div class="campo" role="search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <label class="sr-only" for="c-buscar-ventas">Buscar venta por cliente, número o fecha</label>
+          <input id="c-buscar-ventas" type="search" readonly value="recorrido" />
+          <button class="limpiar" aria-label="Limpiar la búsqueda">✕</button>
+        </div>
+        <p class="pista">Por cliente, número o fecha. 1 resultado.</p>
+      </div>
+      <div class="chips">
+        <button class="chip-filtro activo" aria-pressed="true">Hoy</button>
+        <button class="chip-filtro" aria-pressed="false">Últimos 7 días</button>
+        <button class="chip-filtro" aria-pressed="false">Rechazadas</button>
+      </div>
+      <div class="cuerpo">
+        <div class="venta">
+          <div class="quien">RI Recorrido 36b SA</div>
+          <div class="cuando">29 · 08/11 20:34 · Factura A 00001-00000001</div>
+          <div class="total">9.801,00</div>
+          <div class="estado">Autorizada</div>
+        </div>
+        <p class="grupo" style="background: transparent; padding-top: 18px">Sin búsqueda</p>
+        <div class="venta">
+          <div class="quien">Consumidor Final</div>
+          <div class="cuando">28 · 08/11 20:32 · Factura B</div>
+          <div class="total">105.197,40</div>
+          <div class="estado">Autorizada</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="columna" aria-label="Mostrador · el buscador y el ticket">
+    <p class="rotulo"><b>Mostrador</b> · el buscador y el ticket</p>
+    <div class="telefono">
+      <div class="barra-app">
+        <h2>Mostrador</h2>
+        <a href="#caja">Caja</a>
+      </div>
+      <div class="buscador-grande">
+        <div class="campo" role="search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="3" height="12"/><rect x="8" y="6" width="2" height="12"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="6" width="2" height="12"/></svg>
+          <label class="sr-only" for="c-buscar-mostrador">Buscar artículo por código</label>
+          <input id="c-buscar-mostrador" type="search" readonly placeholder="Escaneá o escribí el código" style="font-size: 16px" />
+          <button class="limpiar" aria-label="Buscar por descripción" style="background: var(--acento); color: #fff">?</button>
+        </div>
+      </div>
+      <div class="franja">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+        <span>Caja del 08/11 abierta · 1 factura para revisar</span>
+      </div>
+      <div class="cuerpo">
+        <p class="grupo" style="background: transparent; padding-top: 16px">Ticket en curso</p>
+        <div class="resultado">
+          <div class="desc">EXPRIM-O BLANCO (01-00510-01)</div>
+          <div class="segunda"><span>2 × 220.715,50</span></div>
+          <div class="plata"><div class="precio">441.431,00</div></div>
+        </div>
+        <div class="resultado">
+          <div class="desc">Bulón 3/8 x 3” cabeza hexagonal</div>
+          <div class="segunda"><span>1 × 1.240,00</span></div>
+          <div class="plata"><div class="precio">1.240,00</div></div>
+        </div>
+      </div>
+      <div class="total-barra">
+        <div><div class="etq">TOTAL</div><div style="font-size: 11px; color: var(--profundo-texto-tenue)">2 renglones</div></div>
+        <div class="monto">442.671,00</div>
+        <button class="cobrar">Cobrar</button>
+      </div>
+    </div>
+  </section>
+</div>
+</main>
+
+<div class="notas">
+  <h2>Dirección C · Buscar primero</h2>
+  <p><b>Qué cambia:</b> la pantalla abre en un buscador grande y enfocado, y la lista aparece <i>después</i> de escribir. Hojear queda como una salida explícita («Ver los 4.149 artículos»), y en Ventas se busca por cliente, número o fecha en lugar de llenar seis campos de filtro.</p>
+  <p><b>El intercambio:</b> el caso más frecuente —buscar un artículo por código o descripción— queda a un toque y sin scroll, y desaparece el problema de los filtros que se comen la pantalla; paga que el dueño que quiere <i>mirar</i> la lista completa necesite un paso más, y que quien no sabe qué buscar tenga que aprender el gesto.</p>
+</div>
+</body>
+</html>

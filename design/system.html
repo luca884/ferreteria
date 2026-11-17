@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sistema de diseño · Ferretería</title>
+<style>
+  /* Tokens tal como están en frontend/src/styles.css (:root). */
+  :root {
+    --acento: #2563eb; --acento-fuerte: #1d4ed8; --acento-profundo: #1e3a8a;
+    --acento-suave: #eff6ff; --acento-anillo: #dbeafe; --acento-borde: #bfdbfe;
+    --acento-texto: #fff; --profundo-texto-tenue: #bfdbfe;
+    --fondo: #f4f6fa; --superficie: #fff; --superficie-2: #f8fafc; --superficie-3: #f1f5f9;
+    --borde: #e2e8f0; --borde-suave: #f1f5f9; --borde-fuerte: #cbd5e1;
+    --texto: #0f172a; --texto-menu: #334155; --texto-suave: #475569;
+    --texto-tenue: #5b6b82; --texto-deshabilitado: #94a3b8;
+    --error: #b91c1c; --error-fondo: #fef2f2; --error-borde: #fecaca;
+    --exito: #047857; --exito-fondo: #ecfdf5; --exito-borde: #a7f3d0;
+    --advertencia: #92400e; --advertencia-fondo: #fffbeb; --advertencia-borde: #fde68a;
+    --advertencia-insignia: #fef3c7; --advertencia-marca: #d97706;
+    --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --fuente-mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    --e-1: 4px; --e-2: 8px; --e-3: 12px; --e-4: 16px; --e-5: 20px; --e-6: 24px; --e-8: 32px;
+    --radio-sm: 4px; --radio: 8px; --radio-lg: 10px; --radio-xl: 14px;
+    --sombra-1: 0 1px 2px rgb(15 23 42 / .05);
+    --sombra-2: 0 8px 24px rgb(15 23 42 / .1);
+    --sombra-3: 0 24px 60px rgb(15 23 42 / .3);
+    --alto-control: 36px; --alto-barra: 58px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: var(--e-8); background: var(--fondo); color: var(--texto);
+    font-family: var(--fuente); font-size: .875rem; line-height: 1.5;
+  }
+  header { max-width: 1376px; margin: 0 auto var(--e-8); }
+  h1 { margin: 0 0 var(--e-2); font-size: 1.375rem; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--texto-tenue); max-width: 62ch; }
+  section { max-width: 1376px; margin: 0 auto var(--e-8); }
+  h2 {
+    margin: 0 0 var(--e-4); font-size: .75rem; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--texto-tenue);
+  }
+  .grilla { display: grid; gap: var(--e-3); }
+  .swatches { grid-template-columns: repeat(8, 1fr); }
+  .swatch { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+  .swatch .chip { height: 44px; }
+  .swatch .meta { padding: var(--e-2); font-size: 11px; }
+  .swatch code { display: block; font-family: var(--fuente-mono); font-size: 10px; color: var(--texto-suave); }
+  .filas { display: grid; grid-template-columns: 160px 1fr; gap: var(--e-2) var(--e-4); align-items: baseline; }
+  .filas .token { font-family: var(--fuente-mono); font-size: 11px; color: var(--texto-tenue); }
+  .caja { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-lg); padding: var(--e-4); box-shadow: var(--sombra-1); }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-4); }
+  button { font: inherit; cursor: pointer; border-radius: var(--radio); border: 1px solid transparent; padding: 0 var(--e-4); height: var(--alto-control); }
+  button:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 2px; }
+  .primario { background: var(--acento); color: var(--acento-texto); border-color: var(--acento-fuerte); }
+  .primario:hover { background: var(--acento-fuerte); }
+  .secundario { background: var(--superficie); color: var(--texto); border-color: var(--borde-fuerte); }
+  .peligro { background: var(--error); color: #fff; }
+  .apagado { background: var(--superficie-3); color: var(--texto-deshabilitado); border-color: var(--borde); cursor: not-allowed; }
+  label { display: block; font-size: 12px; color: var(--texto-suave); margin-bottom: var(--e-1); }
+  input, select {
+    font: inherit; height: var(--alto-control); width: 100%; padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte); border-radius: var(--radio); background: var(--superficie); color: var(--texto);
+  }
+  input:focus-visible, select:focus-visible { outline: 3px solid var(--acento-anillo); outline-offset: 1px; border-color: var(--acento); }
+  table { width: 100%; border-collapse: collapse; background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-lg); overflow: hidden; }
+  th {
+    text-align: left; padding: 10px 12px; background: var(--superficie-2); font-size: 11px;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--texto-tenue); font-weight: 600;
+  }
+  td { padding: 10px 12px; border-top: 1px solid var(--borde-suave); }
+  .num { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .alerta { border-radius: var(--radio); padding: var(--e-3); border: 1px solid; font-size: 13px; }
+  .alerta.exito { background: var(--exito-fondo); border-color: var(--exito-borde); color: var(--exito); }
+  .alerta.advert { background: var(--advertencia-fondo); border-color: var(--advertencia-borde); color: var(--advertencia); }
+  .alerta.err { background: var(--error-fondo); border-color: var(--error-borde); color: var(--error); }
+  .insignia { display: inline-block; padding: 2px var(--e-2); border-radius: var(--radio-sm); background: var(--advertencia-insignia); color: var(--advertencia); font-size: 11px; }
+  .barra-total {
+    display: flex; justify-content: space-between; align-items: center; padding: var(--e-3) var(--e-4);
+    background: var(--acento-profundo); color: #fff; border-radius: var(--radio-lg);
+  }
+  .barra-total .etq { font-size: 11px; letter-spacing: .08em; color: var(--profundo-texto-tenue); }
+  .barra-total .monto { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; font-size: 22px; }
+  .nota { font-size: 12px; color: var(--texto-tenue); margin-top: var(--e-2); }
+  .radios { display: flex; gap: var(--e-4); align-items: end; }
+  .radio-caja { width: 88px; height: 56px; background: var(--superficie); border: 1px solid var(--borde); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sistema de diseño · Ferretería</h1>
+  <p>Los tokens tal como están hoy en <code>frontend/src/styles.css</code>. Este tablero es la referencia para los artboards de <code>design/</code>: cualquier color, radio o sombra de un artboard sale de acá.</p>
+</header>
+
+<section>
+  <h2>Acento de marca</h2>
+  <div class="grilla swatches">
+    <div class="swatch"><div class="chip" style="background: var(--acento)"></div><div class="meta">acento<code>#2563eb</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--acento-fuerte)"></div><div class="meta">acento-fuerte<code>#1d4ed8</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--acento-profundo)"></div><div class="meta">acento-profundo<code>#1e3a8a</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--acento-suave)"></div><div class="meta">acento-suave<code>#eff6ff</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--acento-anillo)"></div><div class="meta">acento-anillo<code>#dbeafe</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--acento-borde)"></div><div class="meta">acento-borde<code>#bfdbfe</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--exito)"></div><div class="meta">exito<code>#047857</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--error)"></div><div class="meta">error<code>#b91c1c</code></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Neutros (una sola familia, fría)</h2>
+  <div class="grilla swatches">
+    <div class="swatch"><div class="chip" style="background: var(--fondo)"></div><div class="meta">fondo<code>#f4f6fa</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--superficie-2)"></div><div class="meta">superficie-2<code>#f8fafc</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--superficie-3)"></div><div class="meta">superficie-3<code>#f1f5f9</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--borde)"></div><div class="meta">borde<code>#e2e8f0</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--borde-fuerte)"></div><div class="meta">borde-fuerte<code>#cbd5e1</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--texto-tenue)"></div><div class="meta">texto-tenue<code>#5b6b82</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--texto-suave)"></div><div class="meta">texto-suave<code>#475569</code></div></div>
+    <div class="swatch"><div class="chip" style="background: var(--texto)"></div><div class="meta">texto<code>#0f172a</code></div></div>
+  </div>
+</section>
+
+<section class="dos">
+  <div class="caja">
+    <h2>Escala tipográfica</h2>
+    <div class="filas">
+      <span class="token">--texto-xl · 22px</span><span style="font-size: 22px; letter-spacing: -.01em">Listado de stock bajo mínimo</span>
+      <span class="token">--texto-lg · 18px</span><span style="font-size: 18px">Actualizar precios</span>
+      <span class="token">--texto-base · 14px</span><span>El cuerpo de la app: tablas, campos, textos de ayuda.</span>
+      <span class="token">--texto-xs · 12px</span><span style="font-size: 12px; color: var(--texto-suave)">Etiqueta de campo</span>
+      <span class="token">--texto-2xs · 11px</span><span style="font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-tenue)">Encabezado de tabla</span>
+      <span class="token">mono · tabular</span><span class="num" style="display: inline-block">$ 220.715,50</span>
+    </div>
+    <p class="nota">La app carga Geist desde Google Fonts. Este tablero usa la pila del sistema, que es su primer respaldo, porque un artboard no puede pedir fuentes externas.</p>
+  </div>
+  <div class="caja">
+    <h2>Espacios, radios y sombras</h2>
+    <div class="radios" style="margin-bottom: var(--e-4)">
+      <div><div class="radio-caja" style="border-radius: var(--radio-sm)"></div><div class="token" style="margin-top: 4px">sm 4px</div></div>
+      <div><div class="radio-caja" style="border-radius: var(--radio)"></div><div class="token" style="margin-top: 4px">8px</div></div>
+      <div><div class="radio-caja" style="border-radius: var(--radio-lg)"></div><div class="token" style="margin-top: 4px">lg 10px</div></div>
+      <div><div class="radio-caja" style="border-radius: var(--radio-xl)"></div><div class="token" style="margin-top: 4px">xl 14px</div></div>
+    </div>
+    <div class="radios">
+      <div style="width: 88px; height: 56px; background: var(--superficie); border-radius: var(--radio); box-shadow: var(--sombra-1)"></div>
+      <div style="width: 88px; height: 56px; background: var(--superficie); border-radius: var(--radio); box-shadow: var(--sombra-2)"></div>
+      <div style="width: 88px; height: 56px; background: var(--superficie); border-radius: var(--radio); box-shadow: var(--sombra-3)"></div>
+    </div>
+    <p class="nota">Espacios en 4 · 8 · 12 · 16 · 20 · 24 · 32 px. Las sombras se tiñen con el gris de la paleta, nunca con negro.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Componentes</h2>
+  <div class="dos">
+    <div class="caja">
+      <div style="display: flex; gap: var(--e-2); flex-wrap: wrap; margin-bottom: var(--e-4)">
+        <button class="primario">Nuevo artículo</button>
+        <button class="secundario">Editar</button>
+        <button class="secundario">Exportar</button>
+        <button class="apagado" aria-disabled="true">Ajustar stock</button>
+      </div>
+      <label for="demo-nombre">Descripción</label>
+      <input id="demo-nombre" value="EXPRIM-O BLANCO (01-00510-01)" />
+      <label for="demo-rubro" style="margin-top: var(--e-3)">Rubro</label>
+      <select id="demo-rubro"><option>Bazar</option><option>Ferretería</option></select>
+      <p class="nota">Alto de control actual: 36px. Es densidad de escritorio; en pantalla táctil el objetivo es 44px.</p>
+    </div>
+    <div class="caja">
+      <table>
+        <thead><tr><th>Código</th><th>Descripción</th><th class="num">Precio final</th></tr></thead>
+        <tbody>
+          <tr><td style="font-family: var(--fuente-mono)">1200003</td><td>EXPRIM-O BLANCO</td><td class="num">220.715,50</td></tr>
+          <tr><td style="font-family: var(--fuente-mono)">1200004</td><td>EXPRIM-O NARANJA</td><td class="num">220.715,50</td></tr>
+          <tr><td style="font-family: var(--fuente-mono)">BUL-002</td><td>Bulón 3/8 x 3”</td><td class="num">1.240,00</td></tr>
+        </tbody>
+      </table>
+      <div style="display: grid; gap: var(--e-2); margin-top: var(--e-4)">
+        <div class="alerta exito">Se actualizaron 3 artículos.</div>
+        <div class="alerta advert">La caja del 08/11 sigue abierta. <span class="insignia">1 pendiente</span></div>
+        <div class="alerta err">El precio final no puede ser menor al costo.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>El cobro y el total</h2>
+  <div class="barra-total">
+    <div><div class="etq">TOTAL</div><div style="font-size: 11px; color: var(--profundo-texto-tenue)">3 renglones</div></div>
+    <div class="monto">$ 105.197,40</div>
+    <button class="primario" style="background: var(--acento); border-color: var(--acento)">Cobrar</button>
+  </div>
+  <p class="nota">El TOTAL va sobre <code>--acento-profundo</code> con los importes en mono tabular: es la única superficie oscura del sistema.</p>
+</section>
+</body>
+</html>

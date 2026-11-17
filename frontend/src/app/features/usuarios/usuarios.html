@@ -83,7 +83,7 @@
         <p class="ayuda estado-vacio">No hay usuarios para mostrar.</p>
       } @else {
         <div class="grilla-marco">
-          <table role="grid" aria-label="Usuarios">
+          <table role="grid" aria-label="Usuarios" class="tabla-tarjetas">
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -107,12 +107,12 @@
                   (dblclick)="editar(usuario)"
                   (keydown)="filas.alTeclear($event, usuario, i)"
                 >
-                  <td class="nombre">{{ usuario.nombre }}</td>
-                  <td>{{ usuario.email }}</td>
-                  <td>{{ etiquetaRol[usuario.rol] }}</td>
-                  <td class="estado">{{ usuario.activo ? 'Activo' : 'Desactivado' }}</td>
-                  <td class="tope">{{ textoTope(usuario) }}</td>
-                  <td class="telefono">{{ usuario.telefono || '—' }}</td>
+                  <td class="nombre" data-etiqueta="Nombre">{{ usuario.nombre }}</td>
+                  <td class="email" data-etiqueta="Email">{{ usuario.email }}</td>
+                  <td data-etiqueta="Rol">{{ etiquetaRol[usuario.rol] }}</td>
+                  <td class="estado" data-etiqueta="Estado">{{ usuario.activo ? 'Activo' : 'Desactivado' }}</td>
+                  <td class="tope" data-etiqueta="Tope de descuento">{{ textoTope(usuario) }}</td>
+                  <td class="telefono" data-etiqueta="Teléfono">{{ usuario.telefono || '—' }}</td>
                 </tr>
               }
             </tbody>

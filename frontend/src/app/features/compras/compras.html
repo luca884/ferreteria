@@ -63,7 +63,7 @@
         </nav>
       }
       <div class="tabla-scroll">
-        <table class="compras">
+        <table class="compras tabla-tarjetas">
           <caption class="sr-only">
             Compras, las más nuevas primero. Elegí una para ver su detalle.
           </caption>
@@ -79,15 +79,17 @@
           <tbody>
             @for (fila of actual.items; track fila.id) {
               <tr [class.elegida]="elegida() === fila.id" (click)="elegir(fila)">
-                <td>{{ fecha(fila.fecha) }}</td>
-                <td>
+                <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
+                <td class="comprobante" data-etiqueta="Comprobante">
                   <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.id">
                     {{ fila.comprobante }}
                   </button>
                 </td>
-                <td>{{ fila.proveedorNombre }}</td>
-                <td class="num">{{ fila.renglones }}</td>
-                <td class="num">{{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}</td>
+                <td class="proveedor" data-etiqueta="Proveedor">{{ fila.proveedorNombre }}</td>
+                <td class="num renglones" data-etiqueta="Renglones">{{ fila.renglones }}</td>
+                <td class="num neto" data-etiqueta="Neto">
+                  {{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}
+                </td>
               </tr>
             }
           </tbody>

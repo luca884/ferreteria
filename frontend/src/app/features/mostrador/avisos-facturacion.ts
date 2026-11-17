@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { EMPTY, catchError, interval, startWith, switchMap } from 'rxjs';
@@ -17,6 +17,26 @@ interface Cuenta {
 /** «1 rechazada», «3 rechazadas». */
 function plural(n: number, singular: string, varias: string): string {
   return `${n} ${n === 1 ? singular : varias}`;
+}
+
+/** Las cuentas del aviso que no están en cero, cada una con la bandeja de Ventas a la que lleva. */
+function cuentasDe(a: Avisos | null): Cuenta[] {
+  if (!a) return [];
+  const todas: (Cuenta | null)[] = [
+    a.rechazadas > 0
+      ? { clave: 'rechazadas', texto: plural(a.rechazadas, 'rechazada', 'rechazadas'), fiscal: 'RECHAZADAS' }
+      : null,
+    a.pendientesViejas > 0
+      ? {
+          clave: 'pendientes',
+          texto: `${plural(a.pendientesViejas, 'pendiente', 'pendientes')} de CAE desde hace más de 30 minutos`,
+          fiscal: 'PENDIENTES',
+        }
+      : null,
+    // Las que están en revisión salen en la bandeja de pendientes (C1).
+    a.enRevision > 0 ? { clave: 'revision', texto: `${a.enRevision} en revisión`, fiscal: 'PENDIENTES' } : null,
+  ];
+  return todas.filter((c): c is Cuenta => c !== null);
 }
 
 /**
@@ -38,28 +58,20 @@ export class AvisosFacturacion {
   /** null hasta la primera lectura. */
   private readonly avisos = signal<Avisos | null>(null);
 
-  protected readonly cuentas = computed<Cuenta[]>(() => {
-    const a = this.avisos();
-    if (!a) return [];
-    const todas: (Cuenta | null)[] = [
-      a.rechazadas > 0
-        ? { clave: 'rechazadas', texto: plural(a.rechazadas, 'rechazada', 'rechazadas'), fiscal: 'RECHAZADAS' }
-        : null,
-      a.pendientesViejas > 0
-        ? {
-            clave: 'pendientes',
-            texto: `${plural(a.pendientesViejas, 'pendiente', 'pendientes')} de CAE desde hace más de 30 minutos`,
-            fiscal: 'PENDIENTES',
-          }
-        : null,
-      // Las que están en revisión salen en la bandeja de pendientes (C1).
-      a.enRevision > 0 ? { clave: 'revision', texto: `${a.enRevision} en revisión`, fiscal: 'PENDIENTES' } : null,
-    ];
-    return todas.filter((c): c is Cuenta => c !== null);
-  });
+  protected readonly cuentas = computed<Cuenta[]>(() => cuentasDe(this.avisos()));
   protected readonly bloqueo = computed(() => this.avisos()?.bloqueo ?? null);
+  /** Cuántos avisos hay: cada cuenta y el bloqueo de la facturación, uno cada uno. */
+  private readonly cantidadDeAvisos = computed(
+    () => this.cuentas().length + (this.bloqueo() === null ? 0 : 1),
+  );
+  /**
+   * La cuenta de avisos, informada al mostrador: la franja del celular (móvil-pulgar, T4) suma este número a los avisos
+   * que sabe ella. Se informa después de la detección de cambios, cuando el mostrador ya escucha la salida.
+   */
+  readonly cantidad = output<number>();
 
   constructor() {
+    effect(() => this.cantidad.emit(this.cantidadDeAvisos()));
     if (this.auth.sesion()?.rol !== 'DUENO') return;
     interval(INTERVALO_AVISOS_MS)
       .pipe(
