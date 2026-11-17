@@ -104,6 +104,8 @@
 
   /* Densidad */
   --alto-control: 36px;
+  /* Lo mínimo que mide un control táctil (S5 de odd/tasks/movil-sectores.md): lo usan la hoja, el botón flotante y la barra fija. */
+  --alto-tactil: 44px;
   --celda-y: 10px;
   --celda-x: 12px;
 
@@ -1534,4 +1536,120 @@ ul.error {
   border-color: var(--error-borde);
   background: var(--error-fondo);
   color: var(--error);
+}
+
+/* ---------- Cimientos del celular: hoja inferior, botón flotante y barra de acción fija (movil-sectores T1) ---------- */
+
+/*
+ * Hoja inferior (app-hoja-inferior): las acciones de un renglón o de todo el ticket. Desde 640 px es una tarjeta
+ * centrada; en el celular sube pegada al borde de abajo con las esquinas de arriba redondeadas.
+ */
+.hoja-inferior {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  max-height: calc(100dvh - var(--e-8));
+  overflow: auto;
+  padding: var(--e-2) var(--e-4) var(--e-4);
+  border-radius: var(--radio-xl);
+  background: var(--superficie);
+  box-shadow: var(--sombra-3);
+}
+.hoja-inferior-asa {
+  flex: none;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto var(--e-2);
+  border-radius: 2px;
+  background: var(--borde-fuerte);
+}
+.hoja-inferior-titulo {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+.hoja-inferior-subtitulo {
+  margin: 2px 0 var(--e-2);
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-xs);
+  color: var(--texto-tenue);
+}
+/* Cada acción: un renglón a todo el ancho de 52px, con filete arriba. `peligro` en rojo; apagada, en gris. */
+.accion-hoja {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--e-1);
+  border: 0;
+  border-top: 1px solid var(--borde-suave);
+  border-radius: 0;
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+  font-size: 0.9375rem;
+}
+.accion-hoja.peligro {
+  color: var(--error);
+}
+.accion-hoja[aria-disabled='true'] {
+  color: var(--texto-deshabilitado);
+}
+
+/*
+ * Botón flotante «Nuevo» y barra de acción fija: sólo del celular. La barra de destinos de abajo (--alto-destinos, la
+ * pone el shell) y la zona segura del teléfono quedan libres para que no tapen nada.
+ */
+.boton-flotante,
+.barra-accion-fija {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  .hoja-inferior-fondo {
+    align-items: end;
+    padding: 0;
+  }
+  .hoja-inferior {
+    width: 100%;
+    max-width: none;
+    padding-bottom: calc(var(--e-4) + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radio-xl) var(--radio-xl) 0 0;
+    box-shadow: 0 -8px 24px rgb(15 23 42 / 0.15);
+  }
+
+  .boton-flotante {
+    position: fixed;
+    right: var(--e-4);
+    bottom: calc(var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px) + var(--e-4));
+    z-index: calc(var(--z-barra) - 1);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-width: var(--alto-tactil);
+    height: 56px;
+    padding: 0 var(--e-5);
+    border: 1px solid var(--acento-fuerte);
+    border-radius: 999px;
+    background: var(--acento);
+    color: var(--acento-texto);
+    font-weight: 600;
+    box-shadow: var(--sombra-2);
+  }
+
+  /* La acción principal de una pantalla completa (alta, ficha, cobro): pegada abajo mientras el formulario scrollea. */
+  .barra-accion-fija {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-fijo);
+    display: flex;
+    gap: var(--e-2);
+    margin-inline: calc(var(--pantalla-x) * -1);
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  .barra-accion-fija > :is(button, a) {
+    flex: 1 1 0;
+    min-height: var(--alto-tactil);
+  }
 }
