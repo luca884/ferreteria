@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
-import { vi } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 import { Sesion } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { EdicionUsuarioRequest, Usuario, UsuarioRequest } from './usuario.models';
@@ -1104,6 +1104,153 @@ describe('Usuarios', () => {
       const nuevas = reglas.filter((r) => /ficha-|\.rol|\.tope|\.dueno|app-barra-acciones|\.chip/.test(r.selector));
       expect(nuevas.length).toBeGreaterThan(0);
       for (const regla of nuevas) expect(regla.consulta).toContain('max-width: 639.98px');
+    });
+  });
+
+  /*
+   * movil-sectores T3 (reabierta, L8): en el celular el Rol es el control segmentado del artboard (un radiogroup de dos
+   * botones de 44 px) que escribe el MISMO control del formulario que el select del escritorio. Los dos están en el DOM y
+   * el CSS deja uno según el ancho; Vitest no evalúa media queries, las medidas se hacen en el navegador.
+   */
+  describe('Rol como control segmentado (celular)', () => {
+    const grupo = () => el().querySelector<HTMLElement>('[role="radiogroup"]')!;
+    const radios = () => Array.from(grupo().querySelectorAll<HTMLButtonElement>('button[role="radio"]'));
+    const marcados = () => radios().map((r) => r.getAttribute('aria-checked'));
+    const apretar = async (indice: number, key: string) => {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      radios()[indice].dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    };
+
+    it('es un radiogroup con la etiqueta «Rol» y un botón por rol, y el select del escritorio sigue en el DOM', async () => {
+      await crear([dueno]);
+
+      expect(grupo().getAttribute('aria-labelledby')).toBeTruthy();
+      expect(el().querySelector(`#${grupo().getAttribute('aria-labelledby')}`)!.textContent!.trim()).toBe('Rol');
+      expect(radios().map((r) => r.textContent!.trim())).toEqual(['Dueño', 'Vendedor']);
+      expect(radios().every((r) => r.type === 'button')).toBe(true);
+      expect(marcados()).toEqual(['false', 'true']);
+      expect(select('rol').value).toBe('VENDEDOR');
+      expect(el().querySelector('label[for="rol"]')!.textContent!.trim()).toBe('Rol');
+    });
+
+    it('tocar un rol escribe el mismo control del formulario: el select, el tope y el pedido lo siguen', async () => {
+      await crear([dueno]);
+      await escribir('nombre', 'Lucía Pérez');
+      await escribir('email', 'lucia@tornillo.demo');
+      await escribir('password', 'clave1234');
+      expect(input('topeDescuento')).not.toBeNull();
+
+      radios()[0].click();
+      await refrescar();
+
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+      expect(el().querySelector('#topeDescuento')).toBeNull();
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ rol: 'DUENO', topeDescuento: null }));
+    });
+
+    it('si el rol cambia por el select, el segmentado lo refleja', async () => {
+      await crear([dueno]);
+
+      await elegirRol('DUENO');
+
+      expect(marcados()).toEqual(['true', 'false']);
+    });
+
+    it('editar precarga el rol del usuario en el segmentado', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+      expect(marcados()).toEqual(['false', 'true']);
+    });
+
+    it('como un radio nativo: un solo tab stop (el elegido) y las flechas eligen y mueven el foco, dando la vuelta', async () => {
+      await crear([dueno]);
+      // Vitest corre a un ancho de escritorio y el CSS esconde el segmentado: se muestra para poder enfocarlo.
+      const estilo = document.createElement('style');
+      estilo.textContent = '.alternativa-celular { display: block !important; }';
+      document.head.appendChild(estilo);
+      onTestFinished(() => estilo.remove());
+      expect(radios().map((r) => r.getAttribute('tabindex'))).toEqual(['-1', '0']);
+
+      const izquierda = await apretar(1, 'ArrowLeft');
+      expect(izquierda.defaultPrevented).toBe(true);
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+      expect(document.activeElement).toBe(radios()[0]);
+      expect(radios().map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1']);
+
+      await apretar(0, 'ArrowRight');
+      expect(marcados()).toEqual(['false', 'true']);
+      expect(document.activeElement).toBe(radios()[1]);
+
+      await apretar(1, 'ArrowDown'); // da la vuelta al principio
+      expect(marcados()).toEqual(['true', 'false']);
+      await apretar(0, 'ArrowUp'); // y al final
+      expect(marcados()).toEqual(['false', 'true']);
+
+      const otra = await apretar(1, 'a');
+      expect(otra.defaultPrevented).toBe(false);
+      expect(marcados()).toEqual(['false', 'true']);
+    });
+
+    it('sobre uno mismo el rol no se cambia: los botones quedan apagados, enlazados a la razón, y no cambian nada', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(0);
+
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(radios().every((r) => r.disabled)).toBe(true);
+      expect(grupo().getAttribute('aria-disabled')).toBe('true');
+      const razon = el().querySelector(`#${grupo().getAttribute('aria-describedby')}`)!;
+      expect(razon.textContent!.trim()).toBe('No podés desactivarte ni cambiarte el rol a vos mismo.');
+
+      radios()[1].click();
+      await apretar(0, 'ArrowRight');
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+    });
+
+    it('en otro usuario los botones están prendidos y no hay aria-disabled', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+
+      expect(radios().some((r) => r.disabled)).toBe(false);
+      expect(grupo().hasAttribute('aria-disabled')).toBe(false);
+    });
+
+    it('el segmentado es sólo del celular y el select sólo del escritorio, cada uno con su regla de CSS', async () => {
+      await crear([dueno]);
+      const reglas: { consulta: string; selector: string; display: string }[] = [];
+      const recorrer = (lista: CSSRuleList, consulta: string) =>
+        Array.from(lista).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          if (media && (regla as CSSMediaRule).cssRules) {
+            recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+          } else if ((regla as CSSStyleRule).selectorText) {
+            reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText, display: (regla as CSSStyleRule).style.display });
+          }
+        });
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          /* una hoja ilegible no es la del componente */
+        }
+      });
+
+      const celular = reglas.filter((r) => /alternativa-celular/.test(r.selector));
+      const escritorio = reglas.filter((r) => /alternativa-escritorio/.test(r.selector));
+      // Afuera de la media query el segmentado se esconde (el escritorio y la tablet no cambian)...
+      expect(celular.some((r) => r.consulta === '' && r.display === 'none')).toBe(true);
+      // ...y adentro se muestra y el select se esconde.
+      expect(celular.some((r) => r.consulta.includes('max-width: 639.98px') && r.display !== '' && r.display !== 'none')).toBe(true);
+      expect(escritorio.length).toBeGreaterThan(0);
+      for (const regla of escritorio) {
+        expect(regla.consulta).toContain('max-width: 639.98px');
+        expect(regla.display).toBe('none');
+      }
     });
   });
 });

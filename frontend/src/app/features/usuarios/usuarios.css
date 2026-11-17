@@ -27,6 +27,10 @@ tr.inactivo td {
 .estado {
   white-space: nowrap;
 }
+/* Sólo del celular: el control segmentado del Rol. En el escritorio y la tablet se ve el select. */
+.alternativa-celular {
+  display: none;
+}
 .errores-campos ul {
   margin: var(--e-1) 0 0;
   padding-left: var(--e-6);
@@ -43,6 +47,47 @@ tr.inactivo td {
  * que tiene la misma especificidad. La barra de botones se reemplaza por el botón flotante y la ficha a pantalla completa.
  */
 @media screen and (max-width: 639.98px) {
+  /* El Rol es un control segmentado (artboard movil-configuracion/06): el select es del escritorio y la tablet. */
+  .alternativa-escritorio {
+    display: none;
+  }
+  .etiqueta-segmentada.alternativa-celular {
+    display: block;
+    font-size: var(--texto-sm);
+    font-weight: 600;
+    color: var(--texto-suave);
+  }
+  .control-segmentado.alternativa-celular {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+  }
+  .control-segmentado button {
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 0;
+    border-radius: 0;
+    background: var(--superficie);
+    color: var(--texto);
+    font-weight: 400;
+  }
+  .control-segmentado button + button {
+    border-left: 1px solid var(--borde-fuerte);
+  }
+  .control-segmentado button[aria-checked='true'] {
+    background: var(--tono-suave);
+    color: var(--tono);
+    font-weight: 600;
+  }
+  .control-segmentado button:disabled {
+    cursor: not-allowed;
+    color: var(--texto-deshabilitado);
+  }
+  .control-segmentado button:focus-visible {
+    outline-offset: -3px;
+  }
   /* Sus botones (Nuevo, Editar, Desactivar…) pasaron al botón flotante y a la ficha: la barra quedaría como una franja vacía. */
   app-barra-acciones {
     display: none;

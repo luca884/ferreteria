@@ -230,12 +230,35 @@
           }
         </div>
         <div class="campo">
-          <label for="rol">Rol</label>
-          <select id="rol" name="rol" formControlName="rol">
+          <label for="rol" class="alternativa-escritorio">Rol</label>
+          <select id="rol" name="rol" formControlName="rol" class="alternativa-escritorio">
             @for (rol of roles; track rol) {
               <option [value]="rol">{{ etiquetaRol[rol] }}</option>
             }
           </select>
+          <!-- Sólo del celular (artboard): el MISMO control del formulario que el select de arriba, como un radiogroup de botones de 44 px. -->
+          <span id="rol-etiqueta" class="etiqueta-segmentada alternativa-celular">Rol</span>
+          <div
+            class="control-segmentado alternativa-celular"
+            role="radiogroup"
+            aria-labelledby="rol-etiqueta"
+            [attr.aria-disabled]="form.controls.rol.disabled ? 'true' : null"
+            [attr.aria-describedby]="esPropio(editando()) ? 'motivo-desactivar-ficha' : null"
+          >
+            @for (rol of roles; track rol; let i = $index) {
+              <button
+                type="button"
+                role="radio"
+                [attr.aria-checked]="form.controls.rol.value === rol"
+                [attr.tabindex]="form.controls.rol.value === rol ? 0 : -1"
+                [disabled]="form.controls.rol.disabled"
+                (click)="elegirRol(rol)"
+                (keydown)="alTeclearRol($event, i)"
+              >
+                {{ etiquetaRol[rol] }}
+              </button>
+            }
+          </div>
         </div>
         @if (conTope()) {
           <div class="campo">

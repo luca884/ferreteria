@@ -377,7 +377,25 @@ export class Usuarios implements OnInit {
     return control.touched && control.dirty && control.invalid;
   }
 
-  /** Sobre uno mismo el rol no se cambia: el selector queda deshabilitado. */
+  /** El rol elegido con el control segmentado del celular: escribe el mismo control del formulario que el select. */
+  protected elegirRol(rol: RolDeFerreteria): void {
+    const control = this.form.controls.rol;
+    if (control.disabled) return;
+    control.setValue(rol);
+    control.markAsDirty();
+  }
+
+  /** Como un grupo de radios nativo: las flechas eligen el rol anterior o el siguiente (dando la vuelta) y llevan el foco. */
+  protected alTeclearRol(evento: KeyboardEvent, indice: number): void {
+    const paso = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[evento.key];
+    if (paso === undefined || this.form.controls.rol.disabled) return;
+    evento.preventDefault();
+    const destino = (indice + paso + this.roles.length) % this.roles.length;
+    this.elegirRol(this.roles[destino]);
+    (evento.currentTarget as HTMLElement).parentElement?.querySelectorAll('button')[destino]?.focus();
+  }
+
+  /** Sobre uno mismo el rol no se cambia: el selector (y el control segmentado del celular) queda deshabilitado. */
   private ajustarRol(usuario: Usuario | null): void {
     const rol = this.form.controls.rol;
     if (this.esPropio(usuario)) rol.disable({ emitEvent: false });
