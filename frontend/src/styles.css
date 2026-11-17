@@ -1586,8 +1586,15 @@ ul.error {
   border-radius: 0;
   background: transparent;
   color: var(--texto);
+  justify-content: flex-start;
   text-align: left;
   font-size: 0.9375rem;
+}
+/* Una línea chica bajo el nombre de la acción («Lo que muestra la lista»). */
+.accion-hoja small {
+  display: block;
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
 }
 .accion-hoja.peligro {
   color: var(--error);

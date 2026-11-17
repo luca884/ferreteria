@@ -13,12 +13,18 @@ import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
+import { RubrosService } from '../rubros/rubros.service';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 
 const TAMANO_PAGINA = 20;
+
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const esCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
 
 /** S5: lo que se explica al intentar una acción de la barra sin un artículo elegido. */
 const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un artículo de la lista para editarlo.';
@@ -41,6 +47,7 @@ type Accion = 'ficha' | 'ajuste' | 'movimientos' | 'clientes' | 'baja';
     Confirmacion,
     DialogoAjusteStock,
     BarraAcciones,
+    HojaInferior,
   ],
   templateUrl: './articulos.html',
   styleUrl: './articulos.css',
@@ -50,6 +57,7 @@ export class Articulos implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly avisos = inject(Avisos);
+  private readonly rubrosService = inject(RubrosService);
   protected readonly auth = inject(AuthService);
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
@@ -69,14 +77,12 @@ export class Articulos implements OnInit {
   /** Ofertas (S3): solo los que hoy tienen una oferta que baja el precio. */
   protected readonly soloEnOferta = signal(false);
   /**
-   * móvil-pulgar, T2: en el celular los dos filtros de la barra se pliegan detrás de un botón con el contador de los
-   * que están puestos. En escritorio el panel no se dibuja: los dos tildes siguen en la barra, como siempre.
+   * movil-sectores T5 (5a): el celular muestra los dos filtros como chips de 44 px (mismo estado que los tildes de la
+   * barra de escritorio) y las acciones que no son de un artículo detrás del ⋯ de la barra, en una hoja inferior.
    */
-  protected readonly filtrosAbiertos = signal(false);
-  /** Cuántos de esos filtros están puestos: cero, uno o los dos. */
-  protected readonly filtrosActivos = computed(
-    () => [this.incluirInactivos(), this.soloEnOferta()].filter(Boolean).length,
-  );
+  protected readonly menuAbierto = signal(false);
+  /** Nombre de cada rubro por id, para la línea de detalle de la fila del celular; vacío si no se pudo leer. */
+  private readonly rubros = signal<ReadonlyMap<number, string>>(new Map());
   /** El CSV se está bajando: Exportar queda deshabilitado. */
   protected readonly exportando = signal(false);
   /**
@@ -129,6 +135,37 @@ export class Articulos implements OnInit {
       this.enfocarElegidaAlCargar = true;
     }
     this.cargar(Number.isInteger(pagina) && pagina > 1 ? pagina - 1 : 0);
+    // El listado trae sólo el id del rubro: el nombre sale de la lista de rubros, y sólo hace falta para la línea de
+    // detalle del celular (el escritorio no pide nada de más). Si no llega, la línea no lo muestra.
+    if (esCelular()) {
+      this.rubrosService.listar().subscribe({
+        next: (lista) => this.rubros.set(new Map(lista.map((rubro) => [rubro.id, rubro.nombre]))),
+        error: () => undefined,
+      });
+    }
+  }
+
+  /** El rubro de la fila para la línea de detalle del celular; null si no tiene o todavía no se leyó. */
+  protected rubroDe(articulo: Articulo): string | null {
+    return articulo.rubroId === null ? null : (this.rubros().get(articulo.rubroId) ?? null);
+  }
+
+  /** «Nuevo artículo»: lo mismo que el enlace «Nuevo» de la barra, para el botón flotante del celular. */
+  protected nuevo(): void {
+    void this.router.navigate(['/articulos/nuevo'], { queryParamsHandling: 'preserve' });
+  }
+
+  /** Una acción del ⋯ que lleva a otra pantalla: cierra la hoja y va. */
+  protected irA(ruta: string): void {
+    this.menuAbierto.set(false);
+    void this.router.navigate([ruta]);
+  }
+
+  /** «Exportar a CSV» del ⋯: cierra la hoja y baja lo mismo que el botón de la barra. */
+  protected exportarDesdeMenu(): void {
+    if (this.exportando()) return;
+    this.menuAbierto.set(false);
+    this.exportar();
   }
 
   /** Enter en el buscador: aplica el texto y vuelve a la primera página. */
@@ -145,11 +182,6 @@ export class Articulos implements OnInit {
   protected cambiarInactivos(incluir: boolean): void {
     this.incluirInactivos.set(incluir);
     this.cargar(0);
-  }
-
-  /** Abre o cierra el panel de filtros del celular (T2). */
-  protected alternarFiltros(): void {
-    this.filtrosAbiertos.update((abierto) => !abierto);
   }
 
   protected cambiarSoloEnOferta(solo: boolean): void {
