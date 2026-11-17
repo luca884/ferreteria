@@ -1,5 +1,16 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse, HttpResponse } from '@angular/common/http';
-import { Component, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  WritableSignal,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { descargar } from '../../core/archivos/descarga';
@@ -26,6 +37,14 @@ const MOTIVO_SIN_PEDIDO = 'Primero generá el pedido de certificado.';
 /** Las acciones de la sección del certificado que pueden estar apagadas por una regla de negocio (S5). */
 type Accion = 'subirCertificado' | 'firmarSimulador';
 
+/** Las tres pantallas del celular para obtener o renovar el certificado (artboard 05): la guía, el pedido y subir el .crt. */
+type PasoCertificado = 'inicio' | 'pedido' | 'subir';
+const TITULOS_DE_PASO: Record<PasoCertificado, string> = {
+  inicio: 'Facturación',
+  pedido: 'Pedido de certificado',
+  subir: 'Subir certificado',
+};
+
 /** El detalle que acompaña al estado del certificado; null si está vigente y no hay nada que decir. */
 function detalleDelEstado(credencial: CredencialArca): string | null {
   const vence = formatearFecha(credencial.vigenteHasta);
@@ -50,15 +69,21 @@ function detalleDelEstado(credencial: CredencialArca): string | null {
  * Configuración › Facturación (solo el Dueño, CU-01 pasos 2 a 4): el ambiente y el punto de venta, el certificado de ARCA y
  * su vencimiento, cómo obtenerlo y «Probar conexión». El sistema genera la clave y el pedido (CSR); la clave privada nace
  * cifrada en el servidor y nunca pasa por acá (D8): el Dueño baja el .csr, lo lleva a ARCA y sube el .crt que le dan.
+ *
+ * En el celular (movil-sectores T4, S2 y S7) la configuración son tarjetas y obtener o renovar el certificado son tres
+ * pantallas completas con «Volver» y la acción fija abajo. Es la misma sección con el mismo estado de hoy: `certificadoAbierto`
+ * y `paso` sólo los lee el CSS del celular (todas las pantallas están siempre en el DOM; el escritorio las ve juntas).
  */
 @Component({
   selector: 'app-facturacion',
-  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion],
+  imports: [ReactiveFormsModule, NgTemplateOutlet, BarraAcciones, Confirmacion],
   templateUrl: './facturacion.html',
   styleUrl: './facturacion.css',
 })
 export class PaginaFacturacion implements OnInit {
   private readonly service = inject(FacturacionService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly ambientes = AMBIENTE_ARCA_LABELS;
@@ -99,6 +124,12 @@ export class PaginaFacturacion implements OnInit {
   /** Por qué no se pudo probar (409: falta el ambiente, el punto de venta o el certificado; red), junto al resultado. */
   protected readonly errorPrueba = signal<string | null>(null);
 
+  /** El flujo del certificado está abierto a pantalla completa (sólo el celular lo abre: el botón de la tarjeta es suyo). */
+  protected readonly certificadoAbierto = signal(false);
+  /** La pantalla del flujo que se ve en el celular. */
+  protected readonly paso = signal<PasoCertificado>('inicio');
+  protected readonly tituloPaso = computed(() => TITULOS_DE_PASO[this.paso()]);
+
   /** El último pedido generado o bajado: descargarlo o copiarlo otra vez no lo vuelve a pedir. */
   private readonly pedidoBajado = signal<PedidoCertificado | null>(null);
   protected readonly hayPedido = computed(() => this.config()?.pedido != null || this.pedidoBajado() !== null);
@@ -133,6 +164,57 @@ export class PaginaFacturacion implements OnInit {
     });
   }
 
+  /** «Renovar certificado» / «Obtener certificado» de la tarjeta (sólo el celular): abre el flujo en la primera pantalla. */
+  protected abrirCertificado(): void {
+    this.paso.set('inicio');
+    this.certificadoAbierto.set(true);
+    this.enfocar('section.pedido .ficha-barra .ficha-volver');
+  }
+
+  /** Cierra el flujo sin tocar nada de lo hecho y devuelve el foco al botón de la tarjeta. */
+  private cerrarCertificado(): void {
+    if (!this.certificadoAbierto()) return;
+    this.certificadoAbierto.set(false);
+    this.paso.set('inicio');
+    this.enfocar('.abrir-certificado');
+  }
+
+  /** La flecha del flujo: retrocede de a una pantalla y en la primera lo cierra. */
+  protected volverDelCertificado(): void {
+    switch (this.paso()) {
+      case 'subir':
+        this.irAPaso('pedido');
+        break;
+      case 'pedido':
+        this.irAPaso('inicio');
+        break;
+      case 'inicio':
+        this.cerrarCertificado();
+        break;
+    }
+  }
+
+  /** Cambia de pantalla del flujo: la nueva se ve desde arriba y el foco pasa a la flecha (el botón que se tocó ya no está). */
+  protected irAPaso(paso: PasoCertificado): void {
+    this.paso.set(paso);
+    afterNextRender(
+      () => {
+        const seccion = this.host.nativeElement.querySelector<HTMLElement>('section.pedido');
+        if (seccion) seccion.scrollTop = 0;
+      },
+      { injector: this.injector },
+    );
+    // Sólo con el flujo abierto (en el escritorio, generar el pedido no mueve el foco de donde está).
+    if (this.certificadoAbierto()) this.enfocar('section.pedido .ficha-barra .ficha-volver');
+  }
+
+  /** Después de pintar, enfoca el primer elemento que coincida. */
+  private enfocar(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
+  }
+
   protected guardarPuntoVenta(): void {
     if (this.ocupado()) return;
     this.limpiar();
@@ -162,6 +244,8 @@ export class PaginaFacturacion implements OnInit {
         this.ocupado.set(false);
         this.pedidoBajado.set(pedido);
         this.exito.set('Se generó el pedido de certificado: bajalo y subilo en ARCA.');
+        // En el celular, con el pedido hecho el flujo pasa a la pantalla del pedido (donde se baja o se copia).
+        this.irAPaso('pedido');
         // La respuesta trae solo el CSR: la configuración se vuelve a leer para mostrar el pedido pendiente.
         this.service.configuracion().subscribe({ next: (config) => this.mostrar(config), error: () => undefined });
       },
@@ -219,6 +303,7 @@ export class PaginaFacturacion implements OnInit {
     this.service.subirCertificado(certificado).subscribe({
       next: (config) => {
         this.pedidoBajado.set(null);
+        this.cerrarCertificado();
         this.terminar(config, 'Se cargó el certificado de ARCA.');
       },
       error: (err: unknown) => this.alFallar(err, this.errorCertificado, 'No se pudo cargar el certificado.'),
@@ -235,6 +320,7 @@ export class PaginaFacturacion implements OnInit {
     this.service.firmarConSimulador().subscribe({
       next: (config) => {
         this.pedidoBajado.set(null);
+        this.cerrarCertificado();
         this.terminar(config, 'El simulador firmó el pedido: el certificado quedó activo.');
       },
       error: (err: unknown) => this.alFallar(err, null, 'No se pudo firmar el pedido con el simulador.'),

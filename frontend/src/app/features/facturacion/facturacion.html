@@ -2,6 +2,19 @@
   <h1>Facturación</h1>
 </app-barra-acciones>
 
+<!--
+  El aviso de lo que se hizo y el error de la acción van arriba de la pantalla. En el celular, con el flujo del certificado
+  abierto a pantalla completa, van adentro de él (arriba quedarían tapados): es el mismo texto, en un solo lugar a la vez.
+-->
+<ng-template #mensajes>
+  @if (exito(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (error(); as mensaje) {
+    <p class="error error-accion" role="alert">{{ mensaje }}</p>
+  }
+</ng-template>
+
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar la facturación.</p>
 } @else {
@@ -14,11 +27,8 @@
     acá el certificado que te dan.
   </p>
 
-  @if (exito(); as mensaje) {
-    <p class="alerta exito" role="status">{{ mensaje }}</p>
-  }
-  @if (error(); as mensaje) {
-    <p class="error error-accion" role="alert">{{ mensaje }}</p>
+  @if (!certificadoAbierto()) {
+    <ng-container [ngTemplateOutlet]="mensajes" />
   }
 
   @if (cargando()) {
@@ -149,6 +159,10 @@
         } @else {
           <p class="sin-credencial">Todavía no hay certificado de ARCA.</p>
         }
+        <!-- Sólo del celular: ahí «Obtener o renovar el certificado» es un flujo de tres pantallas que se abre desde esta tarjeta. -->
+        <button type="button" class="secundario abrir-certificado" (click)="abrirCertificado()">
+          {{ c.credencial ? 'Renovar certificado' : 'Obtener certificado' }}
+        </button>
       </section>
 
       @if (c.ambiente) {
@@ -217,7 +231,28 @@
         </section>
       }
 
-      <section class="seccion pedido" aria-labelledby="titulo-pedido">
+      <!--
+        En el celular esta sección es el flujo de tres pantallas (artboard 05), a pantalla completa y sólo con la tarjeta del
+        certificado como entrada: la barra con «Volver» arriba, la pantalla activa (`data-paso`) y el pie fijo. Las tres
+        pantallas están siempre acá; el escritorio las ve juntas y la barra, los avisos de adentro y el pie no se ven.
+      -->
+      <section
+        class="seccion pedido ficha-pantalla"
+        [class.ficha-abierta]="certificadoAbierto()"
+        [attr.data-paso]="paso()"
+        aria-labelledby="titulo-pedido"
+      >
+        <div class="ficha-barra solo-celular">
+          <button type="button" class="ficha-volver" aria-label="Volver" (click)="volverDelCertificado()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" />
+            </svg>
+          </button>
+          <h2>{{ tituloPaso() }}</h2>
+        </div>
+        @if (certificadoAbierto()) {
+          <ng-container [ngTemplateOutlet]="mensajes" />
+        }
         <h2 id="titulo-pedido">Obtener o renovar el certificado</h2>
 
         @if (c.simulador) {
@@ -337,6 +372,32 @@
               Solo para pruebas: la CA del simulador firma el pedido y el certificado sirve únicamente en el simulador,
               no con ARCA.
             </span>
+          </div>
+        }
+
+        <!--
+          Sólo del celular: la acción de cada pantalla, fija abajo. «Generar» es el mismo manejador del botón de hoy (que en el
+          celular queda escondido); «Ya tengo el .crt» y «Ver el pedido pendiente» sólo cambian de pantalla.
+        -->
+        @if (paso() !== 'subir') {
+          <div class="ficha-pie certificado-pie">
+            @if (paso() === 'inicio') {
+              <button
+                type="button"
+                class="generar-pedido-pie"
+                [class.primario]="!hayPedido()"
+                [class.secundario]="hayPedido()"
+                [disabled]="ocupado()"
+                (click)="pedirGenerar()"
+              >
+                Generar pedido de certificado
+              </button>
+              @if (hayPedido()) {
+                <button type="button" class="primario ver-pedido" (click)="irAPaso('pedido')">Ver el pedido pendiente</button>
+              }
+            } @else {
+              <button type="button" class="primario ya-tengo-crt" (click)="irAPaso('subir')">Ya tengo el .crt</button>
+            }
           </div>
         }
       </section>
