@@ -230,4 +230,59 @@ describe('PaginaDatosFiscales', () => {
     expect(obtener).not.toHaveBeenCalled();
     expect(el().querySelector('form')).toBeNull();
   });
+
+  /* movil-sectores T3 (S2, S7): «Guardar» queda fijo abajo en el celular; las medidas se hacen en el navegador a 390 px. */
+  describe('formulario en el celular', () => {
+
+  /** Las reglas (de este componente) cuyo selector coincide, con la consulta de medios que las envuelve. */
+  function reglasQue(patron: RegExp): { consulta: string; selector: string }[] {
+    const reglas: { consulta: string; selector: string }[] = [];
+    const recorrer = (lista: CSSRuleList, consulta: string) =>
+      Array.from(lista).forEach((regla) => {
+        const media = (regla as CSSMediaRule).media;
+        if (media && (regla as CSSMediaRule).cssRules) {
+          recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+        } else if (patron.test((regla as CSSStyleRule).selectorText ?? '')) {
+          reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText });
+        }
+      });
+    Array.from(document.styleSheets).forEach((hoja) => {
+      try {
+        recorrer(hoja.cssRules, '');
+      } catch {
+        /* una hoja ilegible no es la del componente */
+      }
+    });
+    return reglas;
+  }
+
+    it('«Guardar» va en un pie fijo de la página y sigue siendo el envío del formulario', async () => {
+      await crear();
+
+      const pie = el().querySelector('form.fiscales > .acciones-form')!;
+      expect(pie.classList).toContain('ficha-pie');
+      expect(pie.classList).toContain('en-pagina');
+      expect(pie.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent!.trim()).toBe('Guardar');
+
+      await enviar();
+      expect(guardar).toHaveBeenCalledTimes(1);
+    });
+
+    it('el CUIT se ve como un campo de sólo lectura, con su pista, y no se puede editar', async () => {
+      await crear();
+
+      const cuit = el().querySelector('.campo.cuit')!;
+      expect(cuit.querySelector('.valor')!.textContent!.trim()).toBe('30-71234567-1');
+      expect(cuit.querySelector('.pista')!.textContent!.trim()).toBe('No se puede cambiar.');
+      expect(cuit.querySelector('input, select, textarea')).toBeNull();
+    });
+
+    it('el título de cada sección y el CUIT de sólo lectura se ajustan sólo en el celular', async () => {
+      await crear();
+
+      const delCelular = reglasQue(/legend|\.cuit.*\.valor/).filter((r) => r.consulta.includes('max-width: 639.98px'));
+      expect(delCelular.some((r) => /legend/.test(r.selector))).toBe(true);
+      expect(delCelular.some((r) => /\.cuit.*\.valor/.test(r.selector))).toBe(true);
+    });
+  });
 });

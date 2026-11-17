@@ -133,4 +133,53 @@ describe('PaginaConfiguracionVentas', () => {
     expect(texto('.estado-vacio')).toBe('Solo el Dueño puede configurar el tope de Consumidor Final.');
     expect(obtener).not.toHaveBeenCalled();
   });
+
+  /* movil-sectores T3 (S2, S7): «Guardar» queda fijo abajo en el celular; las medidas se hacen en el navegador a 390 px. */
+  describe('formulario en el celular', () => {
+
+  /** Las reglas (de este componente) cuyo selector coincide, con la consulta de medios que las envuelve. */
+  function reglasQue(patron: RegExp): { consulta: string; selector: string }[] {
+    const reglas: { consulta: string; selector: string }[] = [];
+    const recorrer = (lista: CSSRuleList, consulta: string) =>
+      Array.from(lista).forEach((regla) => {
+        const media = (regla as CSSMediaRule).media;
+        if (media && (regla as CSSMediaRule).cssRules) {
+          recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+        } else if (patron.test((regla as CSSStyleRule).selectorText ?? '')) {
+          reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText });
+        }
+      });
+    Array.from(document.styleSheets).forEach((hoja) => {
+      try {
+        recorrer(hoja.cssRules, '');
+      } catch {
+        /* una hoja ilegible no es la del componente */
+      }
+    });
+    return reglas;
+  }
+
+    it('«Guardar» va en un pie fijo de la página y sigue siendo el envío del formulario', async () => {
+      await crear();
+
+      const pie = el().querySelector('form.ventas > .acciones-form')!;
+      expect(pie.classList).toContain('ficha-pie');
+      expect(pie.classList).toContain('en-pagina');
+      const guardarBoton = pie.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      expect(guardarBoton.textContent!.trim()).toBe('Guardar');
+
+      await escribirYGuardar('250000,5');
+      expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 250000.5 });
+    });
+
+    it('el título de la sección y todo lo nuevo del componente son sólo del celular', async () => {
+      await crear();
+
+      const nuevas = reglasQue(/legend|ficha-|app-barra-acciones/);
+      expect(nuevas.filter((r) => /legend/.test(r.selector) && r.consulta !== '').length).toBeGreaterThan(0);
+      for (const regla of nuevas.filter((r) => /ficha-/.test(r.selector))) {
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+    });
+  });
 });

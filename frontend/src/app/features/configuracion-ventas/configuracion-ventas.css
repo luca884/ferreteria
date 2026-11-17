@@ -45,3 +45,18 @@
   gap: var(--e-3);
   align-items: center;
 }
+
+/*
+ * En el celular (S2, T3 de movil-sectores) el formulario es una pantalla: «Guardar» queda fijo abajo, arriba de la barra de
+ * destinos (`.ficha-pie.en-pagina`, styles.css). Va sólo en pantalla y hasta 640 px: el escritorio y la tablet quedan igual.
+ */
+@media screen and (max-width: 639.98px) {
+  /* El título de cada bloque es un rótulo chico en mayúsculas, como en el artboard (movil-configuracion/03). */
+  .seccion > legend {
+    font-size: var(--texto-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--texto-tenue);
+  }
+}

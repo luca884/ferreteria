@@ -55,3 +55,29 @@
 .cuit .valor {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * En el celular (S2, T3 de movil-sectores) el formulario es una pantalla: «Guardar» queda fijo abajo, arriba de la barra de
+ * destinos (`.ficha-pie.en-pagina`, styles.css). Va sólo en pantalla y hasta 640 px: el escritorio y la tablet quedan igual.
+ */
+@media screen and (max-width: 639.98px) {
+  /* El título de cada bloque es un rótulo chico en mayúsculas, como en el artboard (movil-configuracion/03). */
+  .seccion > legend {
+    font-size: var(--texto-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--texto-tenue);
+  }
+  /* El CUIT se ve como un campo de sólo lectura (gris, de 44 px) y debajo dice por qué no se toca. */
+  .cuit .valor {
+    display: flex;
+    align-items: center;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie-3);
+    color: var(--texto-suave);
+  }
+}
