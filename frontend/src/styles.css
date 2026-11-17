@@ -1855,3 +1855,161 @@ ul.error {
     padding-bottom: calc(69px + var(--e-4));
   }
 }
+
+/* ---------- Facturación en tarjetas y el certificado en tres pantallas (movil-sectores T4, S2, S7) ---------- */
+
+/*
+ * Configuración › Facturación en el celular (artboards 04 y 05): las secciones son tarjetas y «Obtener o renovar el
+ * certificado» es un flujo de tres pantallas completas (`section.pedido`, `data-paso`), con la flecha «Volver» arriba y la
+ * acción de cada pantalla fija abajo. Es la misma sección de siempre: las tres pantallas están en el DOM y acá se deja la
+ * activa. Lleva el prefijo del componente y la clase `.secciones` para ganarle en especificidad a los estilos del propio
+ * componente (Angular les agrega su atributo a cada parte del selector); no caben en facturacion.css (presupuesto de 4 kB). El botón de la tarjeta y el pie se esconden en la
+ * regla base de ese componente: el escritorio y la tablet no cambian (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  app-facturacion .secciones {
+    gap: var(--e-3);
+  }
+  app-facturacion .secciones > .seccion {
+    padding: var(--e-4);
+  }
+  /* El ambiente y el punto de venta trabado se ven como un campo de sólo lectura (gris, de 44 px), como el CUIT de Datos. */
+  app-facturacion .seccion :is(.ambiente, .punto-venta) > .valor {
+    display: flex;
+    align-items: center;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie-3);
+    color: var(--texto-suave);
+  }
+  /* El punto de venta: el campo y «Guardar», cada uno a todo el ancho. */
+  app-facturacion .seccion .fila > :is(#puntoVenta, .guardar-punto-venta) {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  /* El certificado: una fila por dato, el rótulo a la izquierda y el valor a la derecha, como el artboard. */
+  app-facturacion .secciones .seccion .credencial {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  app-facturacion .secciones .seccion .credencial > div {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--e-3);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-facturacion .secciones .seccion .credencial dt {
+    flex: none;
+    font-weight: 400;
+  }
+  app-facturacion .secciones .seccion .credencial dd {
+    min-width: 0;
+    font-weight: 600;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  app-facturacion .secciones .abrir-certificado,
+  app-facturacion .secciones .probar-conexion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  app-facturacion .secciones .probar .acciones {
+    display: block;
+  }
+
+  /* El flujo del certificado: cerrado no se ve; abierto cubre toda la pantalla (también la barra de destinos) y scrollea por dentro. */
+  app-facturacion .secciones > .seccion.pedido:not(.ficha-abierta) {
+    display: none;
+  }
+  app-facturacion .secciones > .seccion.pedido.ficha-abierta {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--fondo);
+  }
+  app-facturacion .secciones > .pedido.ficha-abierta > :not(.ficha-barra, .ficha-pie) {
+    flex: none;
+    margin-inline: var(--pantalla-x);
+  }
+  app-facturacion .secciones > .pedido .ficha-barra h2 {
+    min-width: 0;
+    margin: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  /* La acción de cada pantalla, fija abajo: «Generar» es el mismo botón de hoy repetido en el pie (el de la lista queda escondido). */
+  app-facturacion .secciones > .pedido .certificado-pie {
+    display: flex;
+  }
+  app-facturacion .secciones > .pedido .acciones > .generar-pedido {
+    display: none;
+  }
+  /* Dos botones de pie con rótulos largos («Generar pedido de certificado» y «Ver el pedido pendiente»): el texto se parte en vez de ensanchar la pantalla. */
+  app-facturacion .secciones > .pedido .certificado-pie > button {
+    min-width: 0;
+    padding-block: var(--e-2);
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  /* Una pantalla por vez: 1 la guía y el CUIT, 2 el pedido (.csr), 3 subir el .crt y firmar con el simulador. */
+  app-facturacion .secciones > .pedido[data-paso='inicio'] > :is(.acciones, .subir, .simulador),
+  app-facturacion .secciones > .pedido[data-paso='pedido'] > :is(#titulo-pedido, .guia, .cuit-pedido, .subir, .simulador),
+  app-facturacion .secciones > .pedido[data-paso='subir'] > :is(#titulo-pedido, .guia, .pedido-pendiente, .cuit-pedido, .acciones) {
+    display: none;
+  }
+
+  /* Cada bloque de una pantalla es una tarjeta sobre el fondo gris, como el artboard. */
+  app-facturacion .secciones > .pedido > :is(.guia, .cuit-pedido, .acciones, .simulador) {
+    max-width: none;
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    box-shadow: var(--sombra-1);
+  }
+  app-facturacion .secciones > .pedido > .guia {
+    padding-left: var(--e-8);
+  }
+  /* «Copiar» y «Descargar (.csr)» conviven en una fila (pantalla 2). */
+  app-facturacion .secciones > .pedido > .acciones > button {
+    flex: 1 1 0;
+    min-height: var(--alto-tactil);
+  }
+  /* Subir el .crt es la zona de la pantalla 3: un recuadro punteado con el botón principal a todo el ancho. */
+  app-facturacion .secciones > .pedido > .subir {
+    padding: var(--e-4);
+    border: 2px dashed var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-facturacion .secciones > .pedido .subir .fila > .subir-certificado {
+    flex: 1 1 100%;
+    min-height: 52px;
+  }
+  app-facturacion .secciones > .pedido > .simulador {
+    align-items: stretch;
+    border-top: 1px solid var(--borde);
+  }
+  app-facturacion .secciones > .pedido .firmar-simulador {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+}
