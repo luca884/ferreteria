@@ -82,21 +82,22 @@
               @for (forma of formas(); track forma.id; let i = $index) {
                 <tr
                   class="elegible"
+                  [class.sin-ajuste]="forma.recargoPorcentaje === 0 && forma.descuentoPorcentaje === 0"
                   [class.editando]="forma.id === editando()?.id"
                   [class.inactiva]="!forma.activa"
                   [attr.aria-selected]="forma.id === filas.elegidoId()"
                   [attr.tabindex]="filas.esTabulable(forma, i) ? 0 : -1"
-                  (click)="filas.elegir(forma)"
+                  (click)="filas.elegir(forma); abrirFichaEnElCelular(forma)"
                   (focus)="filas.elegir(forma)"
                   (dblclick)="editar(forma)"
                   (keydown)="filas.alTeclear($event, forma, i)"
                 >
                   <td class="nombre" data-etiqueta="Nombre">{{ forma.nombre }}</td>
                   <td class="medio" data-etiqueta="Medio">{{ etiquetaMedio[forma.medio] }}</td>
-                  <td class="num recargo" data-etiqueta="Recargo">{{ recargoTexto(forma) }}</td>
-                  <td class="num descuento" data-etiqueta="Descuento">{{ descuentoTexto(forma) }}</td>
+                  <td class="num recargo" [class.sin-ajuste]="forma.recargoPorcentaje === 0" data-etiqueta="Recargo">{{ recargoTexto(forma) }}</td>
+                  <td class="num descuento" [class.sin-ajuste]="forma.descuentoPorcentaje === 0" data-etiqueta="Descuento">{{ descuentoTexto(forma) }}</td>
                   <td class="estado" data-etiqueta="Estado">
-                    {{ forma.activa ? 'Activa' : 'Inactiva' }}
+                    <span class="etiqueta-estado">{{ forma.activa ? 'Activa' : 'Inactiva' }}</span>
                     @if (esperaActivacion(forma)) {
                       <small class="pista-activar">Activala con «Activar» para vender a cuenta corriente.</small>
                     }
@@ -116,8 +117,23 @@
     </div>
 
     <!-- Mientras guarda no se escribe: la respuesta vacía el formulario y lo escrito se perdería (hallazgos T3). -->
-    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate [attr.inert]="guardando() ? '' : null">
-      <h2>{{ editando() === null ? 'Nueva forma de pago' : 'Editar forma de pago' }}</h2>
+    <form
+      class="alta panel ficha-pantalla"
+      [class.ficha-abierta]="fichaAbierta()"
+      [formGroup]="form"
+      (ngSubmit)="guardar()"
+      novalidate
+      [attr.inert]="guardando() ? '' : null"
+    >
+      <!-- En el celular la ficha es una pantalla completa: la flecha vuelve a la lista sin guardar (S7). -->
+      <div class="ficha-barra">
+        <button type="button" class="ficha-volver" aria-label="Volver" (click)="volverDeLaFicha()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+        </button>
+        <h2>{{ editando() === null ? 'Nueva forma de pago' : 'Editar forma de pago' }}</h2>
+      </div>
       <div class="campo nombre">
         <label for="nombre">Nombre</label>
         <input
@@ -219,16 +235,35 @@
           </span>
         }
       </div>
-      <div class="acciones-alta">
+      <div class="acciones-alta ficha-pie">
         <button type="submit" [disabled]="guardando()">
           {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
         </button>
         @if (editando() !== null) {
           <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+          <!-- Sólo del celular: en el escritorio Activar y Desactivar son de la barra de arriba. -->
+          <button
+            type="button"
+            class="secundario desactivar-ficha"
+            [class.peligro]="filas.elegido()?.activa !== false"
+            [disabled]="cambiando()"
+            (click)="alternarActiva()"
+          >
+            {{ filas.elegido()?.activa === false ? 'Activar' : 'Desactivar' }}
+          </button>
+        } @else {
+          <button type="button" class="secundario cancelar-ficha" (click)="volverDeLaFicha()">Cancelar</button>
         }
       </div>
     </form>
   </div>
+
+  <button type="button" class="boton-flotante" (click)="nuevo()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+    Nuevo
+  </button>
 }
 
 @if (aDesactivar(); as forma) {

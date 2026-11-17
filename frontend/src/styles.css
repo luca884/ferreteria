@@ -1653,3 +1653,162 @@ ul.error {
     min-height: var(--alto-tactil);
   }
 }
+
+/* ---------- Ficha a pantalla completa y pie fijo de los formularios (movil-sectores T3, S7) ---------- */
+
+/*
+ * Configuración en el celular: el alta o la edición de una forma de pago o de un usuario es una pantalla completa con la
+ * flecha «Volver» arriba y las acciones fijas abajo (`form.alta.ficha-pantalla`); los formularios de una sola pantalla
+ * (Consumidor Final, datos de la ferretería) llevan «Guardar» fijo sobre la barra de destinos (`.ficha-pie.en-pagina`).
+ * Lo que es sólo del celular se esconde acá para el escritorio y la tablet, que no cambian (S5).
+ */
+.ficha-volver,
+.desactivar-ficha,
+.resetear-ficha,
+.cancelar-ficha,
+.motivo-ficha {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /* Cerrada, la ficha no se ve: el formulario aparece al tocar una fila o «Nuevo». */
+  .listado .alta.ficha-pantalla:not(.ficha-abierta) {
+    display: none;
+  }
+  /* Abierta, cubre toda la pantalla (también la barra de destinos) y scrollea por dentro. Un diálogo (z-dialogo) queda encima. */
+  .listado .alta.ficha-pantalla.ficha-abierta {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 0;
+    background: var(--superficie);
+  }
+  .ficha-pantalla > :not(.ficha-barra, .ficha-pie) {
+    flex: none;
+    margin-inline: var(--pantalla-x);
+  }
+  .ficha-barra {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-fijo);
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: 56px;
+    padding: 0 var(--pantalla-x) 0 var(--e-2);
+    border-bottom: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  /* El título entra en hasta dos renglones («Resetear contraseña de Martín Mostrador») y recién después se corta. */
+  .listado .alta.ficha-pantalla .ficha-barra h2 {
+    display: -webkit-box;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .ficha-volver {
+    display: inline-flex;
+    flex: none;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0;
+    margin: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--texto);
+  }
+  /* El pie con la acción principal: pegado abajo mientras el formulario scrollea, con la zona segura del teléfono. */
+  .ficha-pie {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-fijo);
+    display: flex;
+    flex: none;
+    gap: var(--e-2);
+    margin: auto 0 0;
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  .ficha-pie > :is(button, a) {
+    flex: 1 1 0;
+    min-height: var(--alto-tactil);
+    margin: 0;
+  }
+  /* El orden de los artboards: la acción secundaria o destructiva a la izquierda, la principal a la derecha. */
+  .ficha-pie > .desactivar-ficha,
+  .ficha-pie > .cancelar-ficha {
+    display: inline-flex;
+    order: -1;
+  }
+  .ficha-pie > .desactivar-ficha.peligro {
+    color: var(--error);
+  }
+  /* Editando, «Volver» ya descarta: el «Cancelar» de la barra del escritorio sobra. */
+  .ficha-pie > .cancelar {
+    display: none;
+  }
+  /*
+   * El formulario de contraseña (shared/contrasena-form) lleva su propio botón: el cuerpo llena la pantalla y «Cambiar
+   * contraseña» queda fijo abajo, como el pie de las demás fichas.
+   */
+  section.ficha-pantalla.ficha-abierta > app-contrasena-form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .ficha-pantalla app-contrasena-form > form {
+    flex: 1 1 auto;
+  }
+  .ficha-pantalla app-contrasena-form .acciones-alta {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-fijo);
+    display: flex;
+    margin: auto calc(var(--pantalla-x) * -1) 0;
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  .ficha-pantalla app-contrasena-form .acciones-alta > button {
+    flex: 1 1 0;
+    min-height: var(--alto-tactil);
+  }
+  .resetear-ficha {
+    display: inline-flex;
+    min-height: var(--alto-tactil);
+  }
+  .motivo-ficha {
+    display: block;
+  }
+
+  /*
+   * Formularios de una sola pantalla: «Guardar» queda fijo a todo el ancho, justo arriba de la barra de destinos (que
+   * sigue a la vista, porque estas pantallas no tienen una flecha «Volver»), y el formulario deja su alto abajo.
+   */
+  .ficha-pie.en-pagina {
+    position: fixed;
+    inset-inline: 0;
+    /* + 1px del filete de arriba de la barra de destinos, que mide 56 px más su borde. */
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+    z-index: calc(var(--z-barra) - 1);
+    margin: 0;
+    padding: var(--e-3) var(--pantalla-x);
+  }
+  form:has(> .ficha-pie.en-pagina) {
+    padding-bottom: calc(69px + var(--e-4));
+  }
+}

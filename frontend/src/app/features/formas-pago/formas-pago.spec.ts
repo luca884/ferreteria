@@ -843,4 +843,180 @@ describe('FormasPago', () => {
       expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
     });
   });
+
+  /*
+   * movil-sectores T3 (S2, S7): en el celular la forma de pago se edita en una ficha a pantalla completa, con «Nuevo»
+   * flotante y las acciones en el pie. Vitest no evalúa media queries: acá se prueba el comportamiento y la estructura
+   * que el CSS necesita; las medidas se hacen en el navegador a 390 px.
+   */
+  describe('ficha en pantalla completa (celular)', () => {
+    const ficha = () => el().querySelector<HTMLFormElement>('form.alta')!;
+    const flotante = () => el().querySelector<HTMLButtonElement>('button.boton-flotante');
+    const enElCelular = (celular: boolean) =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: celular && consulta.includes('639.98px'), media: consulta }));
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('el botón flotante «Nuevo» es sólo del Dueño y abre la ficha de alta', async () => {
+      await crear([efectivo]);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+
+      flotante()!.click();
+      await refrescar();
+
+      expect(flotante()!.textContent!.trim()).toBe('Nuevo');
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(texto('form.alta h2')).toBe('Nueva forma de pago');
+    });
+
+    it('el Vendedor no tiene botón flotante', async () => {
+      await crear([efectivo], false);
+
+      expect(flotante()).toBeNull();
+    });
+
+    it('tocar una fila en el celular abre su ficha; en el escritorio sólo la elige', async () => {
+      await crear([efectivo, visa6]);
+
+      await elegir(1);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+
+      enElCelular(true);
+      await elegir(1);
+
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(texto('form.alta h2')).toBe('Editar forma de pago');
+      expect(input('nombre').value).toBe('Visa 6 cuotas');
+      expect(document.activeElement).toBe(el().querySelector('form.alta .ficha-volver'));
+    });
+
+    it('«Volver» cierra la ficha sin guardar, vacía el formulario y devuelve el foco al botón flotante', async () => {
+      await crear([efectivo]);
+      enElCelular(true);
+      await editarFila(0);
+      expect(ficha().classList).toContain('ficha-abierta');
+
+      const volver = el().querySelector<HTMLButtonElement>('form.alta button.ficha-volver')!;
+      expect(volver.getAttribute('aria-label')).toBe('Volver');
+      volver.click();
+      await refrescar();
+
+      expect(ficha().classList).not.toContain('ficha-abierta');
+      expect(texto('form.alta h2')).toBe('Nueva forma de pago');
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(flotante());
+    });
+
+    it('en el alta el pie lleva Cancelar y Agregar, y Cancelar cierra la ficha', async () => {
+      await crear([efectivo]);
+      flotante()!.click();
+      await refrescar();
+
+      const pie = el().querySelector('form.alta .ficha-pie')!;
+      expect(Array.from(pie.querySelectorAll('button')).map((b) => b.textContent!.trim())).toEqual(['Agregar', 'Cancelar']);
+      expect(pie.querySelector('.desactivar-ficha')).toBeNull();
+
+      pie.querySelector<HTMLButtonElement>('button.cancelar-ficha')!.click();
+      await refrescar();
+
+      expect(ficha().classList).not.toContain('ficha-abierta');
+    });
+
+    it('guardar cierra la ficha y la lista muestra el aviso', async () => {
+      await crear([efectivo]);
+      flotante()!.click();
+      await refrescar();
+      await escribir('nombre', 'Naranja X');
+
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+      expect(texto('.alerta.exito')).toBe('Se guardó «Naranja X».');
+    });
+
+    it('un error al guardar deja la ficha abierta con sus mensajes', async () => {
+      await crear([efectivo]);
+      flotante()!.click();
+      await refrescar();
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(422, 'Una forma de pago lleva recargo o descuento, no los dos.')));
+      await escribir('nombre', 'Naranja X');
+
+      await enviar();
+
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(texto('.error')).toContain('Una forma de pago lleva recargo o descuento, no los dos.');
+    });
+
+    it('editando, el pie lleva Desactivar (en rojo) y Guardar cambios; desactivar pide confirmación y cierra la ficha', async () => {
+      await crear([efectivo, debito]);
+      await editarFila(1);
+
+      const pie = el().querySelector('form.alta .ficha-pie')!;
+      const desactivar = pie.querySelector<HTMLButtonElement>('button.desactivar-ficha')!;
+      expect(desactivar.textContent!.trim()).toBe('Desactivar');
+      expect(desactivar.classList).toContain('peligro');
+      expect(pie.querySelector('button[type="submit"]')!.textContent!.trim()).toBe('Guardar cambios');
+
+      desactivar.click();
+      await refrescar();
+      expect(el().querySelector('app-confirmacion')!.textContent).toContain('¿Desactivar «Débito»?');
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+
+      await confirmar();
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(2, expect.objectContaining({ nombre: 'Débito', activa: false }));
+      expect(ficha().classList).not.toContain('ficha-abierta');
+    });
+
+    it('la forma inactiva se activa desde la ficha, sin confirmar', async () => {
+      await crear([efectivo, mercadoPago]);
+      await editarFila(1);
+
+      const activar = el().querySelector<HTMLButtonElement>('form.alta button.desactivar-ficha')!;
+      expect(activar.textContent!.trim()).toBe('Activar');
+      expect(activar.classList).not.toContain('peligro');
+      activar.click();
+      await refrescar();
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(4, expect.objectContaining({ activa: true }));
+    });
+
+    it('la fila se parte en lo que la tarjeta necesita: ajuste con signo, estado propio y fila sin ajuste', async () => {
+      await crear([efectivo, visa6, mercadoPago]);
+
+      const [fEfectivo, fVisa, fMp] = filas();
+      expect(fEfectivo.classList).toContain('sin-ajuste');
+      expect(fVisa.classList).not.toContain('sin-ajuste');
+      expect(fVisa.querySelector('td.recargo')!.classList).not.toContain('sin-ajuste');
+      expect(fVisa.querySelector('td.descuento')!.classList).toContain('sin-ajuste');
+      expect(fMp.querySelector('td.estado .etiqueta-estado')!.textContent!.trim()).toBe('Inactiva');
+      expect(fVisa.querySelector('td.estado .etiqueta-estado')!.textContent!.trim()).toBe('Activa');
+    });
+
+    it('todo lo nuevo del componente vive dentro de la pantalla del celular: el escritorio no se mueve', async () => {
+      await crear([efectivo]);
+      const reglas: { consulta: string; selector: string }[] = [];
+      const recorrer = (lista: CSSRuleList, consulta: string) =>
+        Array.from(lista).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          if (media && (regla as CSSMediaRule).cssRules) {
+            recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+          } else if ((regla as CSSStyleRule).selectorText) {
+            reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText });
+          }
+        });
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          /* una hoja ilegible no es la del componente */
+        }
+      });
+
+      const nuevas = reglas.filter((r) => /ficha-|sin-ajuste|etiqueta-estado|app-barra-acciones/.test(r.selector));
+      expect(nuevas.length).toBeGreaterThan(0);
+      for (const regla of nuevas) expect(regla.consulta).toContain('max-width: 639.98px');
+    });
+  });
 });

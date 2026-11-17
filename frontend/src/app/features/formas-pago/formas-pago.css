@@ -24,40 +24,104 @@ tr.inactiva td {
 }
 
 /*
- * En el celular cada forma de pago es una tarjeta apilada (S2, S4, T8), con el patrón de `.tabla-tarjetas` (styles.css):
- * el nombre adelante como título, el medio abajo y el recargo y el descuento uno al lado del otro, que es como se
- * comparan. Así no hay que deslizar de costado para leer una fila. Va sólo en pantalla y hasta 640 px: la tabla del
- * escritorio y la tablet quedan igual. El `.grilla-marco` de adelante le gana a la tarjeta de styles.css, que tiene la
- * misma especificidad.
+ * En el celular cada forma de pago es una fila de lista (S2, T3 de movil-sectores), con el patrón de `.tabla-tarjetas`
+ * (styles.css): el nombre adelante, el medio abajo y a la derecha el ajuste con su signo (+ recargo, − descuento, «—» si
+ * no lleva ninguno); «Inactiva» es una etiqueta al lado del nombre y «Activa» no se dice. Sin deslizar de costado. Va sólo
+ * en pantalla y hasta 640 px: la tabla del escritorio y la tablet quedan igual. El `.grilla-marco` de adelante le gana a la
+ * tarjeta de styles.css, que tiene la misma especificidad.
+ * La barra Nuevo / Editar / Desactivar se reemplaza por el botón flotante y la ficha a pantalla completa (styles.css).
  */
 @media screen and (max-width: 639.98px) {
+  /* Sus botones (Nuevo, Editar, Desactivar…) pasaron al botón flotante y a la ficha: la barra quedaría como una franja vacía. */
+  app-barra-acciones {
+    display: none;
+  }
+  /* El botón flotante (56 px + su margen) no tapa la última fila. */
+  .listado .principal {
+    padding-bottom: calc(56px + var(--e-6));
+  }
   .grilla-marco .tabla-tarjetas > tbody > tr {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
     grid-template-areas:
-      'nombre nombre'
-      'medio medio'
-      'recargo descuento'
-      'estado estado';
-    column-gap: var(--e-3);
+      'nombre estado ajuste'
+      'medio medio ajuste'
+      'pista pista pista';
+    align-content: center;
+    column-gap: var(--e-2);
     row-gap: 2px;
+    min-height: 72px;
+    padding: var(--e-2) var(--e-4);
   }
   .grilla-marco .tabla-tarjetas td.nombre {
     grid-area: nombre;
   }
   .grilla-marco .tabla-tarjetas td.medio {
     grid-area: medio;
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
   }
-  .grilla-marco .tabla-tarjetas td.recargo {
-    grid-area: recargo;
+  .grilla-marco .tabla-tarjetas td.medio::before {
+    content: none;
   }
+  /* El ajuste, a la derecha en mono: el recargo suma (+) y el descuento resta (−); el que es cero no se ve. */
+  .grilla-marco .tabla-tarjetas td.recargo,
   .grilla-marco .tabla-tarjetas td.descuento {
-    grid-area: descuento;
+    grid-area: ajuste;
+    align-self: center;
+    font-family: var(--fuente-mono);
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
   }
+  .grilla-marco .tabla-tarjetas td.recargo::before {
+    content: '+\00a0';
+    font-size: inherit;
+    color: inherit;
+  }
+  .grilla-marco .tabla-tarjetas td.descuento::before {
+    content: '\2212\00a0';
+    font-size: inherit;
+    color: inherit;
+  }
+  .grilla-marco .tabla-tarjetas td.sin-ajuste {
+    display: none;
+  }
+  .grilla-marco .tabla-tarjetas tr.sin-ajuste::after {
+    content: '\2014';
+    grid-area: ajuste;
+    align-self: center;
+    font-family: var(--fuente-mono);
+    color: var(--texto-tenue);
+  }
+  /* El estado deja de ser una línea: su etiqueta va al lado del nombre y la pista de «Activar» abajo, a todo el ancho. */
   .grilla-marco .tabla-tarjetas td.estado {
-    grid-area: estado;
+    display: contents;
   }
-  /* El nombre es el título de la tarjeta: no repite el nombre de la columna (`.grilla-marco` de más para ganarle a la
+  .grilla-marco .tabla-tarjetas td.estado::before {
+    content: none;
+  }
+  .grilla-marco .tabla-tarjetas tr:not(.inactiva) .etiqueta-estado {
+    display: none;
+  }
+  .grilla-marco .tabla-tarjetas .etiqueta-estado {
+    grid-area: estado;
+    align-self: center;
+    justify-self: start;
+    padding: 1px var(--e-2);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie-3);
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+    font-weight: 600;
+  }
+  .grilla-marco .tabla-tarjetas .estado .pista-activar {
+    grid-area: pista;
+    margin-top: 2px;
+    font-size: var(--texto-xs);
+  }
+  /* El nombre es el título de la fila: no repite el nombre de la columna (`.grilla-marco` de más para ganarle a la
      regla global de styles.css). */
   .grilla-marco .tabla-tarjetas td.nombre::before {
     content: none;
