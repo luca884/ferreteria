@@ -94,6 +94,23 @@
           </tbody>
         </table>
       </div>
+      <!-- Las mismas filas en tarjetas: sólo se ven en el celular (la tabla se esconde ahí). -->
+      <ul class="tarjetas-mov" aria-label="Movimientos de stock del artículo, los más nuevos primero">
+        @for (m of actual.items; track m.id) {
+          <li class="tarjeta-mov">
+            <span class="tipo">{{ tipo(m.tipo) }}</span>
+            <span class="cantidad" [class.salida]="m.cantidad < 0" [class.entrada]="m.cantidad > 0">
+              {{ conSigno(m.cantidad) }}
+            </span>
+            <span class="detalle">
+              {{ fecha(m.fecha) }} · {{ m.comprobante ?? '—' }} · {{ m.usuario ?? '—' }}@if (m.motivo) {
+                · «{{ m.motivo }}»
+              }
+            </span>
+            <span class="saldo">Saldo {{ numero(m.saldo) }}</span>
+          </li>
+        }
+      </ul>
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>

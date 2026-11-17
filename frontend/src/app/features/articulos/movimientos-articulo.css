@@ -48,3 +48,75 @@
   gap: var(--e-3);
   margin-bottom: var(--e-4);
 }
+
+/* Las tarjetas son sólo del celular: en la tablet, el escritorio y el papel sigue la tabla de siempre. */
+.tarjetas-mov {
+  display: none;
+}
+
+/*
+ * Movimientos en el celular (movil-sectores T5, slice 5b; artboard 07): la tabla de siete columnas pasa a tarjetas, con
+ * el tipo y la cantidad con signo arriba, el comprobante, el usuario y el motivo abajo y el saldo a la derecha. Los filtros
+ * y los botones miden 44 px y todo entra en el ancho, sin scroll horizontal.
+ */
+@media screen and (max-width: 639.98px) {
+  .filtros {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: end;
+    gap: var(--e-2) var(--e-3);
+  }
+  .filtros input {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--alto-tactil);
+  }
+  .filtros button {
+    min-height: var(--alto-tactil);
+  }
+  .paginas button {
+    min-width: var(--alto-tactil);
+    padding-inline: var(--e-4);
+  }
+  .tabla-scroll {
+    display: none;
+  }
+  .tarjetas-mov {
+    display: block;
+    margin: 0 0 var(--e-4);
+    padding: 0;
+    list-style: none;
+    overflow: hidden;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  .tarjeta-mov {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--e-3);
+    min-height: 64px;
+    padding: 10px var(--e-4);
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  .tarjeta-mov:last-child {
+    border-bottom: 0;
+  }
+  .tarjeta-mov .tipo {
+    font-weight: 500;
+  }
+  .tarjeta-mov .cantidad,
+  .tarjeta-mov .saldo {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .tarjeta-mov .detalle,
+  .tarjeta-mov .saldo {
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+  }
+  .tarjeta-mov .detalle {
+    overflow-wrap: anywhere;
+  }
+}
