@@ -102,16 +102,20 @@
                   [class.inactivo]="!usuario.activo"
                   [attr.aria-selected]="usuario.id === filas.elegidoId()"
                   [attr.tabindex]="filas.esTabulable(usuario, i) ? 0 : -1"
-                  (click)="filas.elegir(usuario)"
+                  (click)="filas.elegir(usuario); abrirFichaEnElCelular(usuario)"
                   (focus)="filas.elegir(usuario)"
                   (dblclick)="editar(usuario)"
                   (keydown)="filas.alTeclear($event, usuario, i)"
                 >
                   <td class="nombre" data-etiqueta="Nombre">{{ usuario.nombre }}</td>
                   <td class="email" data-etiqueta="Email">{{ usuario.email }}</td>
-                  <td data-etiqueta="Rol">{{ etiquetaRol[usuario.rol] }}</td>
+                  <td class="rol" [class.dueno]="usuario.rol === 'DUENO'" data-etiqueta="Rol">{{ etiquetaRol[usuario.rol] }}</td>
                   <td class="estado" data-etiqueta="Estado">{{ usuario.activo ? 'Activo' : 'Desactivado' }}</td>
-                  <td class="tope" data-etiqueta="Tope de descuento">{{ textoTope(usuario) }}</td>
+                  <td
+                    class="tope"
+                    [class.con-tope]="usuario.rol === 'VENDEDOR' && usuario.topeDescuento != null"
+                    data-etiqueta="Tope de descuento"
+                  >{{ textoTope(usuario) }}</td>
                   <td class="telefono" data-etiqueta="Teléfono">{{ usuario.telefono || '—' }}</td>
                 </tr>
               }
@@ -128,8 +132,15 @@
     </div>
 
     @if (reseteando(); as usuario) {
-      <section class="alta panel" aria-labelledby="titulo-reset">
-        <h2 id="titulo-reset">Resetear contraseña de {{ usuario.nombre }}</h2>
+      <section class="alta panel ficha-pantalla ficha-abierta" aria-labelledby="titulo-reset">
+        <div class="ficha-barra">
+          <button type="button" class="ficha-volver" aria-label="Volver" (click)="cerrarReset()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" />
+            </svg>
+          </button>
+          <h2 id="titulo-reset">Resetear contraseña de {{ usuario.nombre }}</h2>
+        </div>
         <p class="ayuda">No hace falta la contraseña actual. Decísela en persona.</p>
         <app-contrasena-form
           [errorServidor]="errorReset()"
@@ -145,8 +156,23 @@
       </section>
     } @else {
       <!-- Mientras guarda no se escribe: la respuesta vacía el formulario y lo escrito se perdería (hallazgos T3). -->
-      <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate [attr.inert]="guardando() ? '' : null">
-        <h2>{{ editando() === null ? 'Nuevo usuario' : 'Editar usuario' }}</h2>
+      <form
+        class="alta panel ficha-pantalla"
+        [class.ficha-abierta]="fichaAbierta()"
+        [formGroup]="form"
+        (ngSubmit)="guardar()"
+        novalidate
+        [attr.inert]="guardando() ? '' : null"
+      >
+        <!-- En el celular la ficha es una pantalla completa: la flecha vuelve a la lista sin guardar (S7). -->
+        <div class="ficha-barra">
+          <button type="button" class="ficha-volver" aria-label="Volver" (click)="volverDeLaFicha()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" />
+            </svg>
+          </button>
+          <h2>{{ editando() === null ? 'Nuevo usuario' : 'Editar usuario' }}</h2>
+        </div>
         @if (erroresCampos().length > 0) {
           <div class="error errores-campos" role="alert">
             <strong>Revisá estos datos:</strong>
@@ -271,17 +297,47 @@
             }
           </div>
         }
-        <div class="acciones-alta">
+        @if (editando() !== null) {
+          <!-- Sólo del celular: en el escritorio Resetear contraseña es de la barra de arriba. -->
+          <button type="button" class="secundario resetear-ficha" (click)="abrirReset()">Resetear contraseña</button>
+        }
+        @if (esPropio(editando())) {
+          <p id="motivo-desactivar-ficha" class="ayuda motivo-ficha">{{ motivoEsPropio }}</p>
+        }
+        <div class="acciones-alta ficha-pie">
           <button type="submit" [disabled]="guardando()">
             {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
           </button>
           @if (editando() !== null) {
             <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+            <!-- Sólo del celular: en el escritorio Desactivar y Reactivar son de la barra de arriba. -->
+            <button
+              type="button"
+              class="secundario desactivar-ficha"
+              [class.peligro]="filas.elegido()?.activo !== false"
+              [disabled]="cambiando()"
+              [attr.aria-disabled]="ariaDe(motivos().alternar)"
+              [attr.aria-describedby]="esPropio(filas.elegido()) ? 'motivo-desactivar-ficha' : null"
+              (click)="alternarActivo()"
+            >
+              {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
+            </button>
+          } @else {
+            <button type="button" class="secundario cancelar-ficha" (click)="volverDeLaFicha()">Cancelar</button>
           }
         </div>
       </form>
     }
   </div>
+
+  @if (!sinPermiso()) {
+    <button type="button" class="boton-flotante" (click)="nuevo()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      Nuevo
+    </button>
+  }
 }
 
 @if (aDesactivar(); as usuario) {

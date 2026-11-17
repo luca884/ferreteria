@@ -36,28 +36,104 @@ tr.inactivo td {
 }
 
 /*
- * En el celular cada usuario es una tarjeta apilada (S2, S4, T7), con el patrón de `.tabla-tarjetas` (styles.css): el
- * nombre adelante como título, el email entero abajo y el resto en dos columnas de «columna: valor», así no hay que
- * deslizar de costado para leer una fila. Va sólo en pantalla y hasta 640 px: la grilla del escritorio y la tablet
- * quedan igual. El `.grilla-marco` de adelante le gana a la tarjeta de styles.css, que tiene la misma especificidad.
+ * En el celular cada usuario es una fila de lista (S2, T3 de movil-sectores), con el patrón de `.tabla-tarjetas`
+ * (styles.css): el nombre y el email a la izquierda, el rol y el tope a la derecha. El teléfono y el estado completo se ven
+ * en la ficha; sólo un desactivado dice «Desactivado» en la lista. Sin deslizar de costado. Va sólo en pantalla y hasta 640
+ * px: la grilla del escritorio y la tablet quedan igual. El `.grilla-marco` de adelante le gana a la tarjeta de styles.css,
+ * que tiene la misma especificidad. La barra de botones se reemplaza por el botón flotante y la ficha a pantalla completa.
  */
 @media screen and (max-width: 639.98px) {
+  /* Sus botones (Nuevo, Editar, Desactivar…) pasaron al botón flotante y a la ficha: la barra quedaría como una franja vacía. */
+  app-barra-acciones {
+    display: none;
+  }
+  /* En la ficha de la contraseña la flecha «Volver» ya cancela y «Cambiar contraseña» es el pie fijo (styles.css). */
+  .acciones-reset {
+    display: none;
+  }
+  /* «Mostrar desactivados» es un chip de 44 px. */
+  .filtros label {
+    min-height: 44px;
+    padding: 0 var(--e-4);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie);
+  }
+  .filtros label:has(:checked) {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+    color: var(--tono);
+  }
+  /* El botón flotante (56 px + su margen) no tapa la última fila. */
+  .listado .principal {
+    padding-bottom: calc(56px + var(--e-6));
+  }
   .grilla-marco .tabla-tarjetas > tbody > tr {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'nombre rol'
+      'email tope'
+      'estado estado';
+    align-content: center;
     column-gap: var(--e-3);
     row-gap: 2px;
+    min-height: 72px;
+    padding: var(--e-2) var(--e-4);
   }
-  /* El nombre es el título de la tarjeta: ocupa el ancho y no repite el nombre de la columna. */
   .grilla-marco .tabla-tarjetas td.nombre {
-    grid-column: 1 / -1;
+    grid-area: nombre;
   }
-  .grilla-marco .tabla-tarjetas td.nombre::before {
+  .grilla-marco .tabla-tarjetas td.email {
+    grid-area: email;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+  }
+  .grilla-marco .tabla-tarjetas td.rol {
+    grid-area: rol;
+    justify-self: end;
+    padding: 1px var(--e-2);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie-3);
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+    font-weight: 600;
+  }
+  .grilla-marco .tabla-tarjetas td.rol.dueno {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+    color: var(--tono);
+  }
+  .grilla-marco .tabla-tarjetas td.tope {
+    grid-area: tope;
+    justify-self: end;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+  }
+  .grilla-marco .tabla-tarjetas td.telefono,
+  .grilla-marco .tabla-tarjetas tr:not(.inactivo) td.estado {
+    display: none;
+  }
+  .grilla-marco .tabla-tarjetas td.estado {
+    grid-area: estado;
+    font-size: var(--texto-xs);
+    font-weight: 600;
+  }
+  /* Los datos de la fila hablan solos: sin la etiqueta de la columna; el tope de un Vendedor lleva la palabra «Tope». */
+  .grilla-marco .tabla-tarjetas td.nombre::before,
+  .grilla-marco .tabla-tarjetas :is(td.email, td.rol, td.tope, td.estado)::before {
     content: none;
   }
-  /* El email es único y largo: va entero abajo del nombre, con su etiqueta, en vez de partirse en media columna. */
-  .grilla-marco .tabla-tarjetas td.email {
-    grid-column: 1 / -1;
-    overflow-wrap: anywhere;
+  .grilla-marco .tabla-tarjetas td.con-tope::before {
+    content: 'Tope\00a0';
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
   }
 }
