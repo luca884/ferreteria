@@ -102,7 +102,11 @@
 @if (destinos().length > 0) {
   <nav class="destinos" aria-label="Destinos">
     @for (destino of destinos(); track destino.ruta) {
-      <a [routerLink]="destino.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
+      <a
+        [routerLink]="destino.ruta"
+        [class.activo]="esDestinoActual(destino)"
+        [attr.aria-current]="esDestinoActual(destino) ? 'page' : null"
+      >
         <app-icono-menu [nombre]="destino.icono" />
         {{ destino.rotulo }}
       </a>

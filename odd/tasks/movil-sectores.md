@@ -35,8 +35,8 @@ de un renglón o de todo el ticket a una hoja inferior. Son los dos patrones com
 
 ## Tasks
 
-- [ ] T1 · S5, S7 · cimientos compartidos: hoja inferior (reusa `trampa-foco`), botón flotante «Nuevo», barra de acción fija, `--alto-tactil` en `:root`. · Route: inline · Commit: —
-- [ ] T2 · S3 · hub «Ventas» y «Más»: ruta y componente por rol, la barra pasa a 4 destinos para el Vendedor, pastilla de la bandeja ARCA. Risk: item 2 (permisos): commit propio. · Route: inline · Commit: —
+- [x] T1 · S5, S7 · cimientos compartidos: hoja inferior (reusa `trampa-foco`), botón flotante «Nuevo», barra de acción fija, `--alto-tactil` en `:root`. · Route: inline · Commit: f9a38cfc
+- [x] T2 · S3 · hub «Ventas» y «Más»: ruta y componente por rol, la barra pasa a 4 destinos para el Vendedor, pastilla de la bandeja ARCA. Risk: item 2 (permisos): commit propio. · Route: inline · Commit: este commit (ver `git log`)
 - [ ] T3 · S1, S2, S6 · Configuración (1/2): formas de pago, Consumidor Final, datos de la ferretería y usuarios en ficha completa. · Route: inline · Commit: —
 - [ ] T4 · S1, S2, S6 · Configuración (2/2): facturación en tarjetas y el certificado en tres pantallas. · Route: inline · Commit: —
 - [ ] T5 · S2, S6, S7 · Artículos (1/3): lista, ficha, alta, oferta, stock y movimientos en pantalla completa. · Route: inline · Commit: —
@@ -66,3 +66,5 @@ L1 · «prepara las ramas y luego hace el plan de la implemntacoin en ood task»
 L2 · Contexto de L1: los seis sectores están diseñados y aprobados (`design/movil-*`); no hay nada implementado de ellos. `movil-pulgar` (T1-T8) dejó la barra inferior, la fila apilada y los filtros plegados.
 L3 · Ramas: `docs/disenos-movil` ya era `feat/movil-pulgar` más 14 commits sólo de `design/` y `docs/spec` (no tocan código), así que no hubo que partirla: se apila su PR sobre #53 y esta rama sale de ella. Un intento de armar los diseños sobre `main` falló porque `design/system.*` entra con `movil-pulgar`.
 L4 · Decisión de Luca: «Dejar el hub de Ventas» (ver S3).
+L5 · T1 y T2 hechos, con tests (suite del frontend verde, build sin errores). Pendiente: la medición a 390 px en el navegador de los cimientos de T1 y del hub de T2; no se pudo porque Docker estaba apagado y sin backend no hay login. Se hace en la primera pantalla que use la hoja, el botón flotante o la barra fija (T3), con los demos levantados.
+L6 · Decisión de implementación de T2: el hub vive en `/area-ventas` (nueva, los dos roles) y NO en `/ventas`, que sigue siendo la consulta de ventas del Dueño con su URL y sus enlaces (`/ventas?fiscal=…`, `/ventas/:id`). El hub es una vista de `gruposPara(rol)`, así que no puede mostrar nada que el rol no tenga. «Ventas» queda marcado en la barra en cualquier pantalla del grupo. Orden de las filas: el del menú (el artboard tiene Caja y Ventas primero, pero su nota dice «el orden del menú de hoy»). Sin estado de la caja en la fila de Caja («Abierta desde las 08:02»): sería lógica nueva (S1).

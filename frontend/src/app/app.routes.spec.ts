@@ -14,6 +14,7 @@ import { NuevaCompra } from './features/compras/nueva-compra';
 import { Reportes } from './features/reportes/reportes';
 import { StockBajoMinimo } from './features/stock-bajo-minimo/stock-bajo-minimo';
 import { ControlesDeDatos } from './features/controles-de-datos/controles-de-datos';
+import { HubVentas } from './features/ventas/hub-ventas';
 import { Ventas } from './features/ventas/ventas';
 import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
@@ -58,6 +59,7 @@ describe('rutas', () => {
     ['compras', Compras],
     ['compras/nueva', NuevaCompra],
     ['compras/:id', Compras],
+    ['area-ventas', HubVentas],
     ['ventas', Ventas],
     ['ventas/:id', Ventas],
     ['reportes', Reportes],
@@ -87,6 +89,8 @@ describe('rutas', () => {
     'remitos/:id': AMBOS,
     clientes: AMBOS,
     caja: AMBOS,
+    // El hub «Ventas» de la barra del celular: los dos roles, y sólo lista lo que cada uno ya puede abrir.
+    'area-ventas': AMBOS,
     rubros: AMBOS,
     articulos: AMBOS,
     'articulos/:id': AMBOS,
@@ -274,6 +278,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'compras/nueva')).toBe('Nueva compra · Ferretería');
     expect(titulo(hijas(), 'reportes')).toBe('Reportes · Ferretería');
     expect(titulo(hijas(), 'ventas')).toBe('Ventas · Ferretería');
+    expect(titulo(hijas(), 'area-ventas')).toBe('Ventas · Ferretería');
     expect(titulo(hijas(), 'stock-bajo-minimo')).toBe('Stock bajo mínimo · Ferretería');
     expect(titulo(hijas(), 'controles-de-datos')).toBe('Controles de datos · Ferretería');
     expect(titulo(hijas(), 'configuracion/ventas')).toBe('Consumidor Final · Ferretería');

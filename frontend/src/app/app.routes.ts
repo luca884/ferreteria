@@ -155,6 +155,13 @@ export const routes: Routes = [
         data: conRoles(SOLO_DUENO),
         loadComponent: () => import('./features/compras/compras').then((m) => m.Compras),
       },
+      // La entrada al grupo Ventas de la barra del celular: la ven los dos roles y sólo lista lo que cada uno ya puede abrir.
+      {
+        path: 'area-ventas',
+        title: titulo('Ventas'),
+        data: conRoles(DUENO_Y_VENDEDOR),
+        loadComponent: () => import('./features/ventas/hub-ventas').then((m) => m.HubVentas),
+      },
       {
         path: 'ventas',
         title: titulo('Ventas'),

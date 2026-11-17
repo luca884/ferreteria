@@ -43,6 +43,12 @@ export interface GrupoMenu {
 /** Fijo arriba, fuera de los grupos: es la pantalla principal. */
 export const MOSTRADOR: OpcionMenu = { ruta: '/mostrador', rotulo: 'Mostrador', icono: 'mostrador' };
 
+/**
+ * El destino «Ventas» de la barra inferior del celular (movil-sectores T2, S3): no es una pantalla del menú sino la
+ * entrada al grupo Ventas, con las opciones que el rol ya tiene. Los dos roles lo tienen: no da acceso a nada nuevo.
+ */
+export const HUB_VENTAS: OpcionMenu = { ruta: '/area-ventas', rotulo: 'Ventas', icono: 'ventas' };
+
 export const GRUPOS: readonly GrupoMenu[] = [
   {
     seccion: 'ventas',
@@ -115,5 +121,6 @@ export function seccionDe(url: string): Seccion | null {
   const ruta = url.split(/[?#]/)[0];
   const coincide = (opcion: OpcionMenu) => ruta === opcion.ruta || ruta.startsWith(`${opcion.ruta}/`);
   if (coincide(MOSTRADOR)) return 'mostrador';
+  if (coincide(HUB_VENTAS)) return 'ventas';
   return GRUPOS.find((grupo) => grupo.opciones.some(coincide))?.seccion ?? null;
 }
