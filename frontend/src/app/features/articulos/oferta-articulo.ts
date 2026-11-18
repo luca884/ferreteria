@@ -37,6 +37,11 @@ export class OfertaArticulo {
   readonly articulo = input.required<Articulo>();
   /** Solo el Dueño pone o saca ofertas; el Vendedor ve el resumen. */
   readonly editable = input(false);
+  /**
+   * La ficha del celular (movil-sectores T5, 5d): la sección es una tarjeta plegable como las de la ficha y el tipo se
+   * elige con tres botones de 44 px. Es el mismo estado y el mismo guardado; el escritorio no cambia.
+   */
+  readonly celular = input(false);
   readonly cambiado = output<Articulo>();
 
   protected readonly tipos = TIPOS_OFERTA;
@@ -48,6 +53,8 @@ export class OfertaArticulo {
     hasta: new FormControl<string | null>(null),
   });
 
+  /** La tarjeta del celular arranca plegada; se abre al tocarla y sola cuando falla el guardado. */
+  protected readonly abierta = signal(false);
   protected readonly guardando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly errores = signal<Partial<Record<Campo, string>>>({});
@@ -55,6 +62,12 @@ export class OfertaArticulo {
   private readonly valores = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
 
   protected readonly oferta = computed(() => this.articulo().oferta ?? null);
+
+  /** El dato clave de la tarjeta plegada del celular: el precio de la oferta vigente, si hay. */
+  protected readonly datoPlegada = computed(() => {
+    const oferta = this.oferta();
+    return oferta?.vigente && oferta.precioOferta !== null ? formatearMonto(oferta.precioOferta) : '';
+  });
 
   /** El precio que dejaría lo escrito sobre el precio normal; undefined sin un valor mayor a 0. */
   protected readonly precioResultante = computed(() => {
@@ -111,6 +124,23 @@ export class OfertaArticulo {
     });
   }
 
+  /** El tipo elegido con los botones del celular: escribe el mismo control del formulario que el select. */
+  protected elegirTipo(tipo: TipoOferta): void {
+    const control = this.form.controls.tipo;
+    control.setValue(tipo);
+    control.markAsDirty();
+  }
+
+  /** Como un grupo de radios nativo: las flechas eligen el tipo anterior o el siguiente (dando la vuelta) y llevan el foco. */
+  protected alTeclearTipo(evento: KeyboardEvent, indice: number): void {
+    const paso = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[evento.key];
+    if (paso === undefined) return;
+    evento.preventDefault();
+    const destino = (indice + paso + this.tipos.length) % this.tipos.length;
+    this.elegirTipo(this.tipos[destino]);
+    (evento.currentTarget as HTMLElement).parentElement?.querySelectorAll('button')[destino]?.focus();
+  }
+
   protected guardar(): void {
     // S5: sin un valor mayor a 0 el botón avisa el motivo en vez de quedar apagado sin explicación.
     if (this.motivo.mostrar('guardar')) return;
@@ -154,6 +184,8 @@ export class OfertaArticulo {
         if (Object.keys(propios).length === 0) {
           this.error.set(mensajeDe(err, 'No se pudo guardar la oferta.'));
         }
+        // Un error en una tarjeta plegada no se vería.
+        this.abierta.set(true);
       },
     });
   }

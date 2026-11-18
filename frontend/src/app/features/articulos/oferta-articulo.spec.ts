@@ -3,7 +3,7 @@ import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Articulo, Oferta } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -41,7 +41,7 @@ describe('OfertaArticulo', () => {
   let servicio: { ponerOferta: ReturnType<typeof vi.fn>; quitarOferta: ReturnType<typeof vi.fn> };
   let emitidos: Articulo[];
 
-  async function crear(a: Articulo, editable = true) {
+  async function crear(a: Articulo, editable = true, celular = false) {
     servicio = { ponerOferta: vi.fn(), quitarOferta: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [OfertaArticulo],
@@ -53,6 +53,7 @@ describe('OfertaArticulo', () => {
     fixture = TestBed.createComponent(OfertaArticulo);
     fixture.componentRef.setInput('articulo', a);
     fixture.componentRef.setInput('editable', editable);
+    fixture.componentRef.setInput('celular', celular);
     emitidos = [];
     fixture.componentInstance.cambiado.subscribe((x) => emitidos.push(x));
     await refrescar();
@@ -264,5 +265,179 @@ describe('OfertaArticulo', () => {
     await crear(articulo(), false);
 
     expect(el().querySelector('.oferta-articulo')).toBeNull();
+  });
+
+  /*
+   * movil-sectores T5 (5d; S1, S2, S5, S7): en la ficha del celular (`[celular]`) la oferta es una tarjeta plegable y el
+   * tipo son tres botones de 44 px que escriben el mismo control que el select; el guardado y el resto no cambian. El
+   * escritorio no cambia. Vitest no lee oferta-articulo.css: las medidas se ven en el navegador a 390 px.
+   */
+  describe('en el celular (movil-sectores T5, 5d)', () => {
+    const cabecera = () => el().querySelector<HTMLButtonElement>('h2 .seccion-cabecera')!;
+    const segmentos = () => Array.from(el().querySelectorAll<HTMLButtonElement>('.tipo-segmentado button'));
+    const marcado = () => segmentos().filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.textContent!.trim());
+    async function abrir() {
+      cabecera().click();
+      await refrescar();
+    }
+
+    it('es una tarjeta plegable: arranca cerrada, sólo con su cabecera, y se abre y se cierra al tocarla', async () => {
+      await crear(articulo(), true, true);
+
+      expect(el().querySelector('.oferta-articulo')!.classList).toContain('oferta-celular');
+      expect(texto('h2')).toBe('Oferta');
+      expect(cabecera().getAttribute('aria-expanded')).toBe('false');
+      expect(el().querySelector('form')).toBeNull();
+      expect(boton('Guardar oferta')).toBeUndefined();
+
+      await abrir();
+      expect(cabecera().getAttribute('aria-expanded')).toBe('true');
+      expect(el().querySelector('form')).not.toBeNull();
+      expect(boton('Guardar oferta')).toBeDefined();
+
+      await abrir();
+      expect(cabecera().getAttribute('aria-expanded')).toBe('false');
+      expect(el().querySelector('form')).toBeNull();
+    });
+
+    it('plegada muestra el precio de la oferta vigente; sin oferta, nada', async () => {
+      await crear(articulo(vigente), true, true);
+      expect(texto('.seccion-dato')).toBe(`$${NBSP}800,00`);
+
+      TestBed.resetTestingModule();
+      await crear(articulo(), true, true);
+      expect(el().querySelector('.seccion-dato')).toBeNull();
+    });
+
+    it('el tipo son tres botones con los textos del select; no hay select', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+
+      expect(el().querySelector('#oferta-tipo')).toBeNull();
+      expect(el().querySelector('.tipo-segmentado')!.getAttribute('role')).toBe('radiogroup');
+      expect(segmentos().map((b) => b.textContent!.trim())).toEqual(['Precio fijo', 'Descuento en %', 'Descuento en $']);
+      expect(segmentos().every((b) => b.getAttribute('role') === 'radio' && b.type === 'button')).toBe(true);
+      expect(marcado()).toEqual(['Precio fijo']);
+    });
+
+    it('cada botón elige el mismo tipo que el select: cambia el campo del valor y el precio que resulta', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+      const valor = () => el().querySelector<HTMLInputElement>('#oferta-valor')!;
+
+      segmentos()[1].click();
+      await refrescar();
+      expect(marcado()).toEqual(['Descuento en %']);
+      expect(valor().type).toBe('number');
+      expect(texto('label[for="oferta-valor"]')).toContain('Descuento (%)');
+      await escribir('#oferta-valor', '10');
+      expect(texto('.precio-resultante')).toBe(`Precio de oferta: $${NBSP}900,00`);
+
+      segmentos()[2].click();
+      await refrescar();
+      expect(marcado()).toEqual(['Descuento en $']);
+      expect(valor().closest('app-campo-moneda')).not.toBeNull();
+      expect(texto('label[for="oferta-valor"]')).toContain('Descuento ($)');
+    });
+
+    it('guardar con un tipo elegido con los botones manda lo mismo que con el select', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+      servicio.ponerOferta.mockReturnValue(of(articulo(vigente)));
+
+      segmentos()[1].click();
+      await refrescar();
+      await escribir('#oferta-valor', '10');
+      await escribir('#oferta-hasta', '2026-11-30');
+      boton('Guardar oferta')!.click();
+      await refrescar();
+
+      expect(servicio.ponerOferta).toHaveBeenCalledWith(7, {
+        tipo: 'DESCUENTO_PORCENTAJE',
+        valor: 10,
+        hasta: '2026-11-30',
+        version: 3,
+      });
+      expect(emitidos).toHaveLength(1);
+    });
+
+    it('las flechas mueven la elección entre los botones, dando la vuelta', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+
+      segmentos()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await refrescar();
+      expect(marcado()).toEqual(['Descuento en %']);
+      expect(segmentos().map((b) => b.tabIndex)).toEqual([-1, 0, -1]);
+
+      segmentos()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      await refrescar();
+      expect(marcado()).toEqual(['Descuento en $']);
+    });
+
+    it('arranca con el tipo de la oferta guardada y «Sacar oferta» sigue sacándola', async () => {
+      await crear(articulo({ ...vigente, tipo: 'DESCUENTO_MONTO', valor: 200 }), true, true);
+      await abrir();
+      servicio.quitarOferta.mockReturnValue(of(articulo()));
+
+      expect(marcado()).toEqual(['Descuento en $']);
+      boton('Sacar oferta')!.click();
+      await refrescar();
+
+      expect(servicio.quitarOferta).toHaveBeenCalledWith(7);
+      expect(emitidos).toEqual([articulo()]);
+    });
+
+    it('guardar sin valor explica el motivo, como hoy', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+
+      boton('Guardar oferta')!.click();
+      await refrescar();
+
+      expect(servicio.ponerOferta).not.toHaveBeenCalled();
+      expect(texto('.motivo-accion')).toBe('Completá el porcentaje o el precio de oferta.');
+    });
+
+    it('un error del servidor abre la tarjeta aunque se haya plegado mientras se guardaba', async () => {
+      await crear(articulo(), true, true);
+      await abrir();
+      const pedido = new Subject<Articulo>();
+      servicio.ponerOferta.mockReturnValue(pedido);
+      await escribir('#oferta-valor', '800');
+      boton('Guardar oferta')!.click();
+      await refrescar();
+      await abrir();
+      expect(cabecera().getAttribute('aria-expanded')).toBe('false');
+
+      pedido.error(new HttpErrorResponse({ status: 400, error: { message: 'Datos inválidos', errors: { valor: 'El valor es inválido.' } } }));
+      await refrescar();
+
+      expect(cabecera().getAttribute('aria-expanded')).toBe('true');
+      expect(texto('#oferta-valor-error')).toBe('El valor es inválido.');
+    });
+
+    it('el Vendedor ve el resumen en la tarjeta, sin formulario ni botones de tipo', async () => {
+      await crear(articulo(vigente), false, true);
+      await abrir();
+
+      expect(texto('.resumen-oferta')).toContain('En oferta a');
+      expect(el().querySelector('form, .tipo-segmentado')).toBeNull();
+    });
+  });
+
+  it('en el escritorio no hay nada de esto: el select de siempre y la sección abierta', async () => {
+    await crear(articulo(vigente));
+
+    expect(el().querySelector('.oferta-celular, .seccion-cabecera, .tipo-segmentado, .campo-tipo')).toBeNull();
+    expect(el().querySelector('select#oferta-tipo')).not.toBeNull();
+    expect(texto('h2')).toBe('Oferta');
+    expect(el().querySelector('h2 button')).toBeNull();
+    expect(boton('Guardar oferta')).toBeDefined();
+    expect(Array.from(el().querySelectorAll<HTMLOptionElement>('#oferta-tipo option')).map((o) => o.textContent!.trim())).toEqual([
+      'Precio fijo',
+      'Descuento en %',
+      'Descuento en $',
+    ]);
   });
 });
