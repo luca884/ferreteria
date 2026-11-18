@@ -3006,3 +3006,243 @@ ul.error {
     min-width: 0;
   }
 }
+
+/* ---------- Cobro a pantalla completa en el celular (movil-sectores T9a, S2, S5, S7) ---------- */
+/*
+ * El cobro de una sola forma de pago (efectivo con recargo y vuelto, y la elección de facturar) pasa a pantalla completa
+ * con la flecha «Volver» arriba y la acción fija abajo (artboard 05 de movil-mostrador). El componente (`DialogoCobro`)
+ * pone `.cobro-celular` sólo en el celular, así que el escritorio y la tablet conservan su DOM y su diálogo centrado (S5).
+ * Es sólo presentación: el estado, la validación y lo que se manda son los de siempre. El mixto y la cuenta corriente se
+ * dibujan como hoy adentro de esta misma pantalla (su diseño es del artboard 06). Reusa la barra y el pie de las fichas
+ * (`.ficha-barra`, `.ficha-volver`, `.ficha-pie`). Todo cuelga de `app-dialogo-cobro` para ganarle a los estilos del
+ * componente, que se cargan después de este archivo; va acá y no en el componente por el tope de tamaño de su CSS.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Cubre toda la pantalla (también la barra de destinos), sin el velo ni la tarjeta del diálogo. */
+  app-dialogo-cobro .dialogo-fondo {
+    padding: 0;
+    place-items: stretch;
+    background: var(--superficie);
+  }
+  app-dialogo-cobro .dialogo.cobro.cobro-celular {
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: 0;
+    overflow-x: hidden;
+    border-radius: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+    /* La barra, el TOTAL y el pie son fijos: al enfocar «Recibido» el campo queda entre ellos, no atrás del pie. */
+    scroll-padding: 152px 0 96px;
+  }
+
+  /* La cabecera azul del cobro, a lo ancho: el rótulo y el comprobante arriba y el TOTAL grande debajo, a la izquierda. */
+  app-dialogo-cobro .cobro-celular > .cabecera {
+    /* El TOTAL no se va con el scroll (con muchas formas de pago «Recibido» queda más abajo): se pega debajo de la barra. */
+    position: sticky;
+    top: 56px;
+    z-index: var(--z-fijo);
+    flex: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--e-1);
+    margin: 0;
+    padding: var(--e-3) var(--pantalla-x) var(--e-4);
+  }
+  app-dialogo-cobro .cobro-celular > .cabecera:has(+ :is(.recargo, .descuento-forma)) {
+    padding-bottom: var(--e-1);
+  }
+  app-dialogo-cobro .cobro-celular .cabecera .titulo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--e-2);
+  }
+  /* El TOTAL de 7 cifras entra en 360 px: se achica con la pantalla, nunca se corta. */
+  app-dialogo-cobro .cobro-celular .cabecera .total {
+    font-size: clamp(1.75rem, 9vw, 2.25rem);
+    text-align: left;
+  }
+  /* El recargo o el descuento de la forma, pegado al TOTAL y con el mismo fondo, como en el artboard. */
+  app-dialogo-cobro .cobro-celular > :is(.recargo, .descuento-forma) {
+    flex: none;
+    margin: 0;
+    padding: 0 var(--pantalla-x) var(--e-3);
+    /* La sombra tapa el filete que deja el alto fraccionario de la cabecera. */
+    box-shadow: 0 -1px 0 var(--acento-profundo);
+    background: var(--acento-profundo);
+    color: var(--profundo-texto-tenue);
+  }
+  /* Con más especificidad que `.recargo strong` del componente, que Angular marca con su atributo en las dos partes. */
+  app-dialogo-cobro .dialogo.cobro-celular > :is(.recargo, .descuento-forma) strong {
+    color: var(--acento-texto);
+  }
+
+  /* Lo que va entre la cabecera y el pie, con el margen de las pantallas completas. */
+  app-dialogo-cobro .cobro-celular > :not(.ficha-barra, .ficha-pie, .cabecera, .recargo, .descuento-forma, .dialogo-acciones) {
+    flex: none;
+    margin: var(--e-3) var(--pantalla-x) 0;
+  }
+
+  /*
+   * «Recibido» y el vuelto van arriba de los medios, justo debajo de la cabecera (el artboard los pone después de la lista):
+   * con más de cuatro formas de pago la lista pasa la pantalla y el campo quedaba abajo, tapado por el pie fijo y, al
+   * escribir, por el teclado. Es sólo el orden en pantalla: el DOM y el orden del Tab son los de siempre. Quitar estas tres
+   * reglas vuelve al orden del artboard.
+   */
+  app-dialogo-cobro .cobro-celular > * {
+    order: 2;
+  }
+  app-dialogo-cobro .cobro-celular > :is(.ficha-barra, .cabecera, .recargo, .descuento-forma, .aviso) {
+    order: 0;
+  }
+  app-dialogo-cobro .cobro-celular > .efectivo {
+    order: 1;
+  }
+  app-dialogo-cobro .cobro-celular > .ficha-pie {
+    order: 3;
+  }
+
+  /* Los medios, como la lista de opciones del artboard: filas de 64 px con el nombre y su ajuste a la izquierda y la marca a la derecha. */
+  app-dialogo-cobro .cobro-celular .medios {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--e-3);
+    min-height: 64px;
+    padding: 10px var(--e-4);
+    border: 0;
+    border-bottom: 1px solid var(--borde-suave);
+    border-radius: 0;
+    background: var(--superficie);
+    box-shadow: none;
+    font-size: var(--texto-md);
+    text-align: left;
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio:last-child {
+    border-bottom: 0;
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio::after {
+    content: '';
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--borde-fuerte);
+    border-radius: 50%;
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio .marca-recargo {
+    grid-row: 2;
+    grid-column: 1;
+    color: var(--texto-tenue);
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio[aria-checked='true'] {
+    background: var(--acento-suave);
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio[aria-checked='true']::after {
+    border-color: var(--acento);
+    background: var(--acento);
+    box-shadow: inset 0 0 0 4px #fff;
+  }
+  app-dialogo-cobro .cobro-celular .medios .medio.medio[aria-disabled='true'] {
+    background: var(--superficie-2);
+  }
+  /* «← → cambian el medio» es de teclado: en el celular sobra. */
+  app-dialogo-cobro .cobro-celular .pista-medios {
+    display: none;
+  }
+
+  /* Efectivo: «Recibido» arriba y, debajo, el vuelto (o lo que falta) en una franja, con el importe a la derecha. */
+  app-dialogo-cobro .cobro-celular .efectivo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  app-dialogo-cobro .cobro-celular .efectivo :is(.vuelto, .falta) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-2);
+    padding: var(--e-3);
+    border: 1px solid var(--exito-borde);
+    border-radius: var(--radio-lg);
+    background: var(--exito-fondo);
+    color: var(--exito);
+    font-size: var(--texto-md);
+  }
+  app-dialogo-cobro .cobro-celular .efectivo .falta {
+    border-color: var(--error-borde);
+    background: var(--error-fondo);
+    color: var(--error);
+  }
+  app-dialogo-cobro .cobro-celular .efectivo :is(.vuelto, .falta) strong {
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-size: clamp(1.375rem, 7.5vw, 1.875rem);
+  }
+
+  /* «No facturable» es un control táctil de 44 px. */
+  app-dialogo-cobro .cobro-celular .no-facturable {
+    min-height: var(--alto-tactil);
+  }
+  app-dialogo-cobro .cobro-celular .no-facturable input {
+    flex: none;
+    width: 24px;
+    height: 24px;
+  }
+
+  /*
+   * El pie fijo, de 52 px como el artboard: «Cobrar» solo o, con la facturación activa, «Cobrar sin factura» y «Cobrar y
+   * facturar con ARCA» lado a lado (la segunda, más ancha). El texto largo del exceso de la cuenta corriente se parte.
+   */
+  app-dialogo-cobro .cobro-celular .dialogo-acciones.ficha-pie {
+    flex-flow: row nowrap;
+    align-items: stretch;
+    justify-content: stretch;
+    padding-top: var(--e-3);
+  }
+  app-dialogo-cobro .cobro-celular .ficha-pie .formas-de-cobrar {
+    flex: 1 1 0;
+    flex-wrap: nowrap;
+    gap: var(--e-2);
+    min-width: 0;
+  }
+  app-dialogo-cobro .cobro-celular .ficha-pie :is(.formas-de-cobrar > button, .cobrar) {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    padding: var(--e-2);
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+    white-space: normal;
+  }
+  app-dialogo-cobro .cobro-celular .ficha-pie .facturar {
+    flex-grow: 1.4;
+  }
+}
+
+/*
+ * El TOTAL de la barra fija del Mostrador con un importe de ocho cifras (L24 punto 11 de movil-sectores): a 360 px el
+ * «$ 12.338.460,00» a 22 px llegaba a 2 px del ⋯ (el piso de 1.375rem de `totales-ticket` lo dejaba crecer más de lo que
+ * entra) y un importe un poco mayor lo pisaba. Con el piso en 1.125rem y 5,2vw el mismo importe deja unos 25 px de aire; a
+ * 390 px baja de ~21,5 a ~20 px. Sólo el celular: la tablet y el escritorio conservan el tamaño de siempre (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  app-mostrador app-totales-ticket .totales .total {
+    font-size: clamp(1.125rem, 5.2vw, 1.75rem);
+  }
+}

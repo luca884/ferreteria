@@ -6567,4 +6567,475 @@ describe('Mostrador', () => {
       });
     });
   });
+
+  /**
+   * movil-sectores T9a (item 6: el flujo de la plata): en el celular el cobro es una pantalla completa con «Volver» arriba y
+   * la acción fija abajo. Todo lo que se manda al servicio y todo lo que se ve de la venta tiene que ser idéntico en el
+   * celular y en el escritorio: cada escenario corre en los dos. Y, desde el celular, cerrar el cobro, el descuento y el
+   * «Quitar» de un renglón no enfoca el buscador (subiría el teclado); tras una venta cobrada sigue yendo al buscador,
+   * como hoy (el lector y las teclas F dependen de eso).
+   */
+  describe('celular: el cobro a pantalla completa (movil-sectores T9a)', () => {
+    const LETRAS_T9: FacturacionDelMostrador['letras'] = {
+      CONSUMIDOR_FINAL: 'B',
+      RESPONSABLE_INSCRIPTO: 'A',
+      MONOTRIBUTISTA: 'A',
+      EXENTO: 'B',
+    };
+    const MODOS_T9: [string, string | null][] = [
+      ['celular', '639.98px'],
+      ['escritorio', null],
+    ];
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const martillo = () => articulo(1, { descripcion: 'Martillo', precioFinal: 1500 });
+    const pantallaCobro = () => el().querySelector<HTMLElement>('app-dialogo-cobro [role="dialog"]');
+    const botonCobrar = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) => b.textContent!.includes('Cobrar'))!;
+    const enElCobro = (selector: string) => el().querySelector<HTMLButtonElement>(`app-dialogo-cobro ${selector}`)!;
+    const importeCobro = () => el().querySelector<HTMLInputElement>('app-dialogo-cobro .efectivo input')!;
+    const avisoDelCobro = () => normal(el().querySelector('app-dialogo-cobro .aviso')?.textContent);
+    const avisoDeLaVenta = () => normal(el().querySelector('app-mostrador > .zona-busqueda .aviso, .zona-busqueda > .aviso')?.textContent);
+    const totalDelTicket = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
+
+    function comoCelular(consulta: string | null) {
+      if (consulta) vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      destino.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    }
+
+    /** Ticket de 2 martillos ($ 3.000,00); el buscador queda enfocado, como lo deja el lector. */
+    async function conMartillos(formas: FormaPago[] = FORMAS_BASE, rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR') {
+      await crear(cajaAbierta, formas, rol);
+      for (const q of ['M', 'M']) {
+        await escribir(q);
+        await enter();
+        await responder(llamadas.length - 1, exacto(martillo()));
+      }
+    }
+
+    /** Un toque en «Cobrar» (la barra fija del celular o el botón de la botonera). */
+    async function tocarCobrar() {
+      botonCobrar().click();
+      await refrescar();
+    }
+
+    async function escribirImporte(valor: string) {
+      importeCobro().value = valor;
+      importeCobro().dispatchEvent(new Event('input', { bubbles: true }));
+      await refrescar();
+    }
+
+    function venta(numero: number, total: number): VentaCobrada {
+      return {
+        venta: { ventaId: 99, numero, total, fecha: '2026-10-15T10:00:00', medioPago: 'EFECTIVO', renglones: [], sinStock: [], facturable: true },
+        repetida: false,
+      } as VentaCobrada;
+    }
+
+    async function cobrada(indice: number, v: VentaCobrada) {
+      cobros[indice].respuesta.next(v);
+      cobros[indice].respuesta.complete();
+      await refrescar();
+    }
+
+    async function rechazada(indice: number, status: number, cuerpo: unknown) {
+      cobros[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    describe.each(MODOS_T9)('la venta es la misma en el %s', (_modo, consulta) => {
+      it('«Cobrar» y Enter en efectivo mandan el pedido de siempre, y al cobrarse el ticket queda vacío con el aviso de hoy', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+
+        await tocarCobrar();
+        expect(pantallaCobro()).not.toBeNull();
+        expect(normal(pantallaCobro()!.querySelector('.cabecera .total')?.textContent)).toBe('$ 3.000,00');
+        await tecla('Enter');
+
+        expect(cobros).toHaveLength(1);
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          formaPagoId: 1,
+        });
+
+        await cobrada(0, venta(7, 3000));
+
+        expect(pantallaCobro()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(normal(el().querySelector('.zona-busqueda .aviso')?.textContent)).toBe('Venta N.º 7 cobrada: $ 3.000,00');
+      });
+
+      it('efectivo con recargo y vuelto: el pedido lleva el total con recargo y el aviso de la venta dice el vuelto', async () => {
+        comoCelular(consulta);
+        await conMartillos([formaDe(1, 'Efectivo', 'EFECTIVO', 10), ...FORMAS_BASE.slice(1)]);
+
+        await tocarCobrar();
+        expect(normal(pantallaCobro()!.querySelector('.recargo')?.textContent)).toBe('Recargo (10 %) $ 300,00');
+        await escribirImporte('4000');
+        expect(normal(pantallaCobro()!.querySelector('.vuelto')?.textContent)).toBe('Vuelto $ 700,00');
+        enElCobro('button.cobrar').click();
+        await refrescar();
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3300,
+          formaPagoId: 1,
+        });
+
+        await cobrada(0, venta(8, 3300));
+
+        expect(normal(el().querySelector('.zona-busqueda .aviso')?.textContent)).toContain('Venta N.º 8 cobrada');
+        expect(normal(el().querySelector('.zona-busqueda .aviso .vuelto')?.textContent)).toBe('$ 700,00');
+      });
+
+      /** Ticket de 2 martillos con «Ferretería Norte SRL» elegida con F9 y la facturación activa. */
+      async function conClienteYFacturacion() {
+        facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS_T9 };
+        await conMartillos();
+        await tecla('F9');
+        await tecla('ArrowDown');
+        await tecla('Enter');
+      }
+
+      it('con facturación y cliente: «Cobrar y facturar con ARCA» manda el clienteId, sin marcar la venta como no facturable', async () => {
+        comoCelular(consulta);
+        await conClienteYFacturacion();
+
+        await tocarCobrar();
+        expect(normal(pantallaCobro()!.querySelector('.comprobante')?.textContent)).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+        // Enter no cobra con la elección a la vista.
+        await tecla('Enter');
+        expect(cobros).toHaveLength(0);
+        enElCobro('button.facturar').click();
+        await refrescar();
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          formaPagoId: 1,
+          clienteId: 2,
+        });
+      });
+
+      it('con facturación y cliente: «Cobrar sin factura» manda facturable false y el clienteId', async () => {
+        comoCelular(consulta);
+        await conClienteYFacturacion();
+
+        await tocarCobrar();
+        enElCobro('button.sin-factura').click();
+        await refrescar();
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          formaPagoId: 1,
+          facturable: false,
+          clienteId: 2,
+        });
+      });
+
+      it('un rechazo del servidor deja el cobro abierto con el mensaje de hoy y el ticket intacto; el reintento usa la misma clave', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tocarCobrar();
+        await tecla('Enter');
+        const mensaje =
+          'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.';
+
+        await rechazada(0, 422, { status: 422, message: mensaje, timestamp: '2026-10-15T10:00:00', motivo: 'CONSUMIDOR_FINAL_SIN_DATOS', articulos: [] });
+
+        expect(pantallaCobro()).not.toBeNull();
+        expect(avisoDelCobro()).toBe(mensaje);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+
+        await tecla('Enter');
+        expect(cobros).toHaveLength(2);
+        expect(cobros[1].pedido).toEqual(cobros[0].pedido);
+        expect(cobros[1].pedido.clave).toBe('clave-1');
+      });
+
+      it('un error de red deja el cobro abierto con «No se pudo cobrar. Probá de nuevo.» y el ticket intacto', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tocarCobrar();
+        await tecla('Enter');
+
+        await rechazada(0, 500, null);
+
+        expect(pantallaCobro()).not.toBeNull();
+        expect(avisoDelCobro()).toBe('No se pudo cobrar. Probá de nuevo.');
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+      });
+
+      it('mientras viaja la venta, otro toque no manda una segunda', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tocarCobrar();
+
+        enElCobro('button.cobrar').click();
+        enElCobro('button.cobrar').click();
+        await refrescar();
+
+        expect(cobros).toHaveLength(1);
+      });
+
+      it('falta plata: no manda nada y el ticket sigue como estaba', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tocarCobrar();
+
+        await escribirImporte('1000');
+        enElCobro('button.cobrar').click();
+        await refrescar();
+
+        expect(normal(pantallaCobro()!.querySelector('.falta')?.textContent)).toBe('Faltan $ 2.000,00');
+        expect(cobros).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+      });
+    });
+
+    describe('cerrar el cobro en el celular', () => {
+      it('se ve como pantalla completa con «Volver», el total y el pie fijo con la acción', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+
+        await tocarCobrar();
+
+        expect(pantallaCobro()!.classList).toContain('cobro-celular');
+        expect(el().querySelector('app-dialogo-cobro .ficha-barra .ficha-volver')!.getAttribute('aria-label')).toBe('Volver');
+        expect(normal(pantallaCobro()!.querySelector('.cabecera .total')?.textContent)).toBe('$ 3.000,00');
+        expect(normal(el().querySelector('app-dialogo-cobro .ficha-pie')?.textContent)).toBe('Cobrar');
+      });
+
+      it('«Volver» cierra sin vender, deja el ticket intacto y el foco NO va al buscador (aunque el lector lo dejó enfocado)', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        expect(document.activeElement).toBe(campo());
+        await tocarCobrar();
+
+        enElCobro('.ficha-volver').click();
+        await refrescar();
+
+        expect(pantallaCobro()).toBeNull();
+        expect(cobros).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('Esc cierra sin vender y tampoco enfoca el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await tocarCobrar();
+
+        await tecla('Escape');
+
+        expect(pantallaCobro()).toBeNull();
+        expect(cobros).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('F4 con el buscador enfocado y Esc: tampoco vuelve al buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        expect(document.activeElement).toBe(campo());
+
+        await tecla('F4');
+        await tecla('Escape');
+
+        expect(pantallaCobro()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('tras una venta cobrada el foco vuelve al buscador, como hoy (el lector y las teclas F dependen de eso)', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await tocarCobrar();
+        await tecla('Enter');
+
+        await cobrada(0, venta(9, 3000));
+
+        expect(pantallaCobro()).toBeNull();
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('un cobro rechazado y cerrado con «Volver» sigue sin enfocar el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await tocarCobrar();
+        await tecla('Enter');
+        await rechazada(0, 500, null);
+
+        enElCobro('.ficha-volver').click();
+        await refrescar();
+
+        expect(pantallaCobro()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
+      });
+    });
+
+    describe.each([
+      ['el escritorio', null],
+      ['la tablet (hasta 1023 px)', '1023.98px'],
+    ])('en %s el cobro no cambia', (_nombre, consulta) => {
+      it('es el diálogo centrado de siempre, con «Cancelar»; Esc y «Cancelar» devuelven el foco al buscador', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+
+        await tecla('F4');
+        expect(pantallaCobro()!.classList).not.toContain('cobro-celular');
+        expect(el().querySelector('app-dialogo-cobro .ficha-barra, app-dialogo-cobro .ficha-pie')).toBeNull();
+        await tecla('Escape');
+        expect(pantallaCobro()).toBeNull();
+        expect(document.activeElement).toBe(campo());
+
+        await tecla('F4');
+        enElCobro('button.cancelar').click();
+        await refrescar();
+        expect(pantallaCobro()).toBeNull();
+        expect(cobros).toHaveLength(0);
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('tras una venta cobrada el foco vuelve al buscador', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tecla('F4');
+        await tecla('Enter');
+
+        await cobrada(0, venta(9, 3000));
+
+        expect(document.activeElement).toBe(campo());
+      });
+    });
+
+    describe('cerrar el descuento y «Quitar» de un renglón (item 10 de L24)', () => {
+      const hojaDelRenglon = () => el().querySelector<HTMLElement>('app-hoja-renglon [role="dialog"].hoja-inferior');
+      const accionDeLaHoja = (texto: string) =>
+        Array.from(hojaDelRenglon()!.querySelectorAll<HTMLButtonElement>('.accion-hoja')).find((b) => normal(b.textContent).startsWith(texto))!;
+      const dialogoDescuento = () => el().querySelector<HTMLElement>('app-dialogo-descuento [role="dialog"]');
+      const confirmacion = () => el().querySelector<HTMLElement>('app-dialogo-confirmacion [role="alertdialog"], app-dialogo-confirmacion [role="dialog"]');
+      const botonDe = (selector: string, texto: string) =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>(`${selector} button`)).find((b) => normal(b.textContent) === texto)!;
+
+      /** Un toque en el renglón sin soltar antes el foco del buscador: el lector lo deja enfocado. */
+      async function abrirDesdeLaHoja(accion: 'Descuento' | 'Quitar') {
+        expect(document.activeElement).toBe(campo());
+        el().querySelector<HTMLElement>('app-ticket-lista .renglon')!.click();
+        await refrescar();
+        accionDeLaHoja(accion).click();
+        await refrescar();
+      }
+
+      it('«Cancelar» del descuento no cambia el renglón y no enfoca el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrirDesdeLaHoja('Descuento');
+        expect(dialogoDescuento()).not.toBeNull();
+
+        botonDe('app-dialogo-descuento', 'Cancelar').click();
+        await refrescar();
+
+        expect(dialogoDescuento()).toBeNull();
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('Esc en el descuento tampoco enfoca el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrirDesdeLaHoja('Descuento');
+
+        await tecla('Escape');
+
+        expect(dialogoDescuento()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('aplicar el descuento baja el total por el mismo camino de hoy y no enfoca el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrirDesdeLaHoja('Descuento');
+
+        const entrada = dialogoDescuento()!.querySelector<HTMLInputElement>('input')!;
+        entrada.value = '10';
+        entrada.dispatchEvent(new Event('input'));
+        await refrescar();
+        botonDe('app-dialogo-descuento', 'Aceptar').click();
+        await refrescar();
+
+        expect(dialogoDescuento()).toBeNull();
+        expect(totalDelTicket()).toBe('$ 2.700,00');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('«Cancelar» y Esc en «Quitar» dejan el ticket como estaba y no enfocan el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrirDesdeLaHoja('Quitar');
+        expect(confirmacion()).not.toBeNull();
+
+        botonDe('app-dialogo-confirmacion', 'Cancelar').click();
+        await refrescar();
+        expect(confirmacion()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
+
+        // Esc, con el buscador otra vez enfocado como lo deja el lector.
+        campo().focus();
+        await abrirDesdeLaHoja('Quitar');
+        await tecla('Escape');
+        expect(confirmacion()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('confirmar «Quitar» saca el renglón y no enfoca el buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrirDesdeLaHoja('Quitar');
+
+        botonDe('app-dialogo-confirmacion', 'Quitar').click();
+        await refrescar();
+
+        expect(confirmacion()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it.each([
+        ['el escritorio', null],
+        ['la tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s F7 y F10 y Esc siguen devolviendo el foco al buscador', async (_nombre, consulta) => {
+        comoCelular(consulta);
+        await conMartillos();
+
+        await tecla('F7');
+        expect(dialogoDescuento()).not.toBeNull();
+        await tecla('Escape');
+        expect(document.activeElement).toBe(campo());
+
+        await tecla('F10');
+        expect(confirmacion()).not.toBeNull();
+        await tecla('Escape');
+        expect(confirmacion()).toBeNull();
+        expect(document.activeElement).toBe(campo());
+      });
+    });
+  });
 });
