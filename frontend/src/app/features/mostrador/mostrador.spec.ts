@@ -5652,4 +5652,297 @@ describe('Mostrador', () => {
       );
     });
   });
+
+  describe('celular: la barra de cobro y la hoja del renglón (movil-sectores T8a)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const hoja = () => el().querySelector<HTMLElement>('app-hoja-renglon [role="dialog"].hoja-inferior');
+    const hojaCantidad = () => el().querySelector<HTMLElement>('app-dialogo-cantidad [role="dialog"].hoja-inferior');
+    const accion = (texto: string) =>
+      Array.from(hoja()!.querySelectorAll<HTMLButtonElement>('.accion-hoja')).find((b) =>
+        normal(b.textContent).startsWith(texto),
+      )!;
+    /** La línea chica de la acción («Ahora: 1»), que en pantalla va debajo de su nombre. */
+    const chica = (texto: string) => normal(accion(texto).querySelector('small')?.textContent);
+    const cantidades = () => renglonesTicket().map((r) => normal(r.querySelector('.cantidad')?.textContent));
+    const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
+    const cobrar = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
+        b.textContent!.includes('Cobrar'),
+      )!;
+    const motivo = () => el().querySelector<HTMLElement>('.motivo-botonera');
+
+    function comoCelular(consulta = '639.98px') {
+      vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    /** Ticket con «Artículo 1» ($ 100) y «Artículo 2» ($ 200) por unidad. */
+    async function conTicket(vigente: CajaVigente = cajaAbierta) {
+      await crear(vigente);
+      for (const [i, q] of [[1, 'A'], [2, 'B']] as const) {
+        await escribir(q);
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(i, { precioFinal: i * 100 })));
+      }
+    }
+
+    async function tocarRenglon(i: number) {
+      renglonesTicket()[i].click();
+      await refrescar();
+    }
+
+    describe('el TOTAL y «Cobrar» fijos', () => {
+      it('el TOTAL y «Cobrar» son la barra fija de siempre: el mismo botón de la botonera y el mismo total', async () => {
+        comoCelular();
+        await conTicket();
+
+        expect(cobrar().classList.contains('cobrar-fijo')).toBe(true);
+        expect(totalGrande()).toBe('$ 300,00');
+        expect(normal(el().querySelector('app-totales-ticket .conteo')?.textContent)).toBe('2 renglones');
+      });
+
+      it('«Cobrar» abre el cobro como siempre', async () => {
+        comoCelular();
+        await conTicket();
+
+        cobrar().click();
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
+      });
+
+      it('sin caja «Cobrar» está apagado y al tocarlo explica por qué, en un aviso que la pantalla fija junto a la barra', async () => {
+        comoCelular();
+        await conTicket({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false });
+
+        expect(cobrar().getAttribute('aria-disabled')).toBe('true');
+        cobrar().click();
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-cobro')).toBeNull();
+        expect(normal(motivo()?.textContent)).toBe('Abrí la caja para vender.');
+        // El aviso lleva la acción que explica: así la pantalla lo fija junto a «Cobrar» y no arriba, donde no se vería.
+        expect(motivo()!.getAttribute('data-accion')).toBe('cobrar');
+        expect(cobrar().getAttribute('aria-describedby')).toBe(motivo()!.id);
+      });
+
+      it('con el ticket vacío «Cobrar» explica que falta un renglón', async () => {
+        comoCelular();
+        await crear();
+
+        cobrar().click();
+        await refrescar();
+
+        expect(normal(motivo()?.textContent)).toBe('Agregá un renglón para usar esta acción.');
+        expect(motivo()!.getAttribute('data-accion')).toBe('cobrar');
+      });
+    });
+
+    describe('tocar un renglón', () => {
+      it('abre la hoja del renglón con su descripción, su código, la cantidad y el descuento de hoy', async () => {
+        comoCelular();
+        await conTicket();
+
+        await tocarRenglon(0);
+
+        expect(hoja()).not.toBeNull();
+        expect(normal(hoja()!.querySelector('h2')?.textContent)).toBe('Artículo 1');
+        expect(normal(hoja()!.querySelector('.hoja-inferior-subtitulo')?.textContent)).toBe('COD-1 · 1 × $ 100,00');
+        expect(chica('Cantidad')).toBe('Ahora: 1');
+        expect(chica('Descuento')).toBe('Hoy: sin descuento');
+        // El foco entra en la hoja.
+        expect(hoja()!.contains(document.activeElement)).toBe(true);
+      });
+
+      it('deja elegido el renglón que se tocó', async () => {
+        comoCelular();
+        await conTicket();
+
+        await tocarRenglon(0);
+
+        expect(renglonesTicket()[0].classList.contains('elegido')).toBe(true);
+      });
+
+      it('con la hoja abierta la botonera explica que hay que cerrarla', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+
+        cobrar().click();
+        await refrescar();
+
+        expect(normal(motivo()?.textContent)).toBe('Cerrá el diálogo para seguir con el ticket.');
+      });
+
+      it('Esc la cierra, deja el ticket como estaba y el foco vuelve al buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+
+        hoja()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await refrescar();
+
+        expect(hoja()).toBeNull();
+        expect(cantidades()).toEqual(['1', '1']);
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('un toque en el velo la cierra', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(1);
+
+        el().querySelector<HTMLElement>('app-hoja-renglon .hoja-inferior-fondo')!.click();
+        await refrescar();
+
+        expect(hoja()).toBeNull();
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('Cantidad abre la hoja de la cantidad con el paso, y + y Aceptar cambian el renglón por el mismo camino de hoy', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+
+        accion('Cantidad').click();
+        await refrescar();
+
+        expect(hoja()).toBeNull();
+        expect(hojaCantidad()).not.toBeNull();
+        expect(normal(hojaCantidad()!.querySelector('h2')?.textContent)).toBe('Cantidad de Artículo 1');
+        const campoCantidad = hojaCantidad()!.querySelector<HTMLInputElement>('input')!;
+        expect(campoCantidad.value).toBe('1');
+
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button[aria-label="Sumar uno"]')!.click();
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button[aria-label="Sumar uno"]')!.click();
+        await refrescar();
+        expect(campoCantidad.value).toBe('3');
+        // Todavía no se aplicó: el renglón cambia al aceptar.
+        expect(cantidades()).toEqual(['1', '1']);
+
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(hojaCantidad()).toBeNull();
+        expect(cantidades()).toEqual(['3', '1']);
+        expect(totalGrande()).toBe('$ 500,00');
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('Cantidad con un valor inválido deja el mismo error de hoy y no cambia nada', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+        accion('Cantidad').click();
+        await refrescar();
+
+        const campoCantidad = hojaCantidad()!.querySelector<HTMLInputElement>('input')!;
+        campoCantidad.value = '2,5';
+        campoCantidad.dispatchEvent(new Event('input'));
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(normal(hojaCantidad()!.querySelector('[role="alert"]')?.textContent)).toBe(
+          'Este artículo se vende por unidad: usá un número entero.',
+        );
+        expect(cantidades()).toEqual(['1', '1']);
+      });
+
+      it('Descuento abre el diálogo de descuento de hoy y al aceptar el renglón lo dice y el total baja', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(1);
+
+        accion('Descuento').click();
+        await refrescar();
+
+        const dialogoDescuento = el().querySelector<HTMLElement>('app-dialogo-descuento [role="dialog"]')!;
+        expect(normal(dialogoDescuento.querySelector('h2')?.textContent)).toBe('Descuento de Artículo 2');
+        const campoDescuento = dialogoDescuento.querySelector<HTMLInputElement>('input')!;
+        campoDescuento.value = '10';
+        campoDescuento.dispatchEvent(new Event('input'));
+        await refrescar();
+        dialogoDescuento.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-descuento')).toBeNull();
+        expect(normal(renglonesTicket()[1].querySelector('.descuento')?.textContent)).toBe('10 % de descuento');
+        expect(totalGrande()).toBe('$ 280,00');
+
+        // La próxima vez la hoja ya dice el descuento de hoy.
+        await tocarRenglon(1);
+        expect(chica('Descuento')).toBe('Hoy: 10 %');
+      });
+
+      it('Quitar renglón pide la confirmación de siempre y al confirmar saca el renglón', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+
+        accion('Quitar').click();
+        await refrescar();
+
+        const confirmacion = el().querySelector<HTMLElement>('app-dialogo-confirmacion [role="alertdialog"], app-dialogo-confirmacion [role="dialog"]')!;
+        expect(normal(confirmacion.textContent)).toContain('Artículo 1');
+        Array.from(confirmacion.querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => normal(b.textContent) === 'Quitar')!
+          .click();
+        await refrescar();
+
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(normal(renglonesTicket()[0].querySelector('.descripcion')?.textContent)).toBe('Artículo 2');
+        expect(totalGrande()).toBe('$ 200,00');
+      });
+
+      it('Cancelar la confirmación de quitar deja el ticket como estaba', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+        accion('Quitar').click();
+        await refrescar();
+
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-confirmacion button'))
+          .find((b) => normal(b.textContent) === 'Cancelar')!
+          .click();
+        await refrescar();
+
+        expect(renglonesTicket()).toHaveLength(2);
+      });
+    });
+
+    describe('fuera del celular el renglón no cambia', () => {
+      it('en el escritorio un clic en un renglón sólo lo elige: no abre ninguna hoja', async () => {
+        await conTicket();
+
+        await tocarRenglon(0);
+
+        expect(hoja()).toBeNull();
+        expect(el().querySelector('[role="dialog"]')).toBeNull();
+        expect(renglonesTicket()[0].classList.contains('elegido')).toBe(true);
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('en la tablet (hasta 1023 px) tampoco', async () => {
+        comoCelular('1023.98px');
+        await conTicket();
+
+        await tocarRenglon(0);
+
+        expect(hoja()).toBeNull();
+        expect(el().querySelector('[role="dialog"]')).toBeNull();
+      });
+
+      it('F3 en el escritorio abre el diálogo de la cantidad, sin hoja ni paso', async () => {
+        await conTicket();
+
+        campo().dispatchEvent(new KeyboardEvent('keydown', { key: 'F3', bubbles: true, cancelable: true }));
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-cantidad .dialogo[role="dialog"]')).not.toBeNull();
+        expect(el().querySelector('.hoja-inferior')).toBeNull();
+        expect(el().querySelector('button[aria-label="Sumar uno"]')).toBeNull();
+      });
+    });
+  });
 });

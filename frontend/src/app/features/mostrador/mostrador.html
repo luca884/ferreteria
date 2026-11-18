@@ -10,7 +10,7 @@
 <div class="zona-busqueda">
   <!-- S4: por qué la acción que se acaba de intentar no se puede usar. Va debajo de la barra y no roba el foco. -->
   @if (motivoVisible(); as motivo) {
-    <p [id]="avisoBotoneraId" class="motivo-botonera" role="status">{{ motivo.texto }}</p>
+    <p [id]="avisoBotoneraId" class="motivo-botonera" role="status" [attr.data-accion]="motivo.accion">{{ motivo.texto }}</p>
   }
 
   <div class="fila-codigo">
@@ -175,6 +175,17 @@
 
 @if (dialogo(); as abierto) {
   @switch (abierto.tipo) {
+    @case ('renglon') {
+      @if (renglonDe(abierto.indice); as r) {
+        <app-hoja-renglon
+          [renglon]="r"
+          (cantidad)="accionDeRenglon('cantidad', abierto.indice)"
+          (descuento)="accionDeRenglon('descuento', abierto.indice)"
+          (quitar)="accionDeRenglon('quitar', abierto.indice)"
+          (cerrar)="cerrarDialogo()"
+        />
+      }
+    }
     @case ('cantidad') {
       @if (renglonDe(abierto.indice); as r) {
         <app-dialogo-cantidad

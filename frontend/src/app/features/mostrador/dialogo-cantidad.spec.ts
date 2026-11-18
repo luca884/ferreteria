@@ -271,4 +271,132 @@ describe('DialogoCantidad', () => {
       expect(descartados).toBe(0);
     });
   });
+
+  describe('en el celular (movil-sectores T8a)', () => {
+    const hoja = () => el().querySelector('[role="dialog"].hoja-inferior');
+    const boton = (etiqueta: string) =>
+      el().querySelector<HTMLButtonElement>(`button[aria-label="${etiqueta}"]`);
+    const aceptar = () => el().querySelector<HTMLButtonElement>('button.aceptar')!;
+
+    beforeEach(() => {
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('es una hoja inferior con el título, la ayuda y el campo de siempre', async () => {
+      await abrir('UNIDAD', 3000);
+
+      expect(hoja()).not.toBeNull();
+      expect(el().querySelector('h2')!.textContent!.trim()).toBe('Cantidad de Martillo');
+      expect(ayuda()).toBe('Unidades — solo números enteros');
+      expect(campo().value).toBe('3');
+    });
+
+    it('tiene un paso de − y + a los costados del campo', async () => {
+      await abrir('UNIDAD', 3000);
+
+      expect(boton('Restar uno')).not.toBeNull();
+      expect(boton('Sumar uno')).not.toBeNull();
+    });
+
+    it('+ y − cambian el campo de a uno, con coma si la cantidad tiene decimales', async () => {
+      await abrir('METRO', 2500);
+
+      boton('Sumar uno')!.click();
+      fixture.detectChanges();
+      expect(campo().value).toBe('3,5');
+
+      boton('Restar uno')!.click();
+      boton('Restar uno')!.click();
+      fixture.detectChanges();
+      expect(campo().value).toBe('1,5');
+      expect(confirmadas).toEqual([]);
+    });
+
+    it('el paso parte de lo que se escribió, no de lo que había', async () => {
+      await abrir('UNIDAD', 3000);
+      escribir('10');
+
+      boton('Sumar uno')!.click();
+      fixture.detectChanges();
+
+      expect(campo().value).toBe('11');
+    });
+
+    it('− no baja de 1 en un artículo por unidad: la cantidad no puede quedar en 0', async () => {
+      await abrir('UNIDAD', 1000);
+
+      boton('Restar uno')!.click();
+      fixture.detectChanges();
+
+      expect(campo().value).toBe('1');
+      expect(error()).toBeNull();
+    });
+
+    it('con un texto que no es un número el paso parte de la cantidad del renglón', async () => {
+      await abrir('UNIDAD', 4000);
+      escribir('abc');
+
+      boton('Sumar uno')!.click();
+      fixture.detectChanges();
+
+      expect(campo().value).toBe('5');
+    });
+
+    it('Aceptar confirma lo del paso con la misma validación de siempre', async () => {
+      await abrir('UNIDAD', 3000);
+      boton('Sumar uno')!.click();
+      fixture.detectChanges();
+
+      aceptar().click();
+
+      expect(confirmadas).toEqual([4000]);
+    });
+
+    it('Aceptar con un decimal en un artículo por unidad sigue dando el error de hoy', async () => {
+      await abrir('UNIDAD', 3000);
+      escribir('2,5');
+
+      aceptar().click();
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Este artículo se vende por unidad: usá un número entero.');
+    });
+
+    it('Cancelar y Esc cancelan', async () => {
+      await abrir('UNIDAD', 3000);
+
+      el().querySelector<HTMLButtonElement>('button.cancelar')!.click();
+      tecla('Escape');
+
+      expect(canceladas).toBe(2);
+    });
+
+    it('Enter en el campo confirma', async () => {
+      await abrir('UNIDAD', 3000);
+      boton('Sumar uno')!.click();
+      fixture.detectChanges();
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([4000]);
+    });
+  });
+
+  describe('fuera del celular (movil-sectores T8a)', () => {
+    it('sigue siendo el diálogo de siempre, sin hoja ni paso', async () => {
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('1023.98px'), media: consulta }));
+      try {
+        await abrir('UNIDAD', 3000);
+
+        expect(el().querySelector('.hoja-inferior')).toBeNull();
+        expect(el().querySelector('.dialogo[role="dialog"]')).not.toBeNull();
+        expect(el().querySelector('button[aria-label="Sumar uno"]')).toBeNull();
+        expect(document.activeElement).toBe(campo());
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
 });

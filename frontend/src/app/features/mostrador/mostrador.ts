@@ -17,6 +17,7 @@ import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
+import { HojaRenglon } from './hoja-renglon';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla, atajosDeBotonera } from './mostrador.atajos';
@@ -26,6 +27,7 @@ import { AVISO_ESCANEO_CON_DIALOGO, GuardaLector } from './guarda-lector';
 import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { esCelular } from '../../shared/es-celular';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { DocumentoNoFiscal } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
@@ -106,6 +108,8 @@ type Dialogo =
   | { tipo: 'quitar'; indice: number }
   | { tipo: 'vaciar' }
   | { tipo: 'descuento'; indice: number }
+  /** movil-sectores T8a: la hoja del renglón del celular, que elige entre cantidad, descuento y quitar. */
+  | { tipo: 'renglon'; indice: number }
   | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' }
   | { tipo: 'presupuesto' }
@@ -170,6 +174,7 @@ interface Escaneo {
     DialogoRemito,
     ListaResultados,
     FichaArticulo,
+    HojaRenglon,
     TicketLista,
     PrimerosPasos,
     TotalesTicket,
@@ -569,11 +574,25 @@ export class Mostrador {
     this.enfocarSinDialogo();
   }
 
-  /** Clic en un renglón del ticket: queda elegido y el foco vuelve al buscador, así el lector sigue andando. */
+  /**
+   * Clic en un renglón del ticket: queda elegido y el foco vuelve al buscador, así el lector sigue andando. En el celular
+   * (movil-sectores T8a) abre además la hoja del renglón, con sus tres acciones.
+   */
   protected elegirRenglon(indice: number): void {
     if (this.dialogo()) return;
     this.ticket.elegir(indice);
+    if (esCelular() && this.renglonDe(indice)) {
+      this.avisar(null);
+      this.dialogo.set({ tipo: 'renglon', indice });
+      return;
+    }
     this.enfocarSinDialogo();
+  }
+
+  /** Una acción de la hoja del renglón: abre el mismo diálogo que la tecla (F3, F7 o F10) sobre ese renglón. */
+  protected accionDeRenglon(accion: 'cantidad' | 'descuento' | 'quitar', indice: number): void {
+    this.avisar(null);
+    this.dialogo.set({ tipo: accion, indice });
   }
 
   /** Con un diálogo abierto el buscador no le roba el foco (R-039). */
@@ -669,8 +688,7 @@ export class Mostrador {
         // Sin renglón elegido, el último agregado.
         const indice = this.ticket.ticket().elegido ?? renglones.length - 1;
         if (!renglones[indice]) return;
-        this.avisar(null);
-        this.dialogo.set({ tipo: accion, indice });
+        this.accionDeRenglon(accion, indice);
         return;
       }
     }

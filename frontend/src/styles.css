@@ -2632,3 +2632,145 @@ ul.error {
     color: var(--tono);
   }
 }
+
+/* ---------- Mostrador en el celular (movil-sectores T8) ---------- */
+/*
+ * 8a: el TOTAL y «Cobrar» fijos arriba de la barra de destinos, el renglón del ticket en dos líneas y la hoja del
+ * renglón. Todo dentro de `max-width: 639.98px`: de 640 px para arriba el mostrador no cambia (S5). Va acá y no en
+ * `mostrador.css` porque ese archivo está cerca del tope duro de 8 kB. Los selectores llevan el componente adelante o
+ * repiten la clase para ganarle a los estilos de cada componente, que se cargan después de este archivo.
+ */
+@media screen and (max-width: 639.98px) {
+  /*
+   * La barra de cobro (el TOTAL del panel y «Cobrar» de la botonera) sigue fija abajo, pero sobre la barra de destinos:
+   * antes quedaba debajo y no se veía. --alto-destinos lo pone el shell; el filete de la barra suma 1 px.
+   */
+  app-mostrador .panel-derecho app-totales-ticket {
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+  }
+  /* «Cobrar» es el botón de siempre de la botonera: acá sólo cambia dónde y cómo se ve (blanco sobre la barra oscura). */
+  app-mostrador app-botonera button.accion-barra.accion-barra.cobrar-fijo.cobrar-fijo {
+    right: var(--e-2);
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px) + var(--e-2));
+    width: calc(var(--ancho-cobrar, 132px) - var(--e-3));
+    height: 52px;
+    border: 0;
+    border-radius: var(--radio-lg);
+    background: #fff;
+    color: var(--acento-profundo);
+  }
+  app-mostrador app-botonera button.accion-barra.accion-barra.cobrar-fijo[aria-disabled='true'] {
+    background: rgb(255 255 255 / 0.25);
+    color: var(--profundo-texto-tenue);
+  }
+  /* Los dos del TOTAL dejan lugar al botón más angosto y más separado del borde. */
+  app-mostrador .panel-derecho app-totales-ticket .totales {
+    padding-right: calc(var(--ancho-cobrar, 132px) + var(--e-2));
+  }
+  /*
+   * El motivo por el que «Cobrar» no se puede usar se ve pegado a la barra y no arriba, donde el celular ya no lo
+   * mostraría si el ticket está scrolleado.
+   */
+  app-mostrador .motivo-botonera[data-accion='cobrar'] {
+    position: fixed;
+    right: var(--e-3);
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px) + var(--alto-barra-total, 64px) + var(--e-2));
+    left: var(--e-3);
+    z-index: calc(var(--z-barra) - 1);
+    box-shadow: var(--sombra-2);
+  }
+
+  /*
+   * Cada renglón del ticket en dos líneas, como el artboard: la descripción arriba, «cantidad × precio» abajo y el total
+   * a la derecha. El código se ve en la hoja del renglón. El fondo pasa del <td> al renglón para que no queden franjas
+   * entre las columnas; `.renglon` va tres veces porque Angular marca cada parte del selector del componente.
+   */
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'detalle detalle total'
+      'cantidad precio total';
+    column-gap: var(--e-1);
+    align-items: center;
+    min-height: 68px;
+    margin: 0;
+    padding: 10px var(--e-4);
+    border: 0;
+    border-bottom: 1px solid var(--borde-suave);
+    border-radius: 0;
+    background: var(--superficie);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon.con-faltante {
+    background: var(--advertencia-fondo);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon.con-problema {
+    background: var(--error-fondo);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon.elegido {
+    background: var(--acento-suave);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon.con-problema {
+    background: var(--error-fondo);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td {
+    padding: 0;
+    background: transparent;
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td::before {
+    content: none;
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.codigo {
+    display: none;
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.detalle {
+    grid-area: detalle;
+  }
+  /* Dos líneas de descripción como mucho: el nombre entero se lee en la hoja del renglón. */
+  app-ticket-lista .renglon .descripcion {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.cantidad {
+    grid-area: cantidad;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-sm);
+    font-weight: 400;
+    color: var(--texto-tenue);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.cantidad::after {
+    content: ' ×';
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.precio {
+    grid-area: precio;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+  }
+  app-ticket-lista .grilla-ticket > tbody > tr.renglon.renglon.renglon > td.total-renglon {
+    grid-area: total;
+    justify-self: end;
+    padding-left: var(--e-3);
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* La hoja del renglón: el ícono de cada acción a la izquierda, como en el artboard. */
+  .accion-hoja svg {
+    flex: none;
+    color: var(--texto-suave);
+  }
+  .accion-hoja.peligro svg {
+    color: var(--error);
+  }
+  /* «Quitar renglón» en rojo pero con el mismo filete gris que las otras acciones. */
+  app-hoja-renglon .accion-hoja.peligro {
+    border-color: transparent;
+    border-top-color: var(--borde-suave);
+  }
+}
