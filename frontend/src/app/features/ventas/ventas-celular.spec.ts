@@ -894,4 +894,309 @@ describe('Consulta y detalle de ventas en el celular (T11b)', () => {
       }
     });
   });
+  // ------------------------------------------------------------------------------ anulaciones (T11c, riesgo alto)
+
+  /**
+   * «Anular» revierte una venta (stock, caja y una nota de crédito fiscal): el diálogo, sus textos, su validación y el
+   * pedido son los de hoy en escritorio y en celular. En el celular el diálogo sale del ⋯ del detalle y sólo cambia su
+   * acomodo (CSS): su marcado es el mismo.
+   */
+  describe.each(MODOS)('anular una venta (%s)', (modo) => {
+    beforeEach(() => (modoPorDefecto = modo));
+    afterEach(() => (modoPorDefecto = 'celular'));
+
+    const TEXTO_NOTA =
+      '¿Anular la venta N.º 5? Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.';
+    const TEXTO_INTERNA =
+      '¿Anular la venta N.º 5? La venta no tiene factura: queda anulada con el motivo y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.';
+    const CUENTA_CORRIENTE = ' La parte a cuenta corriente se descuenta de la deuda del cliente.';
+    const nota = () =>
+      ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO', ventaAnulada: { id: 50, numero: 5 }, fiscal: autorizada() });
+
+    /** Abre la venta 5 y su «Anular»: en el celular por el ⋯, en escritorio por el pie del pop-up. */
+    async function abrirAnularDe(venta: VentaConsultada) {
+      await crear({ venta });
+      await abrirVenta(0);
+      if (modo === 'celular') {
+        await tocar(q('button.mas-venta'));
+        await tocar(boton('Anular', hoja()!));
+      } else {
+        await tocar(boton('Anular', detalle()!));
+      }
+    }
+    const conFactura = () => ventaDePrueba({ ventaId: 50, numero: 5, fiscal: autorizada(), anulacion: null });
+    const sinFactura = () => ventaDePrueba({ ventaId: 50, numero: 5, anulacion: null });
+    const textoDelDialogo = () => normal(`${q('h2', dialogoAnular()!)?.textContent} ${q('#dialogo-anular-mensaje')?.textContent}`);
+    const escribirMotivo = (texto: string) => {
+      const campo = q<HTMLInputElement>('#motivo-anulacion', dialogoAnular()!)!;
+      campo.value = texto;
+      campo.dispatchEvent(new Event('input'));
+    };
+    const anularDelDialogo = () => boton('Anular', dialogoAnular()!)!;
+    const errorDelMotivo = () => normal(q('#error-motivo-anulacion', dialogoAnular()!)?.textContent);
+
+    it('con la factura autorizada confirma con el texto de hoy, sin motivo, con el foco en «Cancelar», y manda `anular(50, null)` una sola vez', async () => {
+      await abrirAnularDe(conFactura());
+
+      expect(textoDelDialogo()).toBe(TEXTO_NOTA);
+      expect(q('#motivo-anulacion', dialogoAnular()!)).toBeNull();
+      expect(qa('.dialogo-acciones button', dialogoAnular()!).map((b) => normal(b.textContent))).toEqual(['Cancelar', 'Anular']);
+      expect(normal(document.activeElement?.textContent)).toBe('Cancelar');
+      expect(api.anular).not.toHaveBeenCalled();
+
+      api.anular.mockReturnValue(of(nota()));
+      api.obtener.mockReturnValue(of(nota()));
+      api.listar.mockReturnValue(of(pagina([resumenDePrueba(14, { tipo: 'NOTA_CREDITO' }), resumenDePrueba(5)])));
+      await tocar(anularDelDialogo());
+
+      expect(api.anular).toHaveBeenCalledTimes(1);
+      expect(api.anular).toHaveBeenCalledWith(50, null);
+      expect(dialogoAnular()).toBeNull();
+      expect(normal(q('.resultado-accion', detalle()!)?.textContent)).toBe('Se anuló la venta N.º 5 con la nota de crédito N.º 14.');
+    });
+
+    it('si cargó algo a cuenta corriente el texto suma que se descuenta de la deuda del cliente', async () => {
+      const pagos = [{ formaPagoId: 4, formaPago: 'Cuenta corriente', medio: 'CUENTA_CORRIENTE', recargoPorcentaje: 0, recargo: 0, monto: 2970 }];
+      await abrirAnularDe({ ...conFactura(), pagos } as VentaConsultada);
+
+      expect(textoDelDialogo()).toBe(TEXTO_NOTA + CUENTA_CORRIENTE);
+    });
+
+    it('sin la factura autorizada pide el motivo (foco en el campo, como hoy), marca los errores con los textos de hoy y no manda nada hasta que vale', async () => {
+      await abrirAnularDe(sinFactura());
+
+      expect(textoDelDialogo()).toBe(TEXTO_INTERNA);
+      expect(normal(q('label.campo-motivo', dialogoAnular()!)?.textContent)).toBe('Motivo');
+      expect(document.activeElement?.id).toBe('motivo-anulacion');
+      expect(errorDelMotivo()).toBe('');
+
+      await tocar(anularDelDialogo());
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(errorDelMotivo()).toBe('Contá por qué se anula la venta.');
+      expect(q('#motivo-anulacion', dialogoAnular()!)!.getAttribute('aria-invalid')).toBe('true');
+
+      escribirMotivo('     ');
+      await tocar(anularDelDialogo());
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(errorDelMotivo()).toBe('Contá por qué se anula la venta.');
+
+      escribirMotivo('x'.repeat(201));
+      await refrescar();
+      expect(errorDelMotivo()).toBe('El motivo tiene hasta 200 caracteres.');
+      expect(normal(q('.contador', dialogoAnular()!)?.textContent)).toBe('201/200');
+      await tocar(anularDelDialogo());
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(dialogoAnular()).not.toBeNull();
+    });
+
+    it('con un motivo válido manda `anular(50, motivo)` recortado, y con 200 caracteres justos también', async () => {
+      await abrirAnularDe(sinFactura());
+      api.anular.mockReturnValue(of(ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO' })));
+
+      escribirMotivo('  El cliente devolvió todo  ');
+      await tocar(anularDelDialogo());
+
+      expect(api.anular).toHaveBeenCalledTimes(1);
+      expect(api.anular).toHaveBeenCalledWith(50, 'El cliente devolvió todo');
+
+      TestBed.resetTestingModule();
+      await abrirAnularDe(sinFactura());
+      escribirMotivo('y'.repeat(200));
+      await tocar(anularDelDialogo());
+      expect(api.anular).toHaveBeenCalledWith(50, 'y'.repeat(200));
+    });
+
+    it('un rechazo deja el diálogo abierto con el motivo escrito y el error, el detalle intacto sin releer nada, y se puede reintentar con lo mismo', async () => {
+      await abrirAnularDe(sinFactura());
+      const titulo = normal(q('h2', detalle()!)?.textContent);
+      escribirMotivo('El cliente devolvió todo');
+      api.listar.mockClear();
+      api.obtener.mockClear();
+      api.anular.mockReturnValueOnce(error(409, { message: 'Esperá el CAE de la factura para anularla.', motivo: 'ESPERAR_CAE' }));
+
+      await tocar(anularDelDialogo());
+
+      expect(api.anular).toHaveBeenCalledWith(50, 'El cliente devolvió todo');
+      expect(normal(q('[role="alert"]', dialogoAnular()!)?.textContent)).toBe('Esperá el CAE de la factura para anularla.');
+      expect(q<HTMLInputElement>('#motivo-anulacion', dialogoAnular()!)!.value).toBe('El cliente devolvió todo');
+      expect(anularDelDialogo().disabled).toBe(false);
+      expect(boton('Cancelar', dialogoAnular()!)!.disabled).toBe(false);
+      expect(normal(q('h2', detalle()!)?.textContent)).toBe(titulo);
+      expect(q('.resultado-accion')).toBeNull();
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(api.obtener).not.toHaveBeenCalled();
+
+      const interna = ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO', ventaAnulada: { id: 50, numero: 5 } });
+      api.anular.mockReturnValue(of(interna));
+      api.obtener.mockReturnValue(of(interna));
+      api.listar.mockReturnValue(of(pagina([resumenDePrueba(14, { tipo: 'NOTA_CREDITO' }), resumenDePrueba(5)])));
+      await tocar(anularDelDialogo());
+
+      expect(api.anular).toHaveBeenCalledTimes(2);
+      expect(api.anular).toHaveBeenLastCalledWith(50, 'El cliente devolvió todo');
+      expect(dialogoAnular()).toBeNull();
+      expect(normal(q('.resultado-accion', detalle()!)?.textContent)).toBe('Se anuló la venta N.º 5 con la anulación N.º 14.');
+    });
+
+    it('un error sin mensaje dice «No se pudo hacer. Probá de nuevo.» dentro del diálogo y un 400 de campos junta sus textos', async () => {
+      await abrirAnularDe(conFactura());
+      api.anular.mockReturnValueOnce(error(500, {}));
+      await tocar(anularDelDialogo());
+      expect(normal(q('[role="alert"]', dialogoAnular()!)?.textContent)).toBe('No se pudo hacer. Probá de nuevo.');
+
+      api.anular.mockReturnValueOnce(error(400, { message: 'Datos inválidos', errors: { motivo: 'El motivo es obligatorio.' } }));
+      await tocar(anularDelDialogo());
+      expect(normal(q('[role="alert"]', dialogoAnular()!)?.textContent)).toBe('El motivo es obligatorio.');
+      expect(api.anular).toHaveBeenCalledTimes(2);
+      expect(detalle()).not.toBeNull();
+    });
+
+    it('mientras se anula los dos botones están apagados, nada más se manda y Esc no cierra; si falla vuelve a andar', async () => {
+      await abrirAnularDe(conFactura());
+      const pedido = new Subject<VentaConsultada>();
+      api.anular.mockReturnValue(pedido);
+
+      await tocar(anularDelDialogo());
+      expect(anularDelDialogo().disabled).toBe(true);
+      expect(boton('Cancelar', dialogoAnular()!)!.disabled).toBe(true);
+      anularDelDialogo().click();
+      boton('Cancelar', dialogoAnular()!)!.click();
+      tecla('Escape');
+      await refrescar();
+      expect(api.anular).toHaveBeenCalledTimes(1);
+      expect(dialogoAnular()).not.toBeNull();
+
+      pedido.error(new HttpErrorResponse({ status: 422, error: { status: 422, message: 'La venta ya no se puede anular.' } }));
+      await refrescar();
+      expect(normal(q('[role="alert"]', dialogoAnular()!)?.textContent)).toBe('La venta ya no se puede anular.');
+      expect(anularDelDialogo().disabled).toBe(false);
+    });
+
+    it('Cancelar, con o sin motivo escrito, no manda nada ni relee y deja el detalle abierto y sin un campo con el foco', async () => {
+      await abrirAnularDe(sinFactura());
+      escribirMotivo('algo a medias');
+      api.listar.mockClear();
+      api.obtener.mockClear();
+
+      await tocar(boton('Cancelar', dialogoAnular()!));
+
+      expect(dialogoAnular()).toBeNull();
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(api.obtener).not.toHaveBeenCalled();
+      expect(detalle()).not.toBeNull();
+      expect(['INPUT', 'TEXTAREA', 'SELECT']).not.toContain(document.activeElement?.tagName);
+
+      // Al volver a abrirlo, el motivo arranca vacío.
+      if (modo === 'celular') {
+        await tocar(q('button.mas-venta'));
+        await tocar(boton('Anular', hoja()!));
+      } else {
+        await tocar(boton('Anular', detalle()!));
+      }
+      expect(q<HTMLInputElement>('#motivo-anulacion', dialogoAnular()!)!.value).toBe('');
+    });
+
+    it('Esc cierra sólo el diálogo, sin mandar nada: el detalle sigue abierto', async () => {
+      await abrirAnularDe(conFactura());
+
+      tecla('Escape');
+      await refrescar();
+
+      expect(dialogoAnular()).toBeNull();
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(detalle()).not.toBeNull();
+      expect(['INPUT', 'TEXTAREA', 'SELECT']).not.toContain(document.activeElement?.tagName);
+    });
+
+    it('Enter en el campo del motivo confirma sólo con un motivo válido', async () => {
+      await abrirAnularDe(sinFactura());
+
+      tecla('Enter', q('#motivo-anulacion', dialogoAnular()!)!);
+      await refrescar();
+      expect(api.anular).not.toHaveBeenCalled();
+      expect(errorDelMotivo()).toBe('Contá por qué se anula la venta.');
+
+      escribirMotivo('Error de carga');
+      tecla('Enter', q('#motivo-anulacion', dialogoAnular()!)!);
+      await refrescar();
+      expect(api.anular).toHaveBeenCalledTimes(1);
+      expect(api.anular).toHaveBeenCalledWith(50, 'Error de carga');
+    });
+
+    it('una nota de crédito y una venta ya anulada no ofrecen «Anular»', async () => {
+      const anulada = ventaDePrueba({
+        ventaId: 50,
+        numero: 5,
+        fiscal: autorizada(),
+        anulacion: { notaId: 140, numero: 14, interna: false, motivo: null, usuario: 'Dueño', fecha: '2026-10-29T14:05:00' },
+      });
+      for (const venta of [nota(), anulada]) {
+        TestBed.resetTestingModule();
+        await crear({ venta });
+        await abrirVenta(0);
+        expect(boton('Anular', detalle()!)).toBeUndefined();
+        expect(q('button.mas-venta')).toBeNull();
+        expect(dialogoAnular()).toBeNull();
+      }
+    });
+
+    it('el Vendedor no llega a Ventas: no hay lista, ni detalle, ni «Anular», y no se pide nada', async () => {
+      await crear({ rol: 'VENDEDOR' });
+
+      expect(normal(q('.estado-vacio')?.textContent)).toBe('La consulta de ventas es solo del dueño.');
+      expect(tarjetas()).toHaveLength(0);
+      expect(boton('Anular')).toBeUndefined();
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(api.anular).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('el diálogo de «Anular» en el celular', () => {
+    /** El diálogo sin los números de los ids de cada apertura. */
+    const volcadoDelDialogo = () => q('app-dialogo-anular')!.outerHTML.replace(/<!--[\s\S]*?-->/g, '').replace(/_ngcontent-[^"\s]+|ng-reflect-[^=]+="[^"]*"/g, '');
+
+    async function abrir(modo: Modo, venta: VentaConsultada) {
+      TestBed.resetTestingModule();
+      vi.unstubAllGlobals();
+      await crear({ modo, venta });
+      await abrirVenta(0);
+      if (modo === 'celular') {
+        await tocar(q('button.mas-venta'));
+        await tocar(boton('Anular', hoja()!));
+      } else {
+        await tocar(boton('Anular', detalle()!));
+      }
+    }
+
+    it('es el mismo marcado que en escritorio y en tablet: sólo cambia el CSS, con el motivo y sin él', async () => {
+      for (const venta of [
+        ventaDePrueba({ ventaId: 50, numero: 5, fiscal: autorizada(), anulacion: null }),
+        ventaDePrueba({ ventaId: 50, numero: 5, anulacion: null }),
+      ]) {
+        const volcados: string[] = [];
+        for (const modo of ['escritorio', 'tablet', 'celular'] as const) {
+          await abrir(modo, venta);
+          volcados.push(volcadoDelDialogo());
+        }
+        expect(volcados[1]).toBe(volcados[0]);
+        expect(volcados[2]).toBe(volcados[0]);
+      }
+    });
+
+    it('sale del ⋯ del detalle (no del pie), la hoja se cierra, la pantalla del detalle queda abajo y el ⋯ sigue andando al cancelar', async () => {
+      await abrir('celular', ventaDePrueba({ ventaId: 50, numero: 5, fiscal: autorizada(), anulacion: null }));
+
+      expect(q('app-hoja-inferior')).toBeNull();
+      expect(pantalla()).not.toBeNull();
+      expect(dialogoAnular()!.getAttribute('aria-modal')).toBe('true');
+
+      await tocar(boton('Cancelar', dialogoAnular()!));
+      expect(dialogoAnular()).toBeNull();
+      expect(pantalla()).not.toBeNull();
+      await tocar(q('button.mas-venta'));
+      expect(boton('Anular', hoja()!)).toBeDefined();
+      expect(api.anular).not.toHaveBeenCalled();
+    });
+  });
 });

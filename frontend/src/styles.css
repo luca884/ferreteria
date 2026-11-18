@@ -4163,3 +4163,291 @@ app-ventas .mas-venta {
     color: var(--texto-deshabilitado);
   }
 }
+
+/* ---------- Ventas: reportes y anulaciones en el celular (movil-sectores T11c, S2, S5, S7) ---------- */
+
+/*
+ * Los reportes y el diálogo de «Anular» en el celular (artboards 12 y 13 de movil-ventas). Sólo cómo se ve (S1): la
+ * página y el diálogo son los mismos, con los mismos manejadores y pedidos. Lo único que `app-reportes` dibuja distinto
+ * en el celular es el selector de «Reporte» (un botón que abre la hoja inferior, en vez del `<select>`); todo lo demás
+ * es CSS sobre el marcado de siempre: el formulario en una tarjeta, el resumen en renglones de dos extremos y las tablas
+ * en tarjetas (el nombre y la cantidad a la izquierda, el total y la ganancia a la derecha). El diálogo de «Anular» sólo
+ * apila sus botones, el rojo arriba. Los selectores repiten clases (`.panel`, `[class]`) para ganarle al CSS de
+ * `reportes.css` y de `dialogo-anular.css`, que se inyectan después de éste.
+ */
+@media screen and (max-width: 639.98px) {
+  /* El formulario: «Reporte» a todo el ancho, Desde y Hasta lado a lado, «Agrupar por» o «Tipo» a todo el ancho y «Ver» de 52 px. */
+  app-reportes .filtros .fila-campos {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: end;
+    gap: var(--e-3);
+  }
+  app-reportes .filtros .fila-campos > :is(.campo:first-child, .campo:nth-child(4), button[type='submit']) {
+    grid-column: 1 / -1;
+  }
+  app-reportes .filtros .fila-campos > button[type='submit'] {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  /* Las fechas lado a lado a 360 px: un poco menos de relleno para que «01/01/2026» no toque el calendario. */
+  app-reportes .filtros input[type='date'] {
+    padding-inline: var(--e-2);
+  }
+  /* El selector del celular: se ve como el select de siempre (44 px, la flecha a la derecha) y abre la hoja. */
+  app-reportes .selector-reporte {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-2);
+    width: 100%;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio);
+    background: var(--superficie);
+    color: var(--texto);
+    font-size: 16px;
+    font-weight: 400;
+    text-align: left;
+  }
+  app-reportes .selector-reporte > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* La hoja con los tipos: filas de 52 px con el actual marcado y la tilde a la derecha. */
+  app-reportes .opciones-reporte {
+    margin-inline: calc(var(--e-4) * -1);
+  }
+  app-reportes .opcion-reporte {
+    justify-content: space-between;
+    padding: 0 var(--e-4);
+  }
+  app-reportes .opcion-reporte[aria-checked='true'] {
+    background: var(--tono-suave);
+    color: var(--tono);
+    font-weight: 600;
+  }
+
+  /* El resumen: una tarjeta con un renglón por concepto, el nombre a la izquierda y el importe a la derecha. */
+  app-reportes dl.resumen.panel[class] {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: var(--e-1) var(--e-4);
+  }
+  app-reportes dl.resumen.panel[class] > div {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--e-3);
+    min-height: var(--alto-tactil);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-reportes dl.resumen.panel[class] > div:last-child {
+    border-bottom: 0;
+  }
+  app-reportes dl.resumen.panel[class] dt {
+    color: var(--texto);
+    font-size: var(--texto-md);
+  }
+  app-reportes dl.resumen.panel[class] dd {
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-md);
+    text-align: right;
+  }
+  app-reportes dl.resumen.panel[class] > .total {
+    font-weight: 700;
+  }
+  app-reportes dl.resumen.panel[class] > .total dd {
+    font-size: var(--texto-lg);
+  }
+
+  /*
+   * Las tablas, una tarjeta por fila (las dos columnas de la grilla: lo que identifica la fila a la izquierda, lo que
+   * suma a la derecha). Se distinguen por la cantidad de celdas: 3 (medio de pago), 4 (usuario, período, artículo,
+   * rubro y la fila «Total»), 5 (ingresos, gastos y retiros) y 7 (con descuento).
+   */
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(3):last-child),
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(4):last-child),
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(5):last-child),
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(7):last-child) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--e-3);
+    align-items: center;
+    padding: var(--e-3);
+  }
+  app-reportes table.tabla-tarjetas > tfoot > tr {
+    background: var(--superficie-3);
+  }
+  /* Cada celda es un renglón de la tarjeta: sin su etiqueta («Total: »), salvo donde la etiqueta ayuda a leerla. */
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr > :is(td, th) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr > td[data-etiqueta]::before {
+    content: none;
+  }
+  /* Lo que se cuenta y la ganancia: la etiqueta en minúscula, pegada al dato («cantidad 180», «ganancia 78.100,00»). */
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(4):last-child) > td:is(:nth-child(2), :nth-child(4))::before,
+  app-reportes table.tabla-tarjetas > :is(tbody, tfoot) > tr:has(> :nth-child(3):last-child) > td:nth-child(2)::before {
+    content: attr(data-etiqueta) ' ';
+    color: inherit;
+    font-size: inherit;
+    font-weight: 400;
+    text-transform: lowercase;
+  }
+
+  /* 4 celdas: nombre / «cantidad N» a la izquierda; total / «ganancia N» a la derecha. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(4):last-child) > :nth-child(1) {
+    grid-area: 1 / 1;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(4):last-child) > :nth-child(2) {
+    grid-area: 2 / 1;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(4):last-child) > :nth-child(3) {
+    grid-area: 1 / 2;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(4):last-child) > :nth-child(4) {
+    grid-area: 2 / 2;
+  }
+  /* 3 celdas (medio de pago): forma de pago / «pagos N» y el monto a la derecha. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(3):last-child) > :nth-child(1) {
+    grid-area: 1 / 1;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(3):last-child) > :nth-child(2) {
+    grid-area: 2 / 1;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(3):last-child) > :nth-child(3) {
+    grid-area: 1 / 2 / 3 / 3;
+    font-weight: 600;
+  }
+  /* 5 celdas (movimientos de caja): motivo y el importe, y debajo el tipo, la fecha y el usuario. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(3) {
+    grid-area: 1 / 1;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(5) {
+    grid-area: 1 / 2;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(2) {
+    grid-area: 2 / 1;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(1) {
+    grid-area: 2 / 2;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(4) {
+    grid-area: 3 / 1 / 4 / 3;
+  }
+  /* 7 celdas (con descuento): cliente y total, N.º y descuento, fecha y descuento general, y el usuario. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(4) {
+    grid-area: 1 / 1;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(7) {
+    grid-area: 1 / 2;
+    font-weight: 600;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(1) {
+    grid-area: 2 / 1;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(6) {
+    grid-area: 2 / 2;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(2) {
+    grid-area: 3 / 1;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(5) {
+    grid-area: 3 / 2;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :nth-child(3) {
+    grid-area: 4 / 1 / 5 / 3;
+  }
+  /* El N.º, el descuento y el usuario sí llevan su etiqueta, en letra chica; lo demás es dato solo. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :is(td:nth-child(1), td:nth-child(3), td:nth-child(5), td:nth-child(6))::before,
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > td:nth-child(4)::before {
+    content: attr(data-etiqueta) ': ';
+  }
+  /* Lo de segunda línea: letra chica y suave, los importes a la derecha. */
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(3):last-child) > :nth-child(2),
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(4):last-child) > :is(:nth-child(2), :nth-child(4)),
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :is(:nth-child(1), :nth-child(2), :nth-child(4)),
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :not(:nth-child(4), :nth-child(7)) {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-reportes table.tabla-tarjetas tr > td.num,
+  app-reportes table.tabla-tarjetas tr > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(7)).num {
+    text-align: right;
+    white-space: nowrap;
+  }
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(5):last-child) > :nth-child(1),
+  app-reportes table.tabla-tarjetas tr:has(> :nth-child(7):last-child) > :is(:nth-child(5), :nth-child(6)) {
+    text-align: right;
+  }
+  /* El pie «Total»: sin la letra chica del renglón de abajo (la ganancia), que sigue siendo secundaria. */
+  app-reportes table.tabla-tarjetas > tfoot > tr > th {
+    font-weight: 700;
+  }
+
+  /* Ingresos, gastos y retiros: el encabezado en columna y los tres totales como renglones de dos extremos. */
+  app-reportes .caja-imprimible .encabezado[class] {
+    flex-direction: column;
+    gap: var(--e-1);
+  }
+  app-reportes .caja-imprimible dl.totales-caja[class] {
+    flex-direction: column;
+    gap: 0;
+    padding: var(--e-1) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-reportes .caja-imprimible dl.totales-caja[class] > div {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    min-height: var(--alto-tactil);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-reportes .caja-imprimible dl.totales-caja[class] > div:last-child {
+    border-bottom: 0;
+  }
+
+  /*
+   * «Anular» (artboard 13): el diálogo de siempre, con los botones apilados a todo el ancho y de 52 px y el rojo arriba
+   * («Anular»), «Cancelar» abajo. Sólo se invierte el orden visual: en el DOM, el foco inicial y Tab siguen igual
+   * (Cancelar primero), así que lo seguro sigue siendo lo que recibe el foco.
+   */
+  app-dialogo-anular .dialogo.anular {
+    max-height: calc(100dvh - var(--e-8));
+    padding: var(--e-4);
+  }
+  app-dialogo-anular .dialogo.anular .dialogo-acciones {
+    flex-direction: column-reverse;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--e-2);
+  }
+  app-dialogo-anular .dialogo.anular .dialogo-acciones > button {
+    width: 100%;
+    min-height: 52px;
+    justify-content: center;
+  }
+  /* La acción destructiva en rojo lleno, a todo el ancho (artboard 13); apagada mientras se anula, como el resto de los peligros. */
+  app-dialogo-anular .dialogo.anular .dialogo-acciones > button.peligro:not(:disabled) {
+    border-color: var(--error);
+    background: var(--error);
+    color: #fff;
+  }
+}
