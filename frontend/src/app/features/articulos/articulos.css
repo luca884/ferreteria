@@ -271,10 +271,11 @@ th.actualizacion {
     font-weight: 600;
   }
 
-  /* El ⋯ de la barra: un botón de 44×44 sólo con el ícono, el primero de la barra. */
+  /* El ⋯ de la barra: un botón de 44×44 sólo con el ícono, pegado a la derecha (decisión de Luca, L16). */
   .mas-opciones {
     display: inline-flex;
     flex: none;
+    margin-left: auto;
     align-items: center;
     justify-content: center;
     width: 44px;
