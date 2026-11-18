@@ -3801,3 +3801,365 @@ app-caja .fila-cerrar-caja {
     width: var(--alto-tactil);
   }
 }
+
+/* ---------- Ventas: consulta y detalle en el celular (movil-sectores T11b, S2, S5, S7) ---------- */
+
+/*
+ * La consulta de ventas y el detalle con la bandeja de ARCA en el celular (artboards 10 y 11 de movil-ventas). Sólo cómo
+ * se ve (S1): la página es la misma. Lo que es sólo del celular (las tarjetas, el chip de la bandeja, el ⋯ del detalle, la
+ * hoja de filtros y la pantalla completa del detalle) lo dibuja `app-ventas` cuando se abre en el celular; por si la
+ * pantalla se ensancha después, se esconde acá fuera del `@media`. La pantalla completa reusa la barra y el pie de las
+ * fichas (`.ficha-barra`, `.ficha-volver`, `.ficha-pie`) y la hoja inferior. El detalle tiene su CSS acá y no en
+ * `ventas.css`, que ya pasa el presupuesto de 4 kB.
+ */
+app-ventas .ventas-celular,
+app-ventas .chips-ventas,
+app-ventas .mas-venta {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /* La lista: una tarjeta por venta, con el N.º y el cliente, la factura y la fecha, el total a la derecha y las marcas debajo. */
+  app-ventas .ventas-celular {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-2);
+    margin: 0 0 var(--e-4);
+    padding: 0;
+    list-style: none;
+  }
+  app-ventas .venta-tarjeta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: var(--e-3);
+    width: 100%;
+    min-height: 64px;
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font: inherit;
+    text-align: left;
+  }
+  app-ventas .venta-tarjeta.elegida {
+    border-color: var(--acento);
+    background: var(--superficie-3);
+  }
+  app-ventas .venta-tarjeta:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+  app-ventas .venta-cuerpo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  /* El cliente largo se corta con puntos suspensivos: el N.º y el cliente son una línea. */
+  app-ventas .venta-linea {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* La factura y la fecha se parten antes de pasar por debajo de las marcas (el botón no parte renglones por defecto). */
+  app-ventas .venta-sub {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: normal;
+  }
+  /* El total y, debajo, las marcas: acotado para que una marca larga no le saque el lugar al cliente. */
+  app-ventas .venta-lado {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    max-width: 55vw;
+  }
+  app-ventas .venta-total {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  app-ventas .venta-marcas {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  app-ventas .venta-marca {
+    padding: 1px var(--e-2);
+    font-size: var(--texto-2xs);
+    line-height: 1.5;
+    text-align: right;
+  }
+  app-ventas .venta-marca[data-tono='peligro'] {
+    border-color: var(--error-borde);
+    background: var(--error-fondo);
+    color: var(--error);
+  }
+  app-ventas .venta-marca[data-tono='aviso'] {
+    border-color: var(--advertencia-borde);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+  }
+  app-ventas .venta-marca[data-tono='acento'] {
+    border-color: var(--acento-borde);
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+  }
+
+  /* El chip de la bandeja que está aplicada: se ve sobre la lista y, tocado, abre los filtros. */
+  app-ventas .chips-ventas {
+    display: flex;
+    margin-bottom: var(--e-2);
+  }
+  app-ventas .chip-filtro {
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-4);
+    border: 1px solid var(--acento-borde);
+    border-radius: 999px;
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+    font-size: var(--texto-sm);
+    font-weight: 600;
+  }
+
+  /* Los filtros dentro de la hoja: sin la tarjeta del panel plegable; N.º y cliente a todo el ancho, Desde y Hasta lado a lado. */
+  app-ventas .hoja-inferior .filtros.abiertos {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--e-3);
+    margin: var(--e-2) 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  app-ventas .hoja-inferior .filtros.abiertos > :is(label, button) {
+    grid-column: 1 / -1;
+  }
+  app-ventas .hoja-inferior .filtros.abiertos > label:has(> input[type='date']) {
+    grid-column: auto;
+  }
+  app-ventas .hoja-inferior > .error {
+    margin: var(--e-3) 0 0;
+  }
+
+  /* El detalle: una pantalla completa (cubre la barra de destinos) con «Volver» arriba y las acciones fijas abajo. */
+  app-detalle-pantalla .detalle-pantalla {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    background: var(--superficie-2);
+  }
+  app-detalle-pantalla .detalle-pantalla:focus {
+    outline: none;
+  }
+  app-detalle-pantalla .ficha-barra {
+    position: static;
+  }
+  app-detalle-pantalla .ficha-barra h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  app-ventas .mas-venta {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--alto-tactil);
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--texto);
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--e-3);
+    min-height: 0;
+    padding: var(--e-3) var(--pantalla-x);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Los hijos del cuerpo no se encogen: el cuerpo scrollea, no se aprieta. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo > * {
+    flex: none;
+  }
+  /* El pie sin acciones (una nota de crédito, una venta que todavía carga) no deja una franja vacía. */
+  app-detalle-pantalla .detalle-pantalla-pie:not(:has(> *)) {
+    display: none;
+  }
+  app-detalle-pantalla .detalle-pantalla-pie {
+    position: static;
+    margin: 0;
+  }
+  app-detalle-pantalla .detalle-pantalla-pie > button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-detalle-pantalla .detalle-pantalla-pie > button.primario {
+    flex-grow: 2;
+  }
+
+  /* Las tarjetas del cuerpo: lo que se dice de la factura y de la venta, cada cosa en su caja blanca. */
+  app-ventas .detalle-pantalla-cuerpo > :is(.linea-fiscal, .venta-anulada, .anulacion),
+  app-ventas .detalle-pantalla-cuerpo .estado-factura {
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-ventas .detalle-pantalla-cuerpo .factura-bandeja {
+    gap: var(--e-3);
+  }
+  /* Errores y observaciones de ARCA: alertas rojas y ámbar, con el código y el texto tal cual. */
+  app-ventas .detalle-pantalla-cuerpo :is(.errores-arca, .observaciones-arca) {
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--error-borde);
+    border-left: 4px solid var(--error);
+    border-radius: var(--radio-lg);
+    background: var(--error-fondo);
+  }
+  app-ventas .detalle-pantalla-cuerpo .observaciones-arca {
+    border-color: var(--advertencia-borde);
+    border-left-color: var(--advertencia-marca);
+    background: var(--advertencia-fondo);
+  }
+  app-ventas .detalle-pantalla-cuerpo :is(.errores-arca, .observaciones-arca) li:last-child {
+    border-bottom: 0;
+  }
+  app-ventas .detalle-pantalla-cuerpo :is(.errores-arca, .observaciones-arca) :is(.mensaje, .explicacion) {
+    overflow-wrap: anywhere;
+  }
+  /* «Autorizando con ARCA…» y el rechazo de «Reintentar» quedan en la página; sin ninguno de los dos el bloque no ocupa lugar. */
+  app-ventas .detalle-pantalla-cuerpo .acciones-factura:not(:has(> *)) {
+    display: none;
+  }
+
+  /* La hoja de la venta (datos, renglones, totales, pagos) como tarjetas. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja {
+    gap: var(--e-3);
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja :is(.datos, .notas, .renglones, .totales, .pagos) {
+    align-self: stretch;
+    min-width: 0;
+    margin: 0;
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .datos {
+    grid-template-columns: 1fr;
+    gap: var(--e-1);
+  }
+  /* Fecha, Cliente y Cobró: la etiqueta a la izquierda y el dato a la derecha. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .datos > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--e-3);
+    min-height: 32px;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .datos dd {
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  /* Los renglones: el artículo y su total, y debajo «cantidad × precio · dto.». La cabecera se lee sólo con lector de pantalla. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones,
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones tbody {
+    display: block;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones tbody tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'articulo articulo articulo total'
+      'cantidad precio descuento descuento';
+    column-gap: var(--e-1);
+    align-items: baseline;
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones tbody tr:last-child {
+    border-bottom: 0;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(1) {
+    grid-area: articulo;
+    overflow-wrap: anywhere;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(5) {
+    grid-area: total;
+    padding-left: var(--e-3);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:is(:nth-child(2), :nth-child(3), :nth-child(4)) {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    text-align: left;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(2) {
+    grid-area: cantidad;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(3) {
+    grid-area: precio;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(3)::before {
+    content: '× ';
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(4) {
+    grid-area: descuento;
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .renglones td:nth-child(4):not(:empty)::before {
+    content: '· dto. ';
+  }
+  /* Los totales y los pagos, a todo el ancho de la tarjeta. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja :is(.totales, .pagos) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-1);
+  }
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .totales .total {
+    font-size: var(--texto-lg);
+  }
+  /* Sin subtotal ni descuentos arriba, el filete de «Total» queda de más: la tarjeta ya lo encierra. */
+  app-detalle-pantalla .detalle-pantalla-cuerpo app-venta-hoja .totales .total:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  /* Las acciones de la hoja del ⋯ apagadas (se está anulando): en gris, como las demás hojas. */
+  app-ventas .hoja-inferior .accion-hoja:disabled {
+    color: var(--texto-deshabilitado);
+  }
+}

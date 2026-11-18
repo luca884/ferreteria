@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -8,8 +9,11 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { DetallePantalla } from '../../shared/detalle-pantalla';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
@@ -51,6 +55,26 @@ const MENSAJE_FECHA_NUEVA = 'La fecha de la venta ya no entra en ARCA. Confirmá
 /** La marca del ambiente en la columna «Factura»: en producción no hay. */
 const AMBIENTE_LABELS: Record<string, string> = { SIMULADOR: 'Simulado', HOMOLOGACION: 'Homologación' };
 
+/** Cómo se llama cada bandeja en el chip del celular: los mismos nombres de las opciones del filtro «Facturas». */
+const BANDEJA_LABELS: Record<FiltroFiscal, string> = { PENDIENTES: 'Pendientes', RECHAZADAS: 'Rechazadas' };
+
+/** Una marca de una venta de la lista del celular (movil-sectores T11b): su texto y el tono de la pastilla. */
+export interface MarcaDeVenta {
+  texto: string;
+  tono: 'neutro' | 'peligro' | 'aviso' | 'acento';
+}
+
+/** El tono de la pastilla del estado de la factura: rojo lo que ARCA no autorizó, ámbar lo que sigue en trámite o en revisión. */
+const TONO_DEL_ESTADO: Partial<Record<ResumenFiscal['estado'], MarcaDeVenta['tono']>> = {
+  RECHAZADO: 'peligro',
+  FUERA_DE_FECHA: 'peligro',
+  PENDIENTE: 'aviso',
+  EN_CURSO: 'aviso',
+  EN_VERIFICACION: 'aviso',
+  CAE_NO_COINCIDE: 'aviso',
+  SERIE_DESINCRONIZADA: 'aviso',
+};
+
 /** El código de un rechazo de la bandeja (C2, C3), con el `motivo` como los demás rechazos de una venta. */
 function motivoDelRechazo(err: unknown): string | null {
   if (!(err instanceof HttpErrorResponse)) return null;
@@ -72,11 +96,14 @@ function motivoDelRechazo(err: unknown): string | null {
   imports: [
     BarraAcciones,
     Confirmacion,
+    DetallePantalla,
     DialogoAnular,
     DialogoDetalle,
     DialogoSinFactura,
     FacturaImprimible,
+    HojaInferior,
     MontoPipe,
+    NgTemplateOutlet,
     VentaHoja,
     VentaImprimible,
     RouterLink,
@@ -90,6 +117,11 @@ export class Ventas implements OnInit {
   private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
 
+  /**
+   * En el celular (movil-sectores T11b) la lista son tarjetas, los filtros una hoja inferior y el detalle una pantalla
+   * completa. Se lee al crearse: no sigue la rotación. Es sólo cómo se ve: el estado, los pedidos y los textos son los mismos.
+   */
+  protected readonly celular = esCelular();
   protected readonly fecha = fechaCompletaLocal;
   protected readonly cliente = clienteDeVenta;
   protected readonly esNota = esNotaDeCredito;
@@ -116,6 +148,9 @@ export class Ventas implements OnInit {
   /** Los de la última lista que cargó: si el servidor rechaza un filtro nuevo (400), se vuelve a estos. */
   private vigentes: Omit<FiltroVentas, 'page'> = {};
   protected readonly filtrada = signal(false);
+  /** La bandeja de los filtros aplicados a la lista que se ve (no la que se está eligiendo): la dice el chip del celular. */
+  protected readonly bandejaAplicada = signal<FiltroFiscal | ''>('');
+  protected readonly bandejaLabel = (bandeja: FiltroFiscal) => BANDEJA_LABELS[bandeja];
 
   /**
    * móvil-pulgar, T3: en el celular los seis filtros se pliegan detrás de un botón con el contador de los que están
@@ -216,6 +251,15 @@ export class Ventas implements OnInit {
   /** El rechazo de «Anular» (400 del motivo, 409, 422), tal cual, dentro de su diálogo. */
   protected readonly errorAnular = signal<string | null>(null);
 
+  /** La hoja del ⋯ del detalle del celular: «Anular» y, si el pie lo ocupa la bandeja, «Imprimir». */
+  protected readonly menuAbierto = signal(false);
+  /** Con «Reintentar» o «Dejar sin factura» en el pie del celular, «Imprimir» pasa al ⋯. */
+  protected readonly imprimirEnElMenu = computed(() => this.puedeReintentar() || this.puedeDejarSinFactura());
+  /** El ⋯ sólo aparece si tiene algo que ofrecer. */
+  protected readonly hayMasOpciones = computed(
+    () => this.puedeAnular() || (this.imprimirEnElMenu() && this.detalle() !== null),
+  );
+
   /** Lo que hizo la última acción: el detalle se puede cerrar si la venta sale de la bandeja. */
   protected readonly resultadoAccion = signal<string | null>(null);
 
@@ -238,7 +282,7 @@ export class Ventas implements OnInit {
     const bandeja = FILTROS_FISCALES.find((f) => f === fiscal);
     if (bandeja) {
       this.fiscal.set(bandeja);
-      this.aplicados = { fiscal: bandeja };
+      this.fijarAplicados({ fiscal: bandeja });
       this.filtrada.set(true);
     }
     this.cargar(0);
@@ -265,7 +309,7 @@ export class Ventas implements OnInit {
         if (err instanceof HttpErrorResponse && err.status === 400) {
           const campos = erroresDeCampos(err);
           this.errorFiltros.set(campos.length > 0 ? campos.join(' ') : mensajeDe(err, MENSAJE_LISTA));
-          this.aplicados = this.vigentes;
+          this.fijarAplicados(this.vigentes);
           this.filtrada.set(Object.keys(this.aplicados).length > 0);
           return;
         }
@@ -290,6 +334,24 @@ export class Ventas implements OnInit {
     return { texto: `${letraEnPantalla(fiscal.letra, fiscal.letraFiscal)}${numero}`, marcas: marcas.join(' · '), reimprimir: fiscal.reimprimir === true };
   }
 
+  /**
+   * Las marcas de una venta de la lista del celular, en pastillas: «No facturable», la nota (con la venta que anula), «Anulada»,
+   * el estado de la factura (con la marca del ambiente) y «Reimprimir factura». Los textos son los de la tabla de hoy.
+   */
+  protected marcas(fila: VentaResumen): MarcaDeVenta[] {
+    const marcas: MarcaDeVenta[] = [];
+    if (!fila.facturable && !this.esNota(fila)) marcas.push({ texto: 'No facturable', tono: 'neutro' });
+    if (this.esNota(fila)) {
+      const nota = fila.fiscal ? 'Nota de crédito' : 'Anulación';
+      marcas.push({ texto: fila.ventaAnulada ? `${nota} · Venta\u00a0N.º\u00a0${fila.ventaAnulada.numero}` : nota, tono: 'neutro' });
+    }
+    if (fila.anulacion) marcas.push({ texto: 'Anulada', tono: 'peligro' });
+    const f = this.factura(fila.fiscal);
+    if (f?.marcas) marcas.push({ texto: f.marcas, tono: (fila.fiscal && TONO_DEL_ESTADO[fila.fiscal.estado]) || 'neutro' });
+    if (f?.reimprimir) marcas.push({ texto: 'Reimprimir factura', tono: 'acento' });
+    return marcas;
+  }
+
   /** Aplica los filtros y vuelve a la primera página. Un número que no es un entero positivo no se manda. */
   protected buscar(evento: Event): void {
     evento.preventDefault();
@@ -310,16 +372,22 @@ export class Ventas implements OnInit {
     const cliente = this.clienteBuscado().trim();
     const numeroFiscal = this.numeroFactura().trim();
     const fiscal = this.fiscal();
-    this.aplicados = {
+    this.fijarAplicados({
       ...(numero ? { numero: Number(numero) } : {}),
       ...(cliente ? { cliente } : {}),
       ...(this.desde() ? { desde: this.desde() } : {}),
       ...(this.hasta() ? { hasta: this.hasta() } : {}),
       ...(numeroFiscal ? { numeroFiscal } : {}),
       ...(fiscal ? { fiscal } : {}),
-    };
+    });
     this.filtrada.set(Object.keys(this.aplicados).length > 0);
     this.cargar(0);
+  }
+
+  /** Los filtros que mandan los pedidos de la lista; el chip del celular dice la bandeja. */
+  private fijarAplicados(filtros: Omit<FiltroVentas, 'page'>): void {
+    this.aplicados = filtros;
+    this.bandejaAplicada.set(filtros.fiscal ?? '');
   }
 
   protected limpiar(): void {
@@ -331,7 +399,7 @@ export class Ventas implements OnInit {
     this.fiscal.set('');
     this.errorFiltros.set(null);
     this.resultadoAccion.set(null);
-    this.aplicados = {};
+    this.fijarAplicados({});
     this.filtrada.set(false);
     this.filtrosAbiertos.set(false);
     this.cargar(0);
@@ -370,6 +438,7 @@ export class Ventas implements OnInit {
     this.errorMotivo.set(null);
     this.confirmandoAnular.set(false);
     this.errorAnular.set(null);
+    this.menuAbierto.set(false);
   }
 
   protected elegir(fila: VentaResumen): void {
@@ -475,6 +544,18 @@ export class Ventas implements OnInit {
         this.errorMotivo.set(campos.length > 0 ? campos.join(' ') : mensajeDe(err, MENSAJE_ACCION));
       },
     });
+  }
+
+  /** «Anular» de la hoja del ⋯ del celular: cierra la hoja y abre el mismo diálogo de siempre. */
+  protected anularDesdeElMenu(): void {
+    this.menuAbierto.set(false);
+    this.pedirAnular();
+  }
+
+  /** «Imprimir» de la hoja del ⋯ del celular. */
+  protected imprimirDesdeElMenu(): void {
+    this.menuAbierto.set(false);
+    this.imprimiendo.set(true);
   }
 
   protected pedirAnular(): void {
