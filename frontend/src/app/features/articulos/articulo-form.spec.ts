@@ -136,6 +136,7 @@ describe('ArticuloForm', () => {
     crear: ReturnType<typeof vi.fn>;
     actualizar: ReturnType<typeof vi.fn>;
     reactivar: ReturnType<typeof vi.fn>;
+    desactivar: ReturnType<typeof vi.fn>;
     ajustarStock: ReturnType<typeof vi.fn>;
     desglose: ReturnType<typeof vi.fn>;
     guardarAjustes: ReturnType<typeof vi.fn>;
@@ -182,6 +183,7 @@ describe('ArticuloForm', () => {
       crear: vi.fn(() => of(articuloGuardado())),
       actualizar: vi.fn(() => of(articuloGuardado())),
       reactivar: vi.fn(() => of(articuloGuardado({ activo: true }))),
+      desactivar: vi.fn(() => of(undefined)),
       ajustarStock: vi.fn(),
       desglose: vi.fn(() =>
         desglose instanceof HttpErrorResponse ? throwError(() => desglose) : of(desglose),
@@ -3404,6 +3406,400 @@ describe('ArticuloForm', () => {
 
       await elegir('alicuotaIva', '10,5 %');
       expect(elegida('alicuotaIva')).toBe('10,5 %');
+    });
+  });
+
+  /*
+   * movil-sectores T5 (5c; S1, S2, S5, S7): en el celular la ficha de un artículo existente es una pantalla completa
+   * (artboard 05 de movil-articulos): barra «Volver» con el ⋯, el resumen del stock con tres accesos, las secciones como
+   * tarjetas plegables y el pie fijo. El alta y el escritorio no cambian. Vitest no lee styles.css: las medidas y la
+   * posición del pie se verifican en el navegador a 390 px.
+   */
+  describe('ficha en el celular (movil-sectores T5, 5c)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    const ultimaCompra = { compraId: 9, comprobante: 'Remito 0003-00412', fecha: '2026-11-02' };
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    const cabecera = (titulo: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('.seccion-cabecera')).find((b) =>
+        b.querySelector('.seccion-titulo')?.textContent?.trim() === titulo,
+      )!;
+    const seccion = (clase: string) => el().querySelector<HTMLFieldSetElement>(`fieldset.seccion.${clase}`)!;
+    const botonDelMenu = (clase: string) => el().querySelector<HTMLButtonElement>(`app-hoja-inferior .${clase}`);
+    async function abrirMenu() {
+      el().querySelector<HTMLButtonElement>('.ficha-mas')!.click();
+      await refrescar();
+    }
+
+    it('es una pantalla con la barra «Volver», el título y el ⋯, y sin la barra de acciones del escritorio', async () => {
+      enElCelular();
+      await crearComponente({ id: '5' });
+
+      expect(el().classList).toContain('ficha-celular');
+      expect(el().querySelector('app-barra-acciones')).toBeNull();
+      const barra = el().querySelector('.ficha-barra')!;
+      expect(barra.querySelector('.ficha-volver')!.getAttribute('aria-label')).toBe('Volver');
+      expect(barra.querySelector('h1')!.textContent!.trim()).toBe('Editar artículo');
+      const mas = barra.querySelector('.ficha-mas')!;
+      expect(mas.getAttribute('aria-label')).toBe('Más opciones del artículo');
+      expect(mas.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('«Volver» vuelve al listado con su búsqueda; con cambios sin guardar pregunta antes', async () => {
+      enElCelular();
+      await crearComponente({ id: '5' });
+
+      el().querySelector<HTMLButtonElement>('.ficha-volver')!.click();
+      await refrescar();
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+
+      navigate.mockClear();
+      await escribir('descripcion', 'Otro nombre');
+      el().querySelector<HTMLButtonElement>('.ficha-volver')!.click();
+      await refrescar();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(el().querySelector('app-confirmacion')!.textContent).toContain('¿Descartar los cambios?');
+    });
+
+    it('en el escritorio, y en el alta del celular, no hay nada de esto: la barra y los fieldsets de siempre', async () => {
+      await crearComponente({ id: '5' });
+      expect(el().classList).not.toContain('ficha-celular');
+      expect(el().querySelector('.ficha-barra, .ficha-mas, .seccion-cabecera, .resumen-celular')).toBeNull();
+      expect(el().querySelector('app-barra-acciones h1')!.textContent!.trim()).toBe('Editar artículo');
+      expect(el().querySelector('legend')!.textContent).toBe('Identificación');
+      expect(el().querySelector('dl.solo-lectura')).not.toBeNull();
+      expect(el().querySelector('.acciones-form')!.classList).not.toContain('ficha-pie');
+
+      TestBed.resetTestingModule();
+      enElCelular();
+      await crearComponente();
+      expect(el().classList).not.toContain('ficha-celular');
+      expect(el().querySelector('.ficha-barra, .ficha-mas, .seccion-cabecera, .resumen-celular')).toBeNull();
+      expect(el().querySelector('app-barra-acciones h1')!.textContent!.trim()).toBe('Nuevo artículo');
+      expect(el().querySelector('legend')!.textContent).toBe('Identificación');
+      expect(el().querySelector('.acciones-form')!.classList).not.toContain('ficha-pie');
+    });
+
+    describe('el ⋯ de la barra', () => {
+      it('con el artículo activo ofrece «Dar de baja» y no «Reactivar»', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        await abrirMenu();
+
+        expect(el().querySelector('.ficha-mas')!.getAttribute('aria-expanded')).toBe('true');
+        expect(el().querySelector('app-hoja-inferior .hoja-inferior-titulo')!.textContent).toBe('Tornillo hexagonal 1/4');
+        expect(el().querySelector('app-hoja-inferior .hoja-inferior-subtitulo')!.textContent).toBe('TOR-001');
+        expect(botonDelMenu('dar-de-baja')!.textContent!.trim()).toBe('Dar de baja');
+        expect(botonDelMenu('reactivar-hoja')).toBeNull();
+      });
+
+      it('con el artículo dado de baja ofrece «Reactivar», que lo reactiva y cierra la hoja', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false }) });
+        expect(el().querySelector('.ficha-barra .etiqueta.de-baja')!.textContent).toBe('De baja');
+        await abrirMenu();
+
+        expect(botonDelMenu('dar-de-baja')).toBeNull();
+        botonDelMenu('reactivar-hoja')!.click();
+        await refrescar();
+
+        expect(servicio.reactivar).toHaveBeenCalledWith(5);
+        expect(el().querySelector('app-hoja-inferior')).toBeNull();
+        expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se reactivó el artículo.');
+        expect(el().querySelector('.ficha-barra .etiqueta.de-baja')).toBeNull();
+      });
+
+      it('«Dar de baja» pide confirmación con el texto del listado y, al confirmar, da de baja y muestra «De baja»', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        servicio.obtener.mockReturnValue(of(articuloGuardado({ activo: false, version: 3 })));
+        await abrirMenu();
+        botonDelMenu('dar-de-baja')!.click();
+        await refrescar();
+
+        expect(el().querySelector('app-hoja-inferior')).toBeNull();
+        const dialogo = el().querySelector('app-confirmacion')!;
+        expect(dialogo.textContent).toContain('¿Dar de baja Tornillo hexagonal 1/4?');
+        expect(dialogo.textContent).toContain('lo podés reactivar cuando quieras');
+        expect(servicio.desactivar).not.toHaveBeenCalled();
+
+        Array.from(dialogo.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Dar de baja')!.click();
+        await refrescar();
+
+        expect(servicio.desactivar).toHaveBeenCalledWith(5);
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se dio de baja el artículo.');
+        expect(el().querySelector('.ficha-barra .etiqueta.de-baja')!.textContent).toBe('De baja');
+      });
+
+      it('cancelar la confirmación no da de baja; un error del servidor se muestra y no cambia el estado', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        await abrirMenu();
+        botonDelMenu('dar-de-baja')!.click();
+        await refrescar();
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-confirmacion button')).find((b) => b.textContent?.trim() === 'Cancelar')!.click();
+        await refrescar();
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(servicio.desactivar).not.toHaveBeenCalled();
+
+        servicio.desactivar.mockReturnValue(throwError(() => errorHttp(409, 'No se puede dar de baja.')));
+        await abrirMenu();
+        botonDelMenu('dar-de-baja')!.click();
+        await refrescar();
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-confirmacion button')).find((b) => b.textContent?.trim() === 'Dar de baja')!.click();
+        await refrescar();
+        expect(el().querySelector('.error')!.textContent).toContain('No se puede dar de baja.');
+        expect(el().querySelector('.ficha-barra .etiqueta.de-baja')).toBeNull();
+      });
+
+      it('el Vendedor no tiene ⋯', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', dueno: false });
+
+        expect(el().querySelector('.ficha-barra h1')!.textContent!.trim()).toBe('Artículo');
+        expect(el().querySelector('.ficha-mas')).toBeNull();
+      });
+    });
+
+    describe('el resumen de arriba', () => {
+      it('muestra el stock grande y tres accesos: Ajustar stock, Movimientos y Clientes', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ stockActual: 12.5, unidad: 'METRO', ultimaCompra }) });
+
+        const resumen = el().querySelector('.resumen-celular')!;
+        expect(resumen.querySelector('.resumen-stock')!.textContent!.trim()).toBe('12,5 metros');
+        const botones = Array.from(resumen.querySelectorAll('.resumen-botones > *'));
+        expect(botones.map((b) => b.textContent!.trim())).toEqual(['Ajustar stock', 'Movimientos', 'Clientes']);
+        expect(el().querySelector('a.ver-movimientos')!.getAttribute('href')).toBe('/articulos/5/movimientos');
+        expect(el().querySelector('a.ver-clientes')!.getAttribute('href')).toBe('/articulos/5/clientes');
+        // El resumen reemplaza a las tarjetas de escritorio, no se suma.
+        expect(el().querySelector('dl.solo-lectura')).toBeNull();
+      });
+
+      it('un stock negativo va marcado', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ stockActual: -2 }) });
+
+        expect(el().querySelector('.resumen-stock')!.classList).toContain('negativo');
+      });
+
+      it('«Ajustar stock» abre el diálogo de siempre y deja el stock nuevo en la ficha', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ stockActual: 12.5, unidad: 'METRO' }) });
+        el().querySelector<HTMLButtonElement>('.resumen-botones .ajustar-stock')!.click();
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-ajuste-stock')).not.toBeNull();
+        fixture.debugElement
+          .query(By.directive(DialogoAjusteStock))
+          .componentInstance.ajustado.emit({ articuloId: 5, stockActual: 20 });
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-ajuste-stock')).toBeNull();
+        expect(el().querySelector('.resumen-stock')!.textContent!.trim()).toBe('20 metros');
+      });
+
+      it('con el artículo dado de baja «Ajustar stock» queda apagado y explica por qué, sin abrir el diálogo', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false }) });
+        const boton = el().querySelector<HTMLButtonElement>('.resumen-botones .ajustar-stock')!;
+
+        expect(boton.getAttribute('aria-disabled')).toBe('true');
+        expect(boton.getAttribute('aria-describedby')).toBe('motivo-sin-ajuste');
+        expect(el().querySelector('#motivo-sin-ajuste')!.textContent!.trim()).toBe(
+          '«Tornillo hexagonal 1/4» está dado de baja. Reactivalo para ajustar el stock.',
+        );
+        boton.click();
+        await refrescar();
+        expect(el().querySelector('app-dialogo-ajuste-stock')).toBeNull();
+        expect(el().querySelector('.motivo-accion')!.textContent).toContain('está dado de baja');
+      });
+
+      it('la última compra va en el resumen, una sola vez, con su enlace', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ ultimaCompra }) });
+
+        const avisos = el().querySelectorAll('.ultima-compra');
+        expect(avisos).toHaveLength(1);
+        expect(avisos[0].closest('.resumen-celular')).not.toBeNull();
+        expect(avisos[0].textContent!.replace(/\s+/g, ' ').trim()).toBe('Última compra: Remito 0003-00412 del 02/11/2026');
+        expect(avisos[0].querySelector('a')!.getAttribute('href')).toBe('/compras/9');
+      });
+
+      it('el Vendedor ve el stock y el precio guardado, sin accesos, sin costos y sin última compra', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', dueno: false, articulo: articuloGuardado({ ultimaCompra }) });
+
+        expect(el().querySelector('.resumen-stock')).not.toBeNull();
+        expect(el().querySelector('.resumen-precio')!.textContent).toContain('Precio final guardado');
+        expect(el().querySelector('.resumen-botones, .ultima-compra, #costo, #margen, #moneda')).toBeNull();
+      });
+    });
+
+    describe('las secciones plegables', () => {
+      it('son botones reales con aria-expanded; «Identificación» arranca abierta y las demás cerradas', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+
+        const titulos = Array.from(el().querySelectorAll('.seccion-cabecera .seccion-titulo')).map((t) => t.textContent);
+        expect(titulos).toEqual(['Identificación', 'Precio', 'Clasificación y códigos', 'Stock', 'De dónde sale el precio']);
+        expect(Array.from(el().querySelectorAll('.seccion-cabecera')).every((b) => b.tagName === 'BUTTON' && b.getAttribute('type') === 'button')).toBe(true);
+        expect(cabecera('Identificación').getAttribute('aria-expanded')).toBe('true');
+        expect(seccion('identificacion').classList).not.toContain('cerrada');
+        for (const [titulo, clase] of [['Precio', 'precio'], ['Clasificación y códigos', 'clasificacion'], ['Stock', 'stock']]) {
+          expect(cabecera(titulo).getAttribute('aria-expanded')).toBe('false');
+          expect(seccion(clase).classList).toContain('cerrada');
+        }
+      });
+
+      it('tocar una cabecera abre la tarjeta y volver a tocarla la cierra, sin tocar las otras', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+
+        cabecera('Precio').click();
+        await refrescar();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('true');
+        expect(seccion('precio').classList).not.toContain('cerrada');
+        expect(cabecera('Identificación').getAttribute('aria-expanded')).toBe('true');
+
+        cabecera('Identificación').click();
+        cabecera('Precio').click();
+        await refrescar();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('false');
+        expect(cabecera('Identificación').getAttribute('aria-expanded')).toBe('false');
+        expect(cabecera('Stock').getAttribute('aria-expanded')).toBe('false');
+      });
+
+      it('cerrada muestra su dato clave: el código, el precio guardado y el stock mínimo', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', articulo: articuloGuardado({ precioFinal: 1240, stockMinimo: 5 }) });
+
+        const dato = (titulo: string) => cabecera(titulo).querySelector('.seccion-dato')?.textContent?.replace(/\u00a0/g, ' ');
+        expect(dato('Identificación')).toBe('TOR-001');
+        expect(dato('Precio')).toBe('$ 1.240,00');
+        expect(dato('Clasificación y códigos')).toBeUndefined();
+        expect(dato('Stock')).toBe('mínimo 5');
+        await escribir('codigoInterno', 'NUEVO-9');
+        expect(dato('Identificación')).toBe('NUEVO-9');
+      });
+
+      it('guardar con un campo inválido en una tarjeta cerrada la abre y deja el foco en el campo', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        cabecera('Precio').click();
+        await refrescar();
+        await escribir('costo', '');
+        cabecera('Precio').click();
+        await refrescar();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('false');
+
+        await enviar();
+
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('true');
+        expect(el().querySelector('#costo-error')!.textContent).toContain('El costo es obligatorio.');
+        expect(cabecera('Stock').getAttribute('aria-expanded')).toBe('false');
+      });
+
+      it('un error del servidor en un campo de una tarjeta cerrada la abre', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        servicio.actualizar.mockReturnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { status: 400, message: 'Datos inválidos', errors: { ubicacion: 'La ubicación es muy larga.' } },
+              }),
+          ),
+        );
+
+        await enviar();
+
+        expect(cabecera('Stock').getAttribute('aria-expanded')).toBe('true');
+        expect(el().querySelector('#ubicacion-error-servidor')!.textContent).toContain('La ubicación es muy larga.');
+        expect(cabecera('Clasificación y códigos').getAttribute('aria-expanded')).toBe('false');
+      });
+
+      it('«De dónde sale el precio» también se pliega, cerrada hasta que se toca', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', desglose: desgloseDe() });
+
+        const desglose = () => el().querySelector('app-desglose-precio')!;
+        expect(cabecera('De dónde sale el precio').getAttribute('aria-expanded')).toBe('false');
+        expect(desglose().classList).toContain('cerrada');
+        cabecera('De dónde sale el precio').click();
+        await refrescar();
+        expect(cabecera('De dónde sale el precio').getAttribute('aria-expanded')).toBe('true');
+        expect(desglose().classList).not.toContain('cerrada');
+      });
+
+      it('el Vendedor tiene las mismas tarjetas, con sus campos en sólo lectura y sin los de costo', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', dueno: false });
+
+        expect(el().querySelectorAll('.seccion-cabecera')).toHaveLength(4);
+        expect(input('codigoInterno').disabled).toBe(true);
+        expect(el().querySelector('#costo, #margen, #moneda, app-desglose-precio')).toBeNull();
+      });
+    });
+
+    describe('el pie', () => {
+      it('el Dueño tiene Cancelar y Guardar en el pie fijo, y Guardar guarda lo mismo de siempre', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+
+        const pie = el().querySelector('.acciones-form')!;
+        expect(pie.classList).toContain('ficha-pie');
+        expect(pie.querySelector('button[type="submit"]')!.textContent!.trim()).toBe('Guardar');
+        expect(pie.querySelector('a.cancelar')!.textContent!.trim()).toBe('Cancelar');
+
+        await escribir('descripcion', 'Tornillo largo');
+        pie.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+        await refrescar();
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+        expect(servicio.actualizar.mock.calls[0][0]).toBe(5);
+        expect(servicio.actualizar.mock.calls[0][1].descripcion).toBe('Tornillo largo');
+        expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+      });
+
+      it('«Cancelar» vuelve al listado, y con cambios sin guardar pregunta', async () => {
+        enElCelular();
+        await crearComponente({ id: '5' });
+        el().querySelector<HTMLAnchorElement>('.acciones-form a.cancelar')!.click();
+        await refrescar();
+        expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+
+        navigate.mockClear();
+        await escribir('descripcion', 'Otro');
+        el().querySelector<HTMLAnchorElement>('.acciones-form a.cancelar')!.click();
+        await refrescar();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(el().querySelector('app-confirmacion')).not.toBeNull();
+      });
+
+      it('el Vendedor sólo tiene «Volver al listado»', async () => {
+        enElCelular();
+        await crearComponente({ id: '5', dueno: false });
+
+        const pie = el().querySelector('.acciones-form')!;
+        expect(pie.classList).toContain('ficha-pie');
+        expect(pie.querySelector('button')).toBeNull();
+        expect(pie.querySelector('a.cancelar')!.textContent!.trim()).toBe('Volver al listado');
+      });
+    });
+
+    it('la oferta sigue en la ficha, debajo de las tarjetas', async () => {
+      enElCelular();
+      await crearComponente({ id: '5' });
+
+      const oferta = el().querySelector('app-oferta-articulo')!;
+      expect(oferta).not.toBeNull();
+      expect(el().querySelector('form.articulo')!.compareDocumentPosition(oferta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 });

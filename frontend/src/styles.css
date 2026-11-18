@@ -2020,3 +2020,238 @@ ul.error {
     min-height: var(--alto-tactil);
   }
 }
+
+/* ---------- Ficha del artículo en el celular (movil-sectores T5, 5c, S7) ---------- */
+
+/*
+ * Artículos › ficha de un artículo existente en el celular (artboard 05 de movil-articulos): una pantalla completa con la
+ * flecha «Volver» y el ⋯ arriba, el resumen (stock y tres accesos), las secciones como tarjetas plegables y el pie fijo
+ * con Cancelar y Guardar. Todo cuelga de `app-articulo-form.ficha-celular`, una clase que el componente pone sólo en
+ * esta ficha y sólo en el celular (el alta y el escritorio no la tienen), y de elementos que sólo existen ahí; el resto
+ * del archivo del componente no cambia (S5). Va acá y no en articulo-form.css por su presupuesto de 8 kB.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Cubre toda la pantalla (también la barra de destinos) y scrollea por dentro; un diálogo (z-dialogo) queda encima. */
+  app-articulo-form.ficha-celular {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    width: auto;
+    /* El pie fijo (68 px) no tapa el último campo. */
+    padding-bottom: calc(68px + var(--e-4) + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(68px + var(--e-4) + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--fondo);
+  }
+  app-articulo-form.ficha-celular > :not(.ficha-barra, app-confirmacion, app-dialogo-ajuste-stock, app-hoja-inferior) {
+    flex: none;
+    max-width: none;
+    margin: 0 var(--pantalla-x);
+  }
+  app-articulo-form.ficha-celular > .ficha-barra {
+    margin: 0;
+  }
+  app-articulo-form.ficha-celular .ficha-barra h1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  app-articulo-form.ficha-celular .ficha-mas {
+    display: inline-flex;
+    flex: none;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--texto-suave);
+  }
+
+  /* El resumen: el stock grande, el precio guardado y los tres accesos de 56 px; la última compra va abajo, como aviso. */
+  app-articulo-form.ficha-celular .resumen-celular {
+    padding: var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-articulo-form.ficha-celular .resumen-celular p {
+    margin: 0;
+  }
+  app-articulo-form.ficha-celular .resumen-rotulo,
+  app-articulo-form.ficha-celular .resumen-precio {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-articulo-form.ficha-celular .resumen-stock {
+    font-family: var(--fuente-mono);
+    font-size: 1.875rem;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  app-articulo-form.ficha-celular .resumen-stock.negativo {
+    color: var(--error);
+  }
+  app-articulo-form.ficha-celular .resumen-precio strong {
+    margin-left: var(--e-1);
+    color: var(--texto);
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-sm);
+  }
+  app-articulo-form.ficha-celular .resumen-botones {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--e-2);
+    margin-top: var(--e-3);
+  }
+  app-articulo-form.ficha-celular .resumen-botones > :is(button, a) {
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    height: 56px;
+    padding: 0 var(--e-1);
+    font-size: var(--texto-xs);
+  }
+  app-articulo-form.ficha-celular .resumen-botones svg {
+    color: var(--tono);
+  }
+  app-articulo-form.ficha-celular .resumen-celular .motivo-sin-ajuste {
+    max-width: none;
+    margin-top: var(--e-2);
+  }
+  app-articulo-form.ficha-celular .resumen-celular .ultima-compra {
+    margin-top: var(--e-3);
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--acento-borde);
+    border-radius: var(--radio-lg);
+    background: var(--acento-suave);
+    font-size: var(--texto-sm);
+  }
+
+  /* Las secciones: tarjetas de una columna (costo y margen, en dos) con la cabecera a todo el ancho de la tarjeta. */
+  app-articulo-form.ficha-celular form.articulo {
+    gap: var(--e-3);
+  }
+  app-articulo-form.ficha-celular .seccion {
+    padding: 0 var(--e-4) var(--e-4);
+    border-radius: var(--radio-xl);
+    box-shadow: none;
+  }
+  app-articulo-form.ficha-celular .seccion.cerrada {
+    padding-bottom: 0;
+  }
+  app-articulo-form.ficha-celular .seccion > * {
+    grid-column: 1 / -1;
+  }
+  app-articulo-form.ficha-celular .seccion > .campo:has(#costo),
+  app-articulo-form.ficha-celular .seccion > .campo:has(#margen) {
+    grid-column: auto;
+  }
+  app-articulo-form.ficha-celular .seccion.cerrada > :not(legend) {
+    display: none;
+  }
+  app-articulo-form.ficha-celular .seccion > legend {
+    width: auto;
+    margin: 0 calc(-1 * var(--e-4));
+  }
+  app-articulo-form.ficha-celular .seccion-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--e-2);
+    width: 100%;
+    min-height: 52px;
+    padding: 0 var(--e-4);
+    border: 0;
+    border-radius: var(--radio-xl);
+    background: transparent;
+    font-size: var(--texto-base);
+    font-weight: 650;
+    text-align: left;
+  }
+  app-articulo-form.ficha-celular .seccion-titulo {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  app-articulo-form.ficha-celular .seccion-dato {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-articulo-form.ficha-celular .seccion-flecha {
+    flex: none;
+    color: var(--texto-tenue);
+    transition: transform var(--transicion);
+  }
+  app-articulo-form.ficha-celular .seccion-cabecera[aria-expanded='true'] .seccion-flecha {
+    transform: rotate(180deg);
+  }
+  /* «De dónde sale el precio»: la cabecera es una tarjeta suelta y su contenido, otra debajo; el título del componente ya está en el botón. */
+  app-articulo-form.ficha-celular > .seccion-cabecera {
+    width: auto;
+    border: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  app-articulo-form.ficha-celular > app-desglose-precio {
+    margin-top: 0;
+  }
+  app-articulo-form.ficha-celular > app-desglose-precio.cerrada {
+    display: none;
+  }
+  app-articulo-form.ficha-celular app-desglose-precio .desglose > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Los botones chicos de las tarjetas (Agregar, Quitar, Recargar, Guardar ajustes) miden 44 px como todo control táctil (S5). */
+  app-articulo-form.ficha-celular button.chico {
+    min-height: var(--alto-tactil);
+  }
+
+  /* El precio en vivo, en la única superficie oscura del sistema (como el TOTAL del mostrador). */
+  app-articulo-form.ficha-celular .precio-en-vivo {
+    flex-wrap: wrap;
+    border: 0;
+    background: var(--acento-profundo);
+    color: #fff;
+  }
+  app-articulo-form.ficha-celular .precio-en-vivo .precio-en-vivo-etiqueta,
+  app-articulo-form.ficha-celular .precio-en-vivo .pista {
+    color: var(--profundo-texto-tenue);
+  }
+  app-articulo-form.ficha-celular .precio-en-vivo strong {
+    font-family: var(--fuente-mono);
+    font-size: 1.375rem;
+  }
+
+  /* Guardar y Cancelar fijos abajo, a todo el ancho; en el celular Cancelar se ve (el resto de las fichas lo esconde). */
+  app-articulo-form.ficha-celular .acciones-form.ficha-pie {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--z-fijo);
+    margin: 0;
+    /* El del componente (`.acciones-form`) le ganaría al de `.ficha-pie`: se repite con la zona segura del teléfono. */
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+  }
+  app-articulo-form.ficha-celular .acciones-form.ficha-pie > .cancelar {
+    display: inline-flex;
+    order: -1;
+  }
+}
