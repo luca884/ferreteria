@@ -3489,3 +3489,315 @@ ul.error {
     flex-grow: 2;
   }
 }
+
+/* ---------- Ventas: caja en el celular (movil-sectores T11a, S2, S5, S7) ---------- */
+
+/*
+ * La Caja, el resumen de caja y el historial de cajas en el celular. Sólo cómo se ve (S1): la página es la misma. Lo que
+ * es sólo del celular (el ⋯ de la barra, la fila «Cerrar la caja», el pie fijo y la barra «Volver» del cierre) lo
+ * dibuja `app-caja` cuando se abre en el celular; por si la pantalla se ensancha después, se esconde acá fuera del
+ * `@media`. La pantalla completa del cierre reusa la barra y el pie de las fichas (`.ficha-barra`, `.ficha-volver`,
+ * `.ficha-pie`); «Cargar» y «Abrir caja» llevan el pie de una sola pantalla (`.ficha-pie.en-pagina`, sobre la barra de
+ * destinos). Todo cuelga de `app-caja`, `app-resumen-caja` o `app-historial-cajas` para ganarle al CSS de cada componente.
+ */
+app-caja .mas-caja,
+app-caja .fila-cerrar-caja {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /* El enlace de la barra se va al ⋯ (que existe sólo para el Dueño); sin ⋯ la barra no tiene botones y no se ve. */
+  app-caja app-barra-acciones .historial {
+    display: none;
+  }
+  app-caja app-barra-acciones .mas-caja {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--alto-tactil);
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    margin-left: auto;
+    padding: 0;
+  }
+  /* El texto de arriba (cómo se usa la caja) no está en el artboard; sigue en el DOM. */
+  app-caja > .ayuda:not(.estado-vacio) {
+    display: none;
+  }
+  /* Sin la barra (el Vendedor no tiene ⋯), la primera tarjeta no queda pegada al encabezado del shell. */
+  app-caja:not(:has(app-barra-acciones button)) {
+    padding-top: var(--e-3);
+  }
+  /* El pie fijo cubre el final de la página: lo que sigue (el resumen del cierre) se puede scrollear hasta verlo. */
+  app-caja:has(.caja-pie) {
+    padding-bottom: calc(69px + var(--e-4));
+  }
+  app-caja form.panel:has(> .ficha-pie.caja-pie) {
+    padding-bottom: var(--e-4);
+  }
+
+  /* Caja abierta: una tarjeta con el tono de la sección. Arriba el rótulo, después el efectivo inicial en grande y quién abrió. */
+  app-caja section.estado {
+    display: flex;
+    flex-direction: column;
+    border-color: var(--tono);
+    background: var(--tono);
+    color: #fff;
+  }
+  app-caja .estado h2 {
+    order: -2;
+    margin: 0;
+    font-size: var(--texto-sm);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  app-caja .estado .quien {
+    display: flex;
+    flex-direction: column;
+    color: #fff;
+    font-size: var(--texto-sm);
+  }
+  app-caja .estado .quien strong {
+    order: -1;
+    margin: 2px 0 4px;
+    font-size: 1.75rem;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  app-caja .estado .alerta {
+    color: var(--texto);
+  }
+
+  /* Los avisos de falta de efectivo: las dos acciones apiladas, a todo el ancho y con el alto del dedo. */
+  app-caja .falta-efectivo .acciones {
+    flex-direction: column;
+  }
+  app-caja .falta-efectivo .acciones > button {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+
+  /* «Cerrar la caja»: una fila de 56 px que abre la pantalla del cierre (artboard 04). */
+  app-caja .fila-cerrar-caja {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--e-3);
+    width: 100%;
+    min-height: 56px;
+    margin-bottom: var(--e-4);
+    padding: var(--e-2) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    color: var(--texto);
+    font: inherit;
+    text-align: left;
+  }
+  app-caja .fila-cerrar-caja b {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  app-caja .fila-cerrar-caja small {
+    display: block;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-caja .fila-cerrar-caja svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  app-caja .fila-cerrar-caja:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+
+  /* El cierre: sin abrir no se ve; abierto es una pantalla completa (cubre la barra de destinos) con «Volver» y el pie fijo. */
+  app-caja form.cierre.cierre-celular:not(.cierre-abierto) {
+    display: none;
+  }
+  app-caja form.cierre.cierre-celular.cierre-abierto {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 0;
+    background: var(--superficie);
+  }
+  app-caja form.cierre-abierto > :not(.ficha-barra, .ficha-pie) {
+    flex: none;
+    margin-inline: var(--pantalla-x);
+  }
+  app-caja form.cierre-abierto .ficha-barra h2 {
+    min-width: 0;
+    margin: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+  }
+  /* «Contá el efectivo y cargalo…» como el aviso informativo del artboard 05. */
+  app-caja form.cierre-abierto > .ayuda {
+    margin-bottom: 0;
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--info-borde);
+    border-radius: var(--radio);
+    background: var(--info-fondo);
+    color: var(--info);
+    font-weight: 500;
+  }
+  app-caja form.cierre-abierto .ficha-pie > button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+
+  /* El resumen de la caja (en vivo, en el cierre y en el detalle del historial): renglones de dos extremos de 44 px. */
+  app-resumen-caja .resumen.panel {
+    padding: var(--e-3) var(--e-4);
+  }
+  app-resumen-caja .lineas {
+    gap: 0;
+  }
+  app-resumen-caja .lineas li {
+    align-items: center;
+    min-height: var(--alto-tactil);
+    padding: var(--e-1) 0;
+  }
+  app-resumen-caja .lineas .subtotal {
+    font-size: 1rem;
+  }
+  app-resumen-caja .titulo .imprimir {
+    min-height: var(--alto-tactil);
+  }
+  /* La diferencia es una pastilla: verde en cero o si sobra, roja si falta, siempre con su texto. */
+  app-resumen-caja .lineas .diferencia strong {
+    padding: 2px 10px;
+    border: 1px solid var(--exito-borde);
+    border-radius: 999px;
+    background: var(--exito-fondo);
+    color: var(--exito);
+  }
+  app-resumen-caja .lineas .diferencia.falta strong {
+    border-color: var(--error-borde);
+    background: var(--error-fondo);
+    color: var(--error);
+  }
+
+  /* Los movimientos del día como tarjetas: tipo e importe arriba, el motivo y, abajo, la hora y quién lo cargó. */
+  app-resumen-caja .tabla-scroll {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  app-resumen-caja .tabla-scroll table,
+  app-resumen-caja .tabla-scroll tbody {
+    display: block;
+  }
+  app-resumen-caja .tabla-scroll thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  app-resumen-caja .tabla-scroll tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--e-3);
+    row-gap: 2px;
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-resumen-caja .tabla-scroll tbody tr + tr {
+    margin-top: var(--e-2);
+  }
+  app-resumen-caja .tabla-scroll td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  /* Las celdas vienen en el orden de la tabla (hora, tipo, motivo, usuario, importe): `order` arma las tres líneas. */
+  app-resumen-caja .tabla-scroll td:nth-child(2) {
+    order: 1;
+    flex: 1 1 0;
+    font-weight: 600;
+  }
+  app-resumen-caja .tabla-scroll td:nth-child(5) {
+    order: 2;
+    flex: none;
+    font-weight: 600;
+  }
+  app-resumen-caja .tabla-scroll td:nth-child(3) {
+    order: 3;
+    flex: 0 0 100%;
+  }
+  /* La primera celda es la columna fija de la grilla (180 px y pegada a la izquierda): acá es una celda más. */
+  app-resumen-caja .tabla-scroll td:nth-child(1) {
+    order: 4;
+    flex: none;
+    position: static;
+    min-width: 0;
+    background: none;
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+  }
+  app-resumen-caja .tabla-scroll td:nth-child(4) {
+    order: 5;
+    flex: 0 1 auto;
+    margin-left: auto;
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+    text-align: right;
+  }
+
+  /* Historial: la diferencia como pastilla (como el artboard 06) y el paginador con botones del dedo. */
+  app-historial-cajas .tabla-scroll .tabla-tarjetas td.diferencia {
+    justify-self: start;
+    padding: 1px 10px;
+    border: 1px solid var(--exito-borde);
+    border-radius: 999px;
+    background: var(--exito-fondo);
+    color: var(--exito);
+    font-weight: 600;
+  }
+  app-historial-cajas .tabla-scroll .tabla-tarjetas td.diferencia.falta {
+    border-color: var(--error-borde);
+    background: var(--error-fondo);
+    color: var(--error);
+  }
+  app-historial-cajas .tabla-scroll .tabla-tarjetas td.diferencia::before {
+    content: none;
+  }
+  app-historial-cajas .paginas {
+    justify-content: space-between;
+  }
+  app-historial-cajas .paginas > button {
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+  }
+  /* La ✕ del detalle de una caja mide 44×44 (la del diálogo compartido mide 36 de ancho; las demás pantallas no se tocan). */
+  app-historial-cajas .dialogo-detalle-equis {
+    width: var(--alto-tactil);
+  }
+}
