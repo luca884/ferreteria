@@ -28,6 +28,16 @@
   </div>
 
   <!--
+    movil-sectores T8c: la barra de cliente del celular, debajo del buscador, como el artboard 01: siempre dice a quién se le
+    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba y, en el celular, esconde
+    el renglón «Cliente: … Quitar» de abajo, que dice lo mismo). «Quitar» está en el selector.
+  -->
+  <div class="sub-cliente">
+    <span class="sub-cliente-nombre">Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong></span>
+    <button type="button" class="sub-cliente-cambiar" (click)="abrirCliente($event)">Cambiar</button>
+  </div>
+
+  <!--
     móvil-pulgar, T4: en el celular los avisos se juntan en una franja de una línea —cuántos hay, la acción de la caja a
     un toque y el panel plegado—, así el ticket arranca más arriba. En el escritorio los dos contenedores no ocupan lugar
     y los avisos se ven como hasta hoy.

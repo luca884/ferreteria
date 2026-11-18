@@ -2861,3 +2861,148 @@ ul.error {
     color: var(--texto-deshabilitado);
   }
 }
+
+/*
+ * 8c: el cliente. La barra «Cliente: … Cambiar» debajo del buscador (artboard 01 de movil-mostrador) y el selector de
+ * cliente a pantalla completa con el pie fijo (artboard 04). La barra existe en la página siempre y sólo se ve en el
+ * celular; en el celular esconde el renglón «Cliente: … Quitar» de siempre, que dice lo mismo («Quitar» está en el
+ * selector). El selector (`DialogoCliente`) pone `.cliente-celular` sólo en el celular: el escritorio y la tablet
+ * conservan su DOM y su diálogo centrado (S5). Reusa la barra «Volver» y el pie de las fichas (`.ficha-barra`,
+ * `.ficha-volver`, `.ficha-pie`). Todo cuelga de `app-dialogo-cliente` o `app-mostrador` para ganarle a los estilos de cada
+ * componente, que se cargan después de este archivo.
+ */
+.sub-cliente {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  app-mostrador .sub-cliente {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-2);
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-1) 0 var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie);
+    font-size: var(--texto-sm);
+  }
+  app-mostrador .sub-cliente .sub-cliente-nombre {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-mostrador .sub-cliente .sub-cliente-cambiar {
+    flex: none;
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 0;
+    background: transparent;
+    color: var(--acento-fuerte);
+    font-weight: 600;
+  }
+  app-mostrador .zona-busqueda .cliente-ticket {
+    display: none;
+  }
+
+  /* El selector cubre toda la pantalla (también la barra de destinos), sin el velo ni la tarjeta del diálogo. */
+  app-dialogo-cliente .dialogo-fondo {
+    padding: 0;
+    place-items: stretch;
+    background: var(--superficie);
+  }
+  app-dialogo-cliente .dialogo.cliente-celular {
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+  }
+  /* Lo que va entre la barra y el pie, con el margen de las pantallas completas. */
+  app-dialogo-cliente .cliente-celular > :not(.ficha-barra, .ficha-pie, form) {
+    flex: none;
+    margin: var(--e-3) var(--pantalla-x) 0;
+  }
+  app-dialogo-cliente .cliente-celular > .actual {
+    font-size: var(--texto-sm);
+  }
+  app-dialogo-cliente .cliente-celular > .conteo-clientes {
+    margin-bottom: calc(var(--e-1) * -1);
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  /* La lista a todo el ancho, como en el artboard: filas de 64 px con filete y sin el marco redondeado del diálogo. */
+  app-dialogo-cliente .cliente-celular > ul.resultados {
+    margin-inline: 0;
+    border-inline: 0;
+    border-radius: 0;
+  }
+  /* `li[role]` le gana a `.resultados li` del componente, que Angular marca con su atributo en las dos partes. */
+  app-dialogo-cliente .cliente-celular .resultados li[role='option'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--e-3);
+    min-height: 64px;
+    padding: 10px var(--pantalla-x);
+  }
+  /* El nombre arriba, el documento debajo y «Cta. cte.» a la derecha; las cifras del Dueño en su propia línea. */
+  app-dialogo-cliente .cliente-celular .resultados .nombre {
+    grid-column: 1;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+  }
+  app-dialogo-cliente .cliente-celular .resultados .lado {
+    display: contents;
+    text-align: left;
+  }
+  app-dialogo-cliente .cliente-celular .resultados .documento {
+    grid-column: 1;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+  }
+  app-dialogo-cliente .cliente-celular .resultados .cta-cte {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+  }
+  app-dialogo-cliente .cliente-celular .resultados .cifras {
+    grid-column: 1 / -1;
+  }
+
+  /* El pie fijo: «Quitar cliente» y «Nuevo cliente» (o «Volver a buscar» y «Guardar y elegir»), de 52 px como el artboard. */
+  app-dialogo-cliente .cliente-celular .ficha-pie button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-dialogo-cliente .cliente-celular .ficha-pie > .primario {
+    flex-grow: 1.4;
+  }
+  /* «Nuevo cliente»: el formulario llena la pantalla y su pie queda fijo abajo, de borde a borde. */
+  app-dialogo-cliente .cliente-celular > form.alta-rapida {
+    flex: 1 1 auto;
+    padding: var(--e-3) var(--pantalla-x) 0;
+  }
+  app-dialogo-cliente .cliente-celular .alta-rapida .ficha-pie {
+    margin: auto calc(var(--pantalla-x) * -1) 0;
+  }
+  /* Documento y Número comparten la fila sin pasarse del ancho de la pantalla. */
+  app-dialogo-cliente .cliente-celular .fila-doc {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  app-dialogo-cliente .cliente-celular .fila-doc > div {
+    min-width: 0;
+  }
+  app-dialogo-cliente .cliente-celular .fila-doc :is(input, select) {
+    width: 100%;
+    min-width: 0;
+  }
+}

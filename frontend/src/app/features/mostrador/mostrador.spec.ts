@@ -5829,7 +5829,8 @@ describe('Mostrador', () => {
         expect(hojaCantidad()).toBeNull();
         expect(cantidades()).toEqual(['3', '1']);
         expect(totalGrande()).toBe('$ 500,00');
-        expect(document.activeElement).toBe(campo());
+        // movil-sectores T8c: cerrar la hoja de la cantidad en el celular tampoco enfoca el buscador (subiría el teclado).
+        expect(document.activeElement).not.toBe(campo());
       });
 
       it('Cantidad con un valor inválido deja el mismo error de hoy y no cambia nada', async () => {
@@ -6204,6 +6205,331 @@ describe('Mostrador', () => {
 
           expect(document.activeElement).toBe(campo());
         });
+      });
+    });
+
+    describe('cliente en pantalla completa y barra de cliente (movil-sectores T8c)', () => {
+      const subBarra = () => el().querySelector<HTMLElement>('.sub-cliente');
+      /** Lo que la barra dice del cliente, sin el botón. */
+      const quienEs = () => normal(subBarra()!.querySelector('.sub-cliente-nombre')?.textContent);
+      const cambiar = () => Array.from(subBarra()!.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === 'Cambiar')!;
+      const pantallaCliente = () => el().querySelector<HTMLElement>('app-dialogo-cliente [role="dialog"].cliente-celular');
+      const filaCliente = (nombre: string) =>
+        Array.from(el().querySelectorAll<HTMLElement>('app-dialogo-cliente [role="option"]')).find((o) => normal(o.textContent).startsWith(nombre))!;
+      const botonPantalla = (texto: string) =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-cliente button')).find((b) => normal(b.textContent) === texto)!;
+      const volver = () => el().querySelector<HTMLButtonElement>('app-dialogo-cliente .ficha-volver')!;
+      async function esc() {
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await refrescar();
+      }
+      async function abrirDesdeCambiar() {
+        cambiar().click();
+        await refrescar();
+      }
+
+      it('la barra de cliente dice «Cliente: Consumidor Final» con «Cambiar» mientras el ticket no tiene cliente', async () => {
+        comoCelular();
+        await conTicket();
+
+        expect(quienEs()).toBe('Cliente: Consumidor Final');
+        expect(normal(subBarra()!.querySelector('button')!.textContent)).toBe('Cambiar');
+        expect(cambiar().getAttribute('type')).toBe('button');
+        expect(cambiar().hasAttribute('disabled')).toBe(false);
+        expect(cambiar().hasAttribute('aria-disabled')).toBe(false);
+        // Con el ticket vacío también: el cliente se elige antes del primer renglón.
+        TestBed.resetTestingModule();
+        comoCelular();
+        await crear();
+        expect(quienEs()).toBe('Cliente: Consumidor Final');
+      });
+
+      it('«Cambiar» abre el selector de cliente a pantalla completa, con su buscador enfocado y la lista de siempre', async () => {
+        comoCelular();
+        await conTicket();
+
+        await abrirDesdeCambiar();
+
+        expect(pantallaCliente()).not.toBeNull();
+        expect(normal(pantallaCliente()!.querySelector('h2')?.textContent)).toBe('Cliente');
+        expect(pantallaCliente()!.querySelector('.ficha-barra .ficha-volver')).not.toBeNull();
+        expect(pantallaCliente()!.querySelector('.dialogo-acciones.ficha-pie')).not.toBeNull();
+        expect(document.activeElement).toBe(pantallaCliente()!.querySelector('input[aria-label="Buscar cliente"]'));
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+        expect(clientesApi.buscar).toHaveBeenCalledWith({ q: '', soloActivos: true, page: 0, size: 8 });
+        expect(Array.from(el().querySelectorAll('app-dialogo-cliente [role="option"]')).map((o) => normal(o.textContent).split(' ')[0])).toEqual(['Ana', 'Ferretería']);
+      });
+
+      it('elegir un cliente cierra el selector, la barra lo muestra y el foco NO va al buscador (no sube el teclado)', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirDesdeCambiar();
+
+        filaCliente('Ferretería Norte SRL').click();
+        await refrescar();
+
+        expect(pantallaCliente()).toBeNull();
+        expect(quienEs()).toBe('Cliente: Ferretería Norte SRL');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('«Quitar cliente» vuelve a Consumidor Final, cierra y tampoco enfoca el buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirDesdeCambiar();
+        filaCliente('Ferretería Norte SRL').click();
+        await refrescar();
+        await abrirDesdeCambiar();
+        expect(normal(pantallaCliente()!.querySelector('.actual')?.textContent)).toBe('Cliente actual: Ferretería Norte SRL');
+
+        botonPantalla('Quitar cliente').click();
+        await refrescar();
+
+        expect(pantallaCliente()).toBeNull();
+        expect(quienEs()).toBe('Cliente: Consumidor Final');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('«Volver» y Esc cierran sin cambiar el cliente, y el foco vuelve a «Cambiar» y no al buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirDesdeCambiar();
+        filaCliente('Ferretería Norte SRL').click();
+        await refrescar();
+
+        // El buscador del mostrador tenía el foco (con el teclado arriba) cuando se tocó «Cambiar».
+        campo().focus();
+        await abrirDesdeCambiar();
+        volver().click();
+        await refrescar();
+        expect(pantallaCliente()).toBeNull();
+        expect(quienEs()).toBe('Cliente: Ferretería Norte SRL');
+        expect(document.activeElement).toBe(cambiar());
+        expect(document.activeElement).not.toBe(campo());
+
+        await abrirDesdeCambiar();
+        await esc();
+        expect(pantallaCliente()).toBeNull();
+        expect(quienEs()).toBe('Cliente: Ferretería Norte SRL');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('desde «Más acciones» › Cliente es la misma pantalla y al cerrarla el foco tampoco va al buscador', async () => {
+        comoCelular();
+        await conTicket();
+        el().querySelector<HTMLButtonElement>('button.mas-acciones-ticket')!.click();
+        await refrescar();
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-hoja-mas-acciones .accion-hoja'))
+          .find((b) => normal(b.textContent).startsWith('Cliente'))!
+          .click();
+        await refrescar();
+
+        expect(pantallaCliente()).not.toBeNull();
+        await esc();
+
+        expect(pantallaCliente()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('el Vendedor y el Dueño ven la misma barra y la misma pantalla; sólo el Dueño ve las cifras de la cuenta', async () => {
+        const conCuenta: Cliente = { ...CLIENTE_ANA, id: 5, razonSocial: 'Corralón Sur', cuentaCorrienteHabilitada: true, limiteCuentaCorriente: 5000, saldo: 1500 };
+        for (const rol of ['VENDEDOR', 'DUENO'] as const) {
+          TestBed.resetTestingModule();
+          comoCelular();
+          await conTicket(cajaAbierta, rol);
+          clientesApi.buscar.mockReturnValue(of({ items: [conCuenta], page: 0, size: 8, totalElements: 1, totalPages: 1 } as PageResponse<Cliente>));
+
+          await abrirDesdeCambiar();
+
+          expect(quienEs()).toBe('Cliente: Consumidor Final');
+          expect(pantallaCliente()).not.toBeNull();
+          expect(normal(filaCliente('Corralón Sur').textContent).includes('Saldo')).toBe(rol === 'DUENO');
+          expect(normal(filaCliente('Corralón Sur').textContent)).toContain('Cta. cte.');
+        }
+      });
+
+      it('con un diálogo abierto «Cambiar» no abre otro selector', async () => {
+        comoCelular();
+        await conTicket();
+        await tocarRenglon(0);
+
+        cambiar().click();
+        await refrescar();
+
+        expect(pantallaCliente()).toBeNull();
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+      });
+
+      it('«Cambiar» abre el selector aunque el ticket no tenga renglones (F9 tampoco lo frena)', async () => {
+        comoCelular();
+        await crear();
+
+        await abrirDesdeCambiar();
+
+        expect(pantallaCliente()).not.toBeNull();
+      });
+
+      it('el cobro sigue llevando el cliente elegido desde la pantalla completa', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirDesdeCambiar();
+        filaCliente('Ferretería Norte SRL').click();
+        await refrescar();
+
+        cobrar().click();
+        await refrescar();
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await refrescar();
+
+        expect(cobros[0].pedido.clienteId).toBe(2);
+      });
+    });
+
+    describe('cerrar la hoja de la cantidad en el celular (movil-sectores T8c)', () => {
+      const dialogoCantidad = () => el().querySelector<HTMLElement>('app-dialogo-cantidad [role="dialog"]');
+      async function abrirCantidad() {
+        await tocarRenglon(0);
+        accion('Cantidad').click();
+        await refrescar();
+      }
+
+      it('«Cancelar» cierra la hoja sin cambiar nada y el foco NO va al buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirCantidad();
+
+        Array.from(hojaCantidad()!.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === 'Cancelar')!.click();
+        await refrescar();
+
+        expect(dialogoCantidad()).toBeNull();
+        expect(cantidades()).toEqual(['1', '1']);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('Esc la cierra y tampoco enfoca el buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirCantidad();
+
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await refrescar();
+
+        expect(dialogoCantidad()).toBeNull();
+        expect(cantidades()).toEqual(['1', '1']);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('un toque en el velo la cierra sin enfocar el buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirCantidad();
+
+        el().querySelector<HTMLElement>('app-dialogo-cantidad .hoja-inferior-fondo')!.click();
+        await refrescar();
+
+        expect(dialogoCantidad()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('«Aceptar» cambia la cantidad por el mismo camino de hoy y tampoco enfoca el buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirCantidad();
+
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button[aria-label="Sumar uno"]')!.click();
+        await refrescar();
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(dialogoCantidad()).toBeNull();
+        expect(cantidades()).toEqual(['2', '1']);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('con el buscador enfocado al tocar el renglón (lo normal: el lector lo deja enfocado), cerrar la hoja de la cantidad no vuelve a él', async () => {
+        comoCelular();
+        await conTicket();
+        expect(document.activeElement).toBe(campo());
+
+        // Sin `blur()` previo: el toque no le saca el foco al buscador. La hoja del renglón se abre y se reemplaza por la de la cantidad.
+        renglonesTicket()[0].click();
+        await refrescar();
+        accion('Cantidad').click();
+        await refrescar();
+        Array.from(hojaCantidad()!.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === 'Cancelar')!.click();
+        await refrescar();
+
+        expect(dialogoCantidad()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('con el buscador enfocado, cerrar la hoja del renglón con Esc tampoco vuelve a él', async () => {
+        comoCelular();
+        await conTicket();
+        expect(document.activeElement).toBe(campo());
+
+        renglonesTicket()[0].click();
+        await refrescar();
+        hoja()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await refrescar();
+
+        expect(hoja()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('un valor inválido deja la hoja abierta con el error, sin cerrarla ni tocar el foco del buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirCantidad();
+        const entrada = hojaCantidad()!.querySelector<HTMLInputElement>('input')!;
+        entrada.value = '0';
+        entrada.dispatchEvent(new Event('input'));
+
+        hojaCantidad()!.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(dialogoCantidad()).not.toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+    });
+
+    describe('fuera del celular cerrar el selector y la cantidad devuelve el foco al buscador (T8c)', () => {
+      const pantallaCliente = () => el().querySelector<HTMLElement>('app-dialogo-cliente [role="dialog"]');
+      const f = async (key: string) => {
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+        await refrescar();
+      };
+
+      it.each([['en el escritorio', null], ['en la tablet (hasta 1023 px)', '1023.98px']])(
+        'F9 + Esc y F3 + Esc %s enfocan el buscador, como siempre',
+        async (_nombre, consulta) => {
+          if (consulta) comoCelular(consulta);
+          await conTicket();
+
+          await f('F9');
+          expect(pantallaCliente()).not.toBeNull();
+          expect(pantallaCliente()!.classList).not.toContain('cliente-celular');
+          expect(el().querySelector('app-dialogo-cliente .ficha-barra')).toBeNull();
+          await f('Escape');
+          expect(pantallaCliente()).toBeNull();
+          expect(document.activeElement).toBe(campo());
+
+          await f('F3');
+          expect(el().querySelector('app-dialogo-cantidad [role="dialog"]')).not.toBeNull();
+          await f('Escape');
+          expect(el().querySelector('app-dialogo-cantidad')).toBeNull();
+          expect(document.activeElement).toBe(campo());
+        },
+      );
+
+      it('en el escritorio elegir un cliente enfoca el buscador', async () => {
+        await conTicket();
+        await f('F9');
+        el().querySelector<HTMLElement>('app-dialogo-cliente [role="option"]')!.click();
+        await refrescar();
+
+        expect(pantallaCliente()).toBeNull();
+        expect(document.activeElement).toBe(campo());
       });
     });
 
