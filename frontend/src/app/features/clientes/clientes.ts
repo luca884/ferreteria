@@ -14,10 +14,13 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { NgTemplateOutlet } from '@angular/common';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { ImporteInput } from '../../shared/importe-input';
+import { esCelular } from '../../shared/es-celular';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
@@ -62,7 +65,7 @@ const sinVacios = (texto: string): string | undefined => texto.trim() || undefin
  */
 @Component({
   selector: 'app-clientes',
-  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, CampoMoneda, ImporteInput, Confirmacion],
+  imports: [ReactiveFormsModule, RouterLink, NgTemplateOutlet, BarraAcciones, CampoMoneda, HojaInferior, ImporteInput, Confirmacion],
   templateUrl: './clientes.html',
   styleUrl: './clientes.css',
 })
@@ -75,6 +78,21 @@ export class Clientes implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
+
+  /**
+   * En el celular (movil-sectores T12a) la lista son tarjetas con «Nuevo» flotante y el alta o la edición es una ficha a
+   * pantalla completa (S7): «Volver» arriba, el pie fijo abajo y, con el cliente abierto, el ⋯ con Desactivar y el atajo a
+   * su cuenta. Se lee al crearse: no sigue la rotación. Es sólo cómo se ve: el formulario, la validación, los pedidos y los
+   * textos son los mismos, y en la tablet y el escritorio el DOM no cambia.
+   */
+  protected readonly celular = esCelular();
+  /**
+   * La ficha a pantalla completa del celular: `nuevo`, `editar` y tocar una fila la abren; guardar, «Volver», «Cancelar»,
+   * Esc y un cambio de estado la cierran. Sólo la lee el CSS del celular.
+   */
+  protected readonly fichaAbierta = signal(false);
+  /** La hoja del ⋯ de la ficha (sólo celular, sólo Dueño): Desactivar o Reactivar. */
+  protected readonly menuAbierto = signal(false);
 
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
   protected readonly condiciones = CONDICIONES_IVA;
@@ -272,6 +290,8 @@ export class Clientes implements OnInit {
       error: (err: unknown) => {
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El cliente ya quedó guardado: en el celular la ficha se cierra para que el aviso se vea en la página.
+        this.cerrarFicha();
         const detalle = erroresDeCampos(err).join(' ') || mensajeDe(err, 'Probá de nuevo.');
         this.error.set(
           `Se guardó «${guardado.razonSocial}», pero no se pudo cambiar el límite de la cuenta corriente. ${detalle}`,
@@ -284,8 +304,10 @@ export class Clientes implements OnInit {
   private terminarGuardado(guardado: Cliente): void {
     this.vaciarFormulario();
     this.guardando.set(false);
-    // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
-    this.enfocar('#razon-social');
+    // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo. En el celular la
+    // ficha se cierra y el foco va al botón flotante: enfocar un campo de una ficha cerrada no tiene dónde.
+    this.cerrarFicha();
+    if (!this.celular) this.enfocar('#razon-social');
     this.aviso.set(`Se guardó «${guardado.razonSocial}».`);
     this.cargar(this.pagina().page);
   }
@@ -318,6 +340,7 @@ export class Clientes implements OnInit {
     this.aviso.set(null);
     this.filas.elegidoId.set(cliente.id);
     this.editando.set(cliente);
+    this.fichaAbierta.set(true);
     this.form.reset({
       razonSocial: cliente.razonSocial,
       tipoDocumento: cliente.tipoDocumento ?? '',
@@ -338,11 +361,43 @@ export class Clientes implements OnInit {
     this.limpiarErrores();
   }
 
+  /** En el celular, tocar un cliente de la lista abre su ficha; en la tablet y el escritorio sólo lo elige (Enter o doble clic editan). */
+  protected abrirFichaEnElCelular(cliente: Cliente): void {
+    if (!this.celular) return;
+    this.editar(cliente);
+    // En «Volver», no en un campo: con el foco en un campo subiría el teclado antes de que se vea la ficha.
+    this.enfocar('form.alta .ficha-volver');
+    this.alInicioDeLaFicha();
+  }
+
+  /** «Volver» y «Cancelar» de la ficha del celular: se descarta lo escrito y el foco vuelve al botón «Nuevo». */
+  protected volverDeLaFicha(): void {
+    this.cancelar();
+    this.cerrarFicha();
+  }
+
+  /** Esc en la ficha del celular es «Volver». Con la hoja del ⋯ o la confirmación abiertas, ese Esc es de ellas (no pasa por acá). */
+  protected alTeclearLaFicha(evento: KeyboardEvent): void {
+    if (evento.key !== 'Escape' || evento.defaultPrevented || !this.celular || !this.fichaAbierta()) return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    this.volverDeLaFicha();
+  }
+
+  /** Cierra la ficha y, en el celular, devuelve el foco a «Nuevo»; en el escritorio el foco se queda donde estaba. */
+  private cerrarFicha(): void {
+    this.fichaAbierta.set(false);
+    this.menuAbierto.set(false);
+    if (this.celular) this.enfocar('.boton-flotante');
+  }
+
   /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
   protected nuevo(): void {
     this.aviso.set(null);
     this.cancelar();
+    this.fichaAbierta.set(true);
     this.enfocar('#razon-social');
+    this.alInicioDeLaFicha();
   }
 
   /** Solo el Dueño: desactivar pide confirmación; reactivar es directo. */
@@ -356,6 +411,15 @@ export class Clientes implements OnInit {
     else this.cambiarActivo(cliente);
   }
 
+  /**
+   * Desactivar o Reactivar desde el ⋯ de la ficha (sólo celular). La hoja se cierra sólo si la acción sigue su curso: con
+   * saldo queda abierta y el motivo ya está escrito en la fila (S5).
+   */
+  protected alternarDesdeLaHoja(): void {
+    if (this.motivos().alternar === null) this.menuAbierto.set(false);
+    this.alternarActivo();
+  }
+
   protected confirmarDesactivar(): void {
     const cliente = this.aDesactivar();
     this.aDesactivar.set(null);
@@ -367,6 +431,8 @@ export class Clientes implements OnInit {
     this.aviso.set(null);
     this.error.set(null);
     this.cambiando.set(true);
+    // En el celular la ficha se cierra: la lista muestra el cambio o, si falla, el error (la ficha lo taparía).
+    if (this.celular && this.fichaAbierta()) this.cerrarFicha();
     this.service.cambiarActivo(cliente.id, !cliente.activo).subscribe({
       next: (cambiado) => {
         this.clientes.update((lista) => lista.map((c) => (c.id === cambiado.id ? cambiado : c)));
@@ -429,6 +495,18 @@ export class Clientes implements OnInit {
       ...(sinVacios(v.whatsapp) ? { whatsapp: sinVacios(v.whatsapp) } : {}),
       ...(sinVacios(v.email) ? { email: sinVacios(v.email) } : {}),
     };
+  }
+
+  /** La ficha del celular scrollea por dentro y conserva su posición al cerrarse: al abrirla otra vez arranca desde arriba. */
+  private alInicioDeLaFicha(): void {
+    if (!this.celular) return;
+    afterNextRender(
+      () => {
+        const ficha = this.host.nativeElement.querySelector('form.alta');
+        if (ficha) ficha.scrollTop = 0;
+      },
+      { injector: this.injector },
+    );
   }
 
   /** Después de pintar, enfoca el primer elemento que coincida. */

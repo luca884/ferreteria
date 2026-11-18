@@ -6,6 +6,7 @@ import { erroresDeCampos, esOcupado, mensajeDe } from '../../../core/api/api-err
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe, formatearMonto } from '../../../core/formato/monto';
 import { BarraAcciones } from '../../../shared/barra-acciones';
+import { esCelular } from '../../../shared/es-celular';
 import { fechaHoraLocal } from '../../caja/caja.models';
 import { Cliente, documentoLegible } from '../cliente.models';
 import { ClientesService } from '../clientes.service';
@@ -79,6 +80,12 @@ export class CuentaCliente implements OnInit {
   private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
+  /**
+   * En el celular (movil-sectores T12a) «Cobrar», «Recargo» y «Descuento» van en una fila debajo del saldo y no en la barra,
+   * donde con «Volver a Clientes» no entraban. Se lee al crearse: no sigue la rotación. Es sólo dónde están los botones: los
+   * manejadores, las condiciones y los diálogos son los mismos, y en la tablet y el escritorio el DOM no cambia.
+   */
+  protected readonly celular = esCelular();
   protected readonly fecha = fechaHoraLocal;
   protected readonly documentoLegible = documentoLegible;
   protected readonly sinPermiso = MENSAJE_SIN_PERMISO;
