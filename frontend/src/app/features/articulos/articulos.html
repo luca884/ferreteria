@@ -132,7 +132,7 @@
   filtros de la barra pasan a dos chips de 44 px (T5, artboard 01 de movil-articulos). En escritorio y en
   tablet no se ve nada de esto: ahí manda la barra de siempre (las copias de arriba quedan ocultas sólo en el celular).
 -->
-<div class="herramientas-movil">
+<div class="herramientas-movil" [class.en-seleccion]="seleccionando()">
   <form class="busqueda-movil" role="search" [formGroup]="form" (ngSubmit)="buscar()">
     <label class="caja-busqueda" for="q-movil">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -162,6 +162,23 @@
     </button>
   </div>
 </div>
+
+<!--
+  Celular, sólo el Dueño (movil-sectores T6): la pista de la primera vez y, en el modo selección, la barra con la ✕, la
+  cuenta y «Elegir todos». Mantener apretada una fila entra al modo; la acción fija está al pie de la página.
+-->
+@if (puedeSeleccionar() && pistaVista() && !seleccionando()) {
+  <p class="alerta info pista-seleccion">Mantené apretado un artículo para elegir varios.</p>
+}
+@if (seleccionando()) {
+  <div class="barra-seleccion" role="status">
+    <button type="button" class="salir-seleccion" aria-label="Salir de la selección" (click)="salirDeSeleccion()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <b>{{ elegidos().size }} {{ elegidos().size === 1 ? 'elegido' : 'elegidos' }}</b>
+    <button type="button" class="elegir-todos" (click)="elegirTodos()">Elegir todos</button>
+  </div>
+}
 
 @if (motivo.visible(); as texto) {
   <p class="motivo-accion" role="status">{{ texto }}</p>
@@ -276,13 +293,30 @@
             <tr
               [class.inactivo]="!articulo.activo"
               class="elegible"
-              [attr.aria-selected]="articulo.id === filas.elegidoId()"
+              [class.con-casilla]="seleccionando()"
+              [class.marcada]="elegidos().has(articulo.id)"
+              [attr.aria-selected]="seleccionando() ? elegidos().has(articulo.id) : articulo.id === filas.elegidoId()"
               [attr.tabindex]="filas.esTabulable(articulo, i) ? 0 : -1"
-              (click)="filas.elegir(articulo); abrirFichaEnElCelular(articulo)"
+              (click)="alTocar(articulo)"
               (focus)="filas.elegir(articulo)"
-              (dblclick)="abrirFicha(articulo)"
+              (dblclick)="alDobleToque(articulo)"
               (keydown)="filas.alTeclear($event, articulo, i)"
+              (pointerdown)="alPulsar($event, articulo)"
+              (pointermove)="alMoverElDedo($event)"
+              (pointerup)="cancelarPulsacion()"
+              (pointercancel)="cancelarPulsacion()"
+              (pointerleave)="cancelarPulsacion()"
+              (contextmenu)="alMenuContextual($event)"
             >
+              @if (seleccionando() && articulo.activo) {
+                <td class="casilla-fila" aria-hidden="true">
+                  <span class="casilla-marca" [class.on]="elegidos().has(articulo.id)">
+                    @if (elegidos().has(articulo.id)) {
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10" /></svg>
+                    }
+                  </span>
+                </td>
+              }
               <td class="codigo" data-etiqueta="Código" [attr.data-rubro]="rubroDe(articulo)">{{ articulo.codigoInterno }}</td>
               <td class="codigo-proveedor solo-ficha" data-etiqueta="Cód. proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
               <td class="descripcion" data-etiqueta="Descripción">
@@ -316,7 +350,7 @@
               <td class="costo-al solo-ficha" data-etiqueta="Última actualización">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
               <td class="estado" data-etiqueta="Estado">
                 <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
-                  articulo.activo ? 'Activo' : 'De baja'
+                  articulo.activo ? 'Activo' : seleccionando() ? 'Dado de baja' : 'De baja'
                 }}</span>
               </td>
             </tr>
@@ -352,13 +386,36 @@
   />
 }
 
-@if (auth.esDueno()) {
+@if (auth.esDueno() && !seleccionando()) {
   <button type="button" class="boton-flotante" (click)="nuevo()">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 5v14M5 12h14" />
     </svg>
     Nuevo
   </button>
+}
+
+@if (seleccionando()) {
+  <div class="pie-seleccion">
+    @if (elegidos().size === 0) {
+      <p class="motivo-seleccion">Elegí al menos un artículo.</p>
+    }
+    <button
+      type="button"
+      class="primario agregar"
+      [attr.aria-disabled]="elegidos().size === 0 ? 'true' : null"
+      (click)="agregarAEtiquetas()"
+    >
+      Agregar {{ elegidos().size }} a Etiquetas
+    </button>
+  </div>
+}
+
+@if (enListaDeEtiquetas(); as total) {
+  <div class="aviso-etiquetas" role="status">
+    <span>Lista de etiquetas: {{ total }} {{ total === 1 ? 'artículo' : 'artículos' }}</span>
+    <button type="button" (click)="irA('/etiquetas')">Ir a Etiquetas</button>
+  </div>
 }
 
 @if (menuAbierto()) {

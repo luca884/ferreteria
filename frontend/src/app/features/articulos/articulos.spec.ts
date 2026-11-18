@@ -11,6 +11,7 @@ import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { Avisos } from '../../core/avisos/avisos';
 import { AuthService } from '../../core/auth/auth.service';
+import { Sesion } from '../../core/auth/auth.models';
 import { Articulo } from './articulo.models';
 import { Articulos } from './articulos';
 import { ArticulosService } from './articulos.service';
@@ -18,6 +19,15 @@ import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 import { RubrosService } from '../rubros/rubros.service';
 
 registerLocaleData(localeEsAr);
+
+const SESION = {
+  userId: 7,
+  nombre: 'Dueño',
+  email: 'dueno@tornillo.demo',
+  rol: 'DUENO',
+  ferreteriaId: 1,
+  ferreteriaNombre: 'El Tornillo',
+} as Sesion;
 
 const NBSP = ' ';
 
@@ -88,7 +98,7 @@ describe('Articulos', () => {
         provideRouter([]),
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ArticulosService, useValue: servicio },
-        { provide: AuthService, useValue: { esDueno } },
+        { provide: AuthService, useValue: { esDueno, sesion: signal<Sesion | null>(SESION) } },
         { provide: RubrosService, useValue: rubrosServicio },
       ],
     }).compileComponents();
@@ -1781,5 +1791,258 @@ describe('Articulos', () => {
     expect(el().querySelector('.error')?.textContent).toContain(
       'No se pudieron cargar los artículos.',
     );
+  });
+
+  /*
+   * movil-sectores T6: selección múltiple por mantener apretado → «Agregar N a Etiquetas». Sólo del Dueño y sólo del
+   * celular (S1): en el escritorio y para el Vendedor mantener apretado no hace nada.
+   */
+  // El CSS de la selección vive en styles.css, que Vitest no lee: se mide en el navegador a 390 y 360 px.
+  describe('celular: selección múltiple → Etiquetas (movil-sectores T6)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    const lista = () => pagina([articulo(1), articulo(2), articulo(3), articulo(4, { activo: false })]);
+    const GUARDADAS = 'etiquetas:1:7';
+
+    beforeEach(() => {
+      localStorage.clear();
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      localStorage.clear();
+    });
+
+    const pulsar = (fila: number, x = 100, y = 100) =>
+      filas()[fila].dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, pointerType: 'touch', isPrimary: true }),
+      );
+    const soltar = (fila: number) =>
+      filas()[fila].dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
+    const tocar = (fila: number) => (filas()[fila].querySelector('.descripcion') as HTMLElement).click();
+    /** Mantiene apretada la fila 600 ms y suelta: el toque que el navegador manda después va con `tocar`. */
+    const mantener = (fila: number) => {
+      pulsar(fila);
+      vi.advanceTimersByTime(600);
+      fixture.detectChanges();
+      soltar(fila);
+      tocar(fila);
+      fixture.detectChanges();
+    };
+    const barraSel = () => el().querySelector<HTMLElement>('.barra-seleccion');
+    const marcadas = () => filas().flatMap((f, i) => (f.classList.contains('marcada') ? [i] : []));
+    const pie = () => el().querySelector<HTMLButtonElement>('.pie-seleccion button.agregar')!;
+
+    it('mantener apretada una fila entra al modo selección con esa fila elegida, y el toque que sigue no abre la ficha', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      navegar.mockClear();
+
+      mantener(0);
+
+      expect(barraSel()!.getAttribute('role')).toBe('status');
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('1 elegido');
+      expect(marcadas()).toEqual([0]);
+      expect(navegar).not.toHaveBeenCalled();
+      expect(pie().textContent!.trim()).toBe('Agregar 1 a Etiquetas');
+    });
+
+    it('un toque corto no entra al modo selección: abre la ficha como hasta hoy', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      navegar.mockClear();
+
+      pulsar(0);
+      vi.advanceTimersByTime(200);
+      soltar(0);
+      tocar(0);
+      vi.advanceTimersByTime(1000);
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+      expect(navegar.mock.calls[0]).toEqual([['/articulos', 1], { queryParams: { elegido: 1 }, queryParamsHandling: 'merge' }]);
+    });
+
+    it('si el dedo se mueve (es un scroll) la pulsación se cancela', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      pulsar(0, 100, 100);
+      filas()[0].dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 140 }));
+      vi.advanceTimersByTime(1000);
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('en modo selección tocar suma o saca, cuenta bien y no abre la ficha', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      navegar.mockClear();
+
+      tocar(1);
+      tocar(2);
+      fixture.detectChanges();
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('3 elegidos');
+      expect(marcadas()).toEqual([0, 1, 2]);
+      expect(pie().textContent!.trim()).toBe('Agregar 3 a Etiquetas');
+
+      tocar(1);
+      fixture.detectChanges();
+      expect(marcadas()).toEqual([0, 2]);
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('2 elegidos');
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('«Elegir todos» marca los activos de la página; el dado de baja no tiene casilla y dice por qué', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+
+      barraSel()!.querySelector<HTMLButtonElement>('button.elegir-todos')!.click();
+      fixture.detectChanges();
+
+      expect(marcadas()).toEqual([0, 1, 2]);
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('3 elegidos');
+      expect(filas()[3].querySelector('.casilla-fila')).toBeNull();
+      expect(filas()[3].textContent).toContain('Dado de baja');
+      tocar(3);
+      fixture.detectChanges();
+      expect(marcadas()).toEqual([0, 1, 2]);
+    });
+
+    it('un artículo dado de baja no entra al modo selección al mantenerlo apretado', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      mantener(3);
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('la ✕ sale del modo selección sin tocar nada, y al volver a entrar no queda nada elegido', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(1);
+
+      barraSel()!.querySelector<HTMLButtonElement>('button.salir-seleccion')!.click();
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+      expect(localStorage.getItem(GUARDADAS)).toBeNull();
+      mantener(2);
+      expect(marcadas()).toEqual([2]);
+    });
+
+    it('«Agregar N a Etiquetas» guarda la lista, sale del modo y avisa con un atajo a Etiquetas', async () => {
+      enElCelular();
+      localStorage.setItem(GUARDADAS, JSON.stringify({ v: 1, items: [{ id: 9, copias: 2 }] }));
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(1);
+      navegar.mockClear();
+
+      pie().click();
+      fixture.detectChanges();
+
+      expect(JSON.parse(localStorage.getItem(GUARDADAS)!).items).toEqual([
+        { id: 9, copias: 2 },
+        { id: 1, copias: 1 },
+        { id: 2, copias: 1 },
+      ]);
+      expect(barraSel()).toBeNull();
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain(
+        'Se agregaron 2 artículos a la lista de etiquetas.',
+      );
+      const atajo = el().querySelector<HTMLElement>('.aviso-etiquetas')!;
+      expect(atajo.textContent).toContain('Lista de etiquetas: 3 artículos');
+      atajo.querySelector<HTMLButtonElement>('button')!.click();
+      expect(navegar).toHaveBeenCalledWith(['/etiquetas']);
+    });
+
+    it('con un solo artículo el aviso va en singular', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+
+      pie().click();
+      fixture.detectChanges();
+
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se agregó 1 artículo a la lista de etiquetas.');
+      expect(el().querySelector('.aviso-etiquetas')!.textContent).toContain('Lista de etiquetas: 1 artículo');
+    });
+
+    it('sin nada elegido el botón está apagado, dice por qué y no guarda', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(0);
+      fixture.detectChanges();
+
+      expect(barraSel()).not.toBeNull();
+      expect(pie().getAttribute('aria-disabled')).toBe('true');
+      expect(el().querySelector('.pie-seleccion')!.textContent).toContain('Elegí al menos un artículo.');
+      pie().click();
+      fixture.detectChanges();
+      expect(localStorage.getItem(GUARDADAS)).toBeNull();
+      expect(barraSel()).not.toBeNull();
+    });
+
+    it('cambiar de página sale del modo selección', async () => {
+      enElCelular();
+      await crearComponente(true, pagina([articulo(1), articulo(2)], 0, 2, 30));
+      mantener(0);
+
+      el().querySelector<HTMLButtonElement>('nav.paginacion button.siguiente')!.click();
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('el Vendedor no tiene Etiquetas: mantener apretado no le hace nada', async () => {
+      enElCelular();
+      await crearComponente(false, lista());
+
+      mantener(0);
+
+      expect(barraSel()).toBeNull();
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+    });
+
+    it('en el escritorio mantener apretado no hace nada', async () => {
+      await crearComponente(true, lista());
+
+      mantener(0);
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('la pista «Mantené apretado…» se ve hasta usar la selección una vez y no vuelve', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      expect(el().querySelector('.pista-seleccion')!.textContent).toContain('Mantené apretado un artículo para elegir varios.');
+
+      mantener(0);
+      barraSel()!.querySelector<HTMLButtonElement>('button.salir-seleccion')!.click();
+      fixture.detectChanges();
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crearComponente(true, lista());
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+    });
+
+    it('en el celular el menú de contexto del navegador no aparece sobre una fila', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      const evento = new Event('contextmenu', { bubbles: true, cancelable: true });
+      filas()[0].dispatchEvent(evento);
+
+      expect(evento.defaultPrevented).toBe(true);
+    });
   });
 });

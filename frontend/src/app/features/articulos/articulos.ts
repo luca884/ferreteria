@@ -15,6 +15,7 @@ import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import { HojaInferior } from '../../shared/hoja-inferior';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
+import { claveDeEtiquetas, sumarEtiquetas } from '../etiquetas/etiquetas.storage';
 import { RubrosService } from '../rubros/rubros.service';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -25,6 +26,20 @@ const TAMANO_PAGINA = 20;
 /** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
 const esCelular = (): boolean =>
   typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+
+/** movil-sectores T6: cuánto hay que mantener apretada una fila para entrar a la selección, y cuánto puede moverse el dedo. */
+const PULSACION_LARGA_MS = 500;
+const MOVIMIENTO_MAXIMO_PX = 10;
+/** La pista de la selección se muestra hasta que se usa una vez (por dispositivo). */
+const CLAVE_PISTA_SELECCION = 'ferreteria.pista-seleccion-articulos';
+
+function pistaUsada(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_PISTA_SELECCION) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** S5: lo que se explica al intentar una acción de la barra sin un artículo elegido. */
 const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un artículo de la lista para editarlo.';
@@ -81,6 +96,19 @@ export class Articulos implements OnInit {
    * barra de escritorio) y las acciones que no son de un artículo detrás del ⋯ de la barra, en una hoja inferior.
    */
   protected readonly menuAbierto = signal(false);
+  /**
+   * movil-sectores T6: selección múltiple, sólo del Dueño en el celular. Mantener apretada una fila entra al modo; ahí
+   * un toque suma o saca, y la única acción es «Agregar N a Etiquetas» (CU-03). Cambiar de página sale del modo.
+   */
+  protected readonly seleccionando = signal(false);
+  protected readonly elegidos = signal<ReadonlySet<number>>(new Set());
+  /** Cuántos artículos tiene la lista de Etiquetas tras agregar: muestra el atajo «Ir a Etiquetas». */
+  protected readonly enListaDeEtiquetas = signal<number | null>(null);
+  /** La pista «Mantené apretado…» se descarta sola la primera vez que se usa la selección. */
+  protected readonly pistaVista = signal(!pistaUsada());
+  private pulsacion: { temporizador: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+  /** La pulsación larga ya entró al modo: el toque que el navegador manda al soltar no tiene que contar. */
+  private pulsacionLarga = false;
   /** Nombre de cada rubro por id, para la línea de detalle de la fila del celular; vacío si no se pudo leer. */
   private readonly rubros = signal<ReadonlyMap<number, string>>(new Map());
   /** El CSV se está bajando: Exportar queda deshabilitado. */
@@ -225,6 +253,116 @@ export class Articulos implements OnInit {
     if (esCelular()) this.abrirFicha(articulo);
   }
 
+  /** La selección sólo existe para quien tiene Etiquetas (el Dueño) y en la pantalla del celular. */
+  protected puedeSeleccionar(): boolean {
+    return this.auth.esDueno() && esCelular();
+  }
+
+  /** Un toque en la fila: en el modo selección suma o saca; fuera de él, lo de siempre. */
+  protected alTocar(articulo: Articulo): void {
+    if (this.pulsacionLarga) {
+      this.pulsacionLarga = false;
+      return;
+    }
+    if (this.seleccionando()) {
+      this.alternar(articulo);
+      return;
+    }
+    this.filas.elegir(articulo);
+    this.abrirFichaEnElCelular(articulo);
+  }
+
+  protected alDobleToque(articulo: Articulo): void {
+    if (!this.seleccionando()) this.abrirFicha(articulo);
+  }
+
+  /** Arranca la cuenta de la pulsación larga; un artículo dado de baja no se puede agregar, así que no cuenta. */
+  protected alPulsar(evento: PointerEvent, articulo: Articulo): void {
+    this.cancelarPulsacion();
+    this.pulsacionLarga = false;
+    if (!evento.isPrimary || this.seleccionando() || !articulo.activo || !this.puedeSeleccionar()) return;
+    this.pulsacion = {
+      x: evento.clientX,
+      y: evento.clientY,
+      temporizador: setTimeout(() => {
+        this.pulsacion = null;
+        this.pulsacionLarga = true;
+        this.entrarASeleccion(articulo);
+      }, PULSACION_LARGA_MS),
+    };
+  }
+
+  /** Si el dedo se mueve es un scroll: la pulsación se cancela. */
+  protected alMoverElDedo(evento: PointerEvent): void {
+    const inicio = this.pulsacion;
+    if (!inicio) return;
+    if (Math.hypot(evento.clientX - inicio.x, evento.clientY - inicio.y) > MOVIMIENTO_MAXIMO_PX) {
+      this.cancelarPulsacion();
+    }
+  }
+
+  protected cancelarPulsacion(): void {
+    if (this.pulsacion) clearTimeout(this.pulsacion.temporizador);
+    this.pulsacion = null;
+  }
+
+  /** El menú del navegador al mantener apretado (copiar, compartir) taparía el modo selección. */
+  protected alMenuContextual(evento: Event): void {
+    if (this.puedeSeleccionar()) evento.preventDefault();
+  }
+
+  protected salirDeSeleccion(): void {
+    this.cancelarPulsacion();
+    this.seleccionando.set(false);
+    this.elegidos.set(new Set());
+  }
+
+  protected elegirTodos(): void {
+    const activos = (this.pagina()?.items ?? []).filter((a) => a.activo).map((a) => a.id);
+    this.elegidos.set(new Set(activos));
+  }
+
+  /** «Agregar N a Etiquetas»: suma a la lista guardada de Etiquetas (una copia cada uno) y vuelve a la lista. */
+  protected agregarAEtiquetas(): void {
+    if (this.elegidos().size === 0) return;
+    const clave = claveDeEtiquetas(this.auth.sesion());
+    if (clave === null) {
+      this.error.set('No se pudo guardar la lista de etiquetas.');
+      return;
+    }
+    const ids = (this.pagina()?.items ?? []).filter((a) => this.elegidos().has(a.id)).map((a) => a.id);
+    const total = sumarEtiquetas(clave, ids);
+    this.salirDeSeleccion();
+    this.limpiarMensajes();
+    this.aviso.set(
+      ids.length === 1
+        ? 'Se agregó 1 artículo a la lista de etiquetas.'
+        : `Se agregaron ${ids.length} artículos a la lista de etiquetas.`,
+    );
+    this.enListaDeEtiquetas.set(total);
+  }
+
+  private entrarASeleccion(articulo: Articulo): void {
+    this.limpiarMensajes();
+    this.seleccionando.set(true);
+    this.elegidos.set(new Set([articulo.id]));
+    this.pistaVista.set(false);
+    try {
+      localStorage.setItem(CLAVE_PISTA_SELECCION, '1');
+    } catch {
+      /* sin persistencia: la pista vuelve en la próxima visita */
+    }
+  }
+
+  private alternar(articulo: Articulo): void {
+    if (!articulo.activo) return;
+    this.elegidos.update((actuales) => {
+      const siguientes = new Set(actuales);
+      if (!siguientes.delete(articulo.id)) siguientes.add(articulo.id);
+      return siguientes;
+    });
+  }
+
   protected pedirBaja(): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     const articulo = this.filas.elegido();
@@ -327,6 +465,7 @@ export class Articulos implements OnInit {
   private limpiarMensajes(): void {
     this.error.set(null);
     this.aviso.set(null);
+    this.enListaDeEtiquetas.set(null);
   }
 
   /** Lo que se explica al intentar abrir la ficha sin una fila elegida: el Dueño edita y el Vendedor la ve. */
@@ -341,6 +480,7 @@ export class Articulos implements OnInit {
 
   /** Con `retrocederSiVacia`, si la página quedó sin artículos (por una baja) trae la anterior. */
   private cargar(page: number, retrocederSiVacia = false): void {
+    this.salirDeSeleccion();
     this.cargando.set(true);
     this.error.set(null);
     this.service

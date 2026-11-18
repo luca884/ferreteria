@@ -2455,3 +2455,156 @@ ul.error {
     min-height: 52px;
   }
 }
+
+/* ---------- Selección múltiple de Artículos (movil-sectores T6) ---------- */
+
+/*
+ * La selección múltiple (artboard 04 de movil-articulos), sólo del celular (el CSS de la pantalla ya está en el tope de su presupuesto). Mantener apretada una fila
+ * entra al modo: la barra de arriba cuenta lo elegido, cada fila gana su casilla de 44 px y el pie fijo agrega todo a
+ * Etiquetas. La fila no se puede seleccionar como texto ni abre el menú del navegador, que taparían el gesto.
+ */
+.pista-seleccion,
+.barra-seleccion,
+.pie-seleccion,
+.aviso-etiquetas,
+.casilla-fila {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  .tabla-tarjetas > tbody > tr.elegible {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .pista-seleccion {
+    display: flex;
+    margin: 0 0 var(--e-2);
+  }
+  .herramientas-movil.en-seleccion {
+    display: none;
+  }
+  .barra-seleccion {
+    position: sticky;
+    top: 60px;
+    z-index: var(--z-desplegable);
+    display: flex;
+    align-items: center;
+    gap: var(--e-2);
+    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-2);
+    padding: var(--e-2) var(--pantalla-x);
+    background: var(--tono);
+    color: #fff;
+  }
+  .barra-seleccion b {
+    flex: 1;
+    font-size: var(--texto-md, 16px);
+  }
+  .barra-seleccion button {
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid rgb(255 255 255 / 0.5);
+    border-radius: var(--radio-lg);
+    background: transparent;
+    color: #fff;
+  }
+  .barra-seleccion .salir-seleccion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+  }
+  /*
+   * La casilla ocupa la primera columna de la fila, a lo alto de las dos líneas. La grilla de la fila vive en el CSS de
+   * Artículos (con los atributos de su componente), así que la selección repite clases para ganarle sin !important.
+   */
+  .grilla-marco.grilla-marco.grilla-marco .tabla-tarjetas.tabla-tarjetas > tbody > tr.con-casilla.elegible {
+    grid-template-columns: var(--alto-tactil) minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'casilla descripcion descripcion precio'
+      'casilla codigo estado stock';
+    padding-left: var(--e-1);
+  }
+  /* El dado de baja no tiene casilla: la columna queda vacía y las filas no se corren. */
+  .tabla-tarjetas > tbody > tr.marcada {
+    background: var(--tono-suave);
+  }
+  .tabla-tarjetas > tbody > tr > td.casilla-fila {
+    background: transparent;
+    grid-area: casilla;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+  }
+  .casilla-marca {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--borde-fuerte);
+    border-radius: 6px;
+    background: var(--superficie);
+    color: #fff;
+  }
+  .casilla-marca.on {
+    border-color: var(--tono);
+    background: var(--tono);
+  }
+  /* La acción fija de abajo, pegada arriba de la barra de destinos. */
+  .pie-seleccion {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px));
+    z-index: calc(var(--z-barra) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-1);
+    padding: var(--e-3) var(--pantalla-x);
+    border-top: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  .pie-seleccion .agregar {
+    min-height: 52px;
+    font-weight: 600;
+  }
+  .pie-seleccion .agregar[aria-disabled='true'] {
+    border-color: var(--borde);
+    background: var(--superficie-3);
+    color: var(--texto-deshabilitado);
+  }
+  .pie-seleccion .motivo-seleccion {
+    margin: 0;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    text-align: center;
+  }
+  /* El aviso de que ya está en la lista, arriba del botón flotante «Nuevo». */
+  .aviso-etiquetas {
+    position: fixed;
+    inset-inline: var(--e-3);
+    bottom: calc(var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px) + 56px + var(--e-4) + var(--e-3));
+    z-index: calc(var(--z-barra) - 1);
+    display: flex;
+    align-items: center;
+    gap: var(--e-3);
+    padding: var(--e-3) var(--e-4);
+    border-radius: var(--radio-lg);
+    background: var(--texto);
+    color: #fff;
+    box-shadow: var(--sombra-2);
+    font-size: var(--texto-sm);
+  }
+  .aviso-etiquetas button {
+    min-height: var(--alto-tactil);
+    margin-left: auto;
+    padding: 0 var(--e-2);
+    border: 0;
+    background: transparent;
+    color: var(--acento-borde);
+    font-weight: 600;
+  }
+}
