@@ -2292,3 +2292,166 @@ ul.error {
     text-decoration: underline;
   }
 }
+
+/* ---------- Ajuste de stock en pantalla completa en el celular (movil-sectores T5, 5e, S7) ---------- */
+
+/*
+ * Artículos › «Ajustar stock» en el celular (artboard 07 de movil-articulos): el mismo <dialog> modal del panel lateral
+ * (`dialogo-ajuste-stock`) cubre toda la pantalla, con la barra «Volver» arriba, «Cómo cargarlo» y «Entra o sale» como
+ * control segmentado de 44 px, − y + de 52 px junto a la cantidad, el «Queda» en vivo y el pie fijo con Cancelar y Guardar.
+ * Todo cuelga de `.ajuste-celular`, una clase que el componente pone sólo en el celular (el escritorio no la tiene y su
+ * DOM no cambia, S5), y de elementos que sólo existen ahí. Va acá y no en el componente por el presupuesto de 8 kB.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Pantalla completa sobre el velo (que ya no se ve); scrollea por dentro, la barra y el pie quedan pegados. */
+  app-dialogo-ajuste-stock dialog.panel-lateral.ajuste-celular {
+    inset: 0;
+    width: auto;
+    max-width: none;
+    padding: 0;
+    box-shadow: none;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .ajuste {
+    gap: var(--e-3);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .ajuste > :not(.ficha-barra, .ficha-pie) {
+    flex: none;
+    margin-inline: var(--pantalla-x);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .ficha-barra h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .articulo {
+    font-size: var(--texto-lg);
+  }
+
+  /* Rótulo de un grupo de opciones o de un campo: ocupa todo el renglón de la grilla. */
+  app-dialogo-ajuste-stock .ajuste-celular .etq {
+    grid-column: 1 / -1;
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+    font-weight: 400;
+  }
+
+  /* «Cómo cargarlo» y «Entra o sale»: dos botones pegados de 44 px; el elegido lleva el color y el filete del acento. */
+  app-dialogo-ajuste-stock .ajuste-celular .modos,
+  app-dialogo-ajuste-stock .ajuste-celular .signos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    gap: var(--e-1) 0;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .modo,
+  app-dialogo-ajuste-stock .ajuste-celular .signo {
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-2);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 0;
+    font-size: var(--texto-base);
+    text-align: center;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .modo:nth-of-type(1),
+  app-dialogo-ajuste-stock .ajuste-celular .signo:nth-of-type(1) {
+    border-radius: var(--radio-lg) 0 0 var(--radio-lg);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .modo:nth-of-type(2),
+  app-dialogo-ajuste-stock .ajuste-celular .signo:nth-of-type(2) {
+    margin-left: -1px;
+    border-radius: 0 var(--radio-lg) var(--radio-lg) 0;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .modo[aria-checked='true'],
+  app-dialogo-ajuste-stock .ajuste-celular .signo[aria-checked='true'] {
+    z-index: 1;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .modo-detalle {
+    display: none;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular select,
+  app-dialogo-ajuste-stock .ajuste-celular #detalle {
+    min-height: var(--alto-tactil);
+  }
+
+  /* Sumar o restar: Entra o sale arriba, la cantidad a todo el ancho. */
+  app-dialogo-ajuste-stock .ajuste-celular .carga {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--e-3);
+  }
+
+  /* La cantidad (o el stock real) entre − y +, de 52 px; el campo es el mismo de siempre. */
+  app-dialogo-ajuste-stock .ajuste-celular .campo.con-paso {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 52px;
+    align-items: center;
+    gap: var(--e-1) var(--e-2);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .con-paso > :is(label, .campo-error) {
+    grid-column: 1 / -1;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .paso-boton {
+    width: 52px;
+    height: 52px;
+    min-height: 52px;
+    padding: 0;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font-size: 1.375rem;
+    line-height: 1;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .paso-boton[aria-disabled='true'] {
+    color: var(--texto-deshabilitado);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .numero {
+    height: 52px;
+    padding: 0 var(--e-2);
+    border-width: 1px;
+    border-color: var(--acento);
+    font-size: 1.375rem;
+    text-align: center;
+  }
+
+  /* «Queda 12 → 17»: verde si sube, rojo si baja, gris si todavía no hay un valor válido. */
+  app-dialogo-ajuste-stock .ajuste-celular .vista-previa {
+    padding: 10px var(--e-3);
+    border: 1px solid var(--borde);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .vista-previa:has(.quedara.sube) {
+    border-color: var(--exito-borde);
+    background: var(--exito-fondo);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .vista-previa:has(.quedara.baja) {
+    border-color: var(--error-borde);
+    background: var(--error-fondo);
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .queda-rotulo {
+    font-size: var(--texto-sm);
+    font-weight: 600;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .vista-previa .desde {
+    margin-left: auto;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .quedara {
+    font-size: 1.25rem;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .motivo-accion {
+    margin-bottom: 0;
+  }
+
+  /* El pie fijo: Cancelar a la izquierda (el resto de las fichas lo esconde) y Guardar ajuste a la derecha, de 52 px. */
+  app-dialogo-ajuste-stock .ajuste-celular .acciones-panel.ficha-pie > .cancelar {
+    display: inline-flex;
+    order: -1;
+  }
+  app-dialogo-ajuste-stock .ajuste-celular .acciones-panel.ficha-pie > button {
+    min-height: 52px;
+  }
+}

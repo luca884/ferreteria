@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AjusteStockResponse, Unidad } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -823,5 +823,480 @@ describe('DialogoAjusteStock', () => {
 
     expect(canceladas).toBe(2);
     expect(servicio.ajustarStock).not.toHaveBeenCalled();
+  });
+  /*
+   * movil-sectores T5 (5e; S1, S5, S7): en el celular el ajuste es una pantalla completa (artboard 07 de movil-articulos):
+   * barra «Volver», control segmentado para «Cómo cargarlo» y «Entra o sale», − y + junto a la cantidad y el pie fijo con
+   * Cancelar y Guardar. Es el mismo formulario con el mismo estado y los mismos manejadores; el escritorio no cambia.
+   * Vitest no lee styles.css: las medidas se verifican en el navegador a 390 y 360 px.
+   */
+  describe('pantalla completa en el celular (movil-sectores T5, 5e)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    afterEach(() => vi.unstubAllGlobals());
+
+    const campo = () => el().querySelector<HTMLInputElement>('#cantidad, #stock-real')!;
+    /** Las partes de la vista previa, separadas por «|» (entre ellas hay espacio de CSS, no de texto). */
+    const queda = () =>
+      Array.from(el().querySelectorAll('.vista-previa > .queda-rotulo, .vista-previa > .desde, .vista-previa .quedara, .vista-previa .diferencia'))
+        .map((n) => n.textContent!.replace(/\s+/g, ' ').trim())
+        .join('|');
+    const boton = (selector: string) => el().querySelector<HTMLButtonElement>(selector)!;
+    async function tocar(selector: string) {
+      boton(selector).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    describe('en el escritorio todo queda como estaba', () => {
+      it.each([
+        ['sin matchMedia', () => undefined],
+        ['con una pantalla ancha', () => vi.stubGlobal('matchMedia', (c: string) => ({ matches: false, media: c }))],
+      ])('%s: sigue el panel lateral, sin barra, sin − ni + y sin pie fijo', async (_caso, preparar) => {
+        preparar();
+        await abrir(tornillo(10));
+        await elegirModo('CANTIDAD');
+
+        const dialogo = el().querySelector('dialog')!;
+        expect(dialogo.className).toBe('panel-lateral');
+        expect(el().querySelector('header h2.sobretitulo')!.textContent!.trim()).toBe('Ajustar stock');
+        expect(
+          el().querySelector('.ficha-barra, .ficha-volver, .paso-boton, .con-paso, .ficha-pie, .queda-rotulo, .etq'),
+        ).toBeNull();
+        expect(el().querySelectorAll('.modo-detalle')).toHaveLength(2);
+        expect(texto('.modos')).toContain('Entra o sale mercadería');
+        expect(texto('.vista-previa').replace(/\s+/g, ' ')).toBe('10 → —');
+        expect(texto('.signo.entra')).toBe('+ Entra');
+        expect(el().querySelector('.acciones-panel')!.className).toBe('acciones-panel');
+        expect(boton('.confirmar').textContent).toBe('Guardar ajuste');
+      });
+
+      it('mientras guarda, «Guardar ajuste» queda apagado de verdad (disabled) y no explica nada', async () => {
+        await abrir(tornillo(10));
+        const pendiente = new Subject<AjusteStockResponse>();
+        servicio.ajustarStock.mockReturnValue(pendiente);
+        await escribir('#stock-real', '12');
+        await escribir('#motivo', 'CONTEO');
+
+        await confirmar();
+
+        expect(boton('.confirmar').disabled).toBe(true);
+        expect(boton('.confirmar').hasAttribute('aria-disabled')).toBe(false);
+        expect(el().querySelector('.motivo-accion')).toBeNull();
+      });
+    });
+
+    it('al girar el teléfono con el ajuste abierto cambia de pantalla completa a panel lateral y al revés', async () => {
+      let alCambiar: ((e: MediaQueryListEvent) => void) | undefined;
+      const quitar = vi.fn();
+      vi.stubGlobal('matchMedia', (consulta: string) => ({
+        matches: true,
+        media: consulta,
+        addEventListener: (_tipo: string, f: (e: MediaQueryListEvent) => void) => (alCambiar = f),
+        removeEventListener: quitar,
+      }));
+      await abrir(tornillo(10));
+      expect(el().querySelector('.ficha-barra')).not.toBeNull();
+
+      alCambiar!({ matches: false } as MediaQueryListEvent);
+      fixture.detectChanges();
+      expect(el().querySelector('.ficha-barra, .paso-boton')).toBeNull();
+      expect(el().querySelector('dialog')!.className).toBe('panel-lateral');
+      expect(el().querySelector('header h2.sobretitulo')).not.toBeNull();
+
+      alCambiar!({ matches: true } as MediaQueryListEvent);
+      fixture.detectChanges();
+      expect(el().querySelector('.ficha-barra')).not.toBeNull();
+
+      fixture.destroy();
+      expect(quitar).toHaveBeenCalledWith('change', alCambiar);
+    });
+
+    describe('barra «Volver» y título', () => {
+      it('es el mismo <dialog> modal, ahora a pantalla completa, con la barra arriba y un solo título', async () => {
+        enElCelular();
+        await abrir({ ...tornillo(12), codigoInterno: 'BUL-002' });
+
+        const dialogo = el().querySelector<HTMLDialogElement>('dialog')!;
+        expect(dialogo.classList).toContain('panel-lateral');
+        expect(dialogo.classList).toContain('ajuste-celular');
+        expect(showModal).toHaveBeenCalledTimes(1);
+        expect(dialogo.open).toBe(true);
+        expect(el().querySelectorAll('h2')).toHaveLength(1);
+        const barra = el().querySelector('.ficha-barra')!;
+        expect(barra.querySelector('h2')!.textContent!.trim()).toBe('Ajustar stock');
+        expect(barra.querySelector('.ficha-volver')!.getAttribute('aria-label')).toBe('Volver');
+        const nombre = (dialogo.getAttribute('aria-labelledby') ?? '')
+          .split(' ')
+          .map((id) => el().querySelector(`#${id}`)?.textContent?.trim())
+          .join(' ');
+        expect(nombre).toBe('Ajustar stock Tornillo hexagonal 1/4');
+        expect(texto('.referencia').replace(/\s+/g, ' ')).toBe('BUL-002 · hoy 12 unidades');
+      });
+
+      it('«Volver» cancela sin ajustar, como Cancelar y Esc', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+
+        await tocar('.ficha-volver');
+        expect(canceladas).toBe(1);
+        expect(boton('.ficha-volver').type).toBe('button');
+
+        el().querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+        expect(canceladas).toBe(2);
+        expect(servicio.ajustarStock).not.toHaveBeenCalled();
+      });
+
+      it('al abrir el foco va al campo numérico y al cerrar vuelve a quien abrió', async () => {
+        enElCelular();
+        const abridor = document.createElement('button');
+        document.body.appendChild(abridor);
+        abridor.focus();
+
+        await abrir(tornillo(10));
+        expect(document.activeElement).toBe(el().querySelector('#stock-real'));
+        fixture.destroy();
+
+        expect(cerrar).toHaveBeenCalled();
+        expect(document.activeElement).toBe(abridor);
+        abridor.remove();
+      });
+    });
+
+    describe('«Cómo cargarlo» y «Entra o sale» como control segmentado', () => {
+      it('rotula cada grupo y son los mismos botones de siempre, en el orden de tabulación del artboard', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        expect(texto('.modos .etq')).toBe('Cómo cargarlo');
+        expect(texto('.signos .etq')).toBe('Entra o sale');
+        expect(el().querySelector('.modos')!.getAttribute('aria-label')).toBe('Cómo cargar el ajuste');
+        expect(el().querySelector('.signos')!.getAttribute('aria-label')).toBe('Entra o sale');
+        const botones = Array.from(el().querySelectorAll('.modo, .signo')).map((b) => b.getAttribute('role'));
+        expect(botones).toEqual(['radio', 'radio', 'radio', 'radio']);
+        expect(texto('[data-modo="CANTIDAD"] span')).toBe('Sumar o restar');
+        expect(texto('[data-modo="STOCK_REAL"] span')).toBe('Conteo');
+        expect(texto('[data-signo="ENTRA"]')).toBe('+ Entra');
+        expect(texto('[data-signo="SALE"]')).toBe('− Sale');
+      });
+
+      it('«Cómo cargarlo» cambia el mismo estado: modo, campo numérico vacío y errores del campo borrados', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#stock-real', '10');
+        await confirmar();
+        expect(texto('#stock-real-error')).toBe('El stock real es igual al actual: no hay nada que ajustar.');
+
+        await tocar('[data-modo="CANTIDAD"]');
+
+        expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+        expect(marcado('[data-modo="STOCK_REAL"]')).toBe(false);
+        expect(el().querySelector('#stock-real')).toBeNull();
+        expect(el().querySelector<HTMLInputElement>('#cantidad')!.value).toBe('');
+        expect(document.activeElement).toBe(el().querySelector('#cantidad'));
+        expect(texto('.modos .etq')).toBe('Cómo cargarlo');
+
+        await tocar('[data-modo="STOCK_REAL"]');
+        expect(el().querySelector('#cantidad')).toBeNull();
+        expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+      });
+
+      it('«Entra o sale» cambia el signo: la cantidad, el «Queda» y lo que se manda siguen la elección', async () => {
+        enElCelular();
+        await abrir(tornillo(12));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await escribir('#cantidad', '5');
+        expect(texto('.quedara')).toBe('17 unidades');
+        expect(texto('label[for="cantidad"]')).toBe('Cantidad que entra');
+
+        await tocar('[data-signo="SALE"]');
+
+        expect(marcado('[data-signo="SALE"]')).toBe(true);
+        expect(texto('label[for="cantidad"]')).toBe('Cantidad que sale');
+        expect(texto('.quedara')).toBe('7 unidades');
+        await confirmar();
+        expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+          modo: 'CANTIDAD',
+          cantidad: -5,
+          motivo: 'INGRESO_MERCADERIA',
+          detalle: null,
+        });
+      });
+
+      it('las flechas siguen moviendo la elección y el foco dentro de cada grupo', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        boton('[data-modo="CANTIDAD"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+        expect(document.activeElement).toBe(boton('[data-modo="STOCK_REAL"]'));
+
+        await tocar('[data-modo="CANTIDAD"]');
+        boton('[data-signo="ENTRA"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(marcado('[data-signo="SALE"]')).toBe(true);
+        expect(document.activeElement).toBe(boton('[data-signo="SALE"]'));
+      });
+    });
+
+    describe('− y + junto a la cantidad', () => {
+      const menos = '.paso-menos';
+      const mas = '.paso-mas';
+
+      it('rodean el mismo campo (el de antes), en ese orden, y no mandan el formulario', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        const hijos = Array.from(el().querySelector('.con-paso')!.children).map((n) => n.className.split(' ')[0] || n.tagName);
+        expect(hijos).toEqual(['LABEL', 'paso-boton', 'numero', 'paso-boton']);
+        expect(boton(menos).getAttribute('aria-label')).toBe('Restar uno');
+        expect(boton(mas).getAttribute('aria-label')).toBe('Sumar uno');
+        expect(boton(menos).type).toBe('button');
+        expect(boton(mas).type).toBe('button');
+        expect(campo().id).toBe('cantidad');
+
+        await tocar(mas);
+        expect(servicio.ajustarStock).not.toHaveBeenCalled();
+      });
+
+      it('+ suma uno y − resta uno sobre lo escrito, y el «Queda» y lo que se manda lo ven', async () => {
+        enElCelular();
+        await abrir(tornillo(12));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        await tocar(mas);
+        expect(campo().value).toBe('1');
+        for (let i = 0; i < 4; i++) await tocar(mas);
+        expect(campo().value).toBe('5');
+        expect(queda()).toBe('Queda|12 →|17 unidades');
+        await tocar(menos);
+        expect(campo().value).toBe('4');
+        await tocar(mas);
+
+        await confirmar();
+        expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+          modo: 'CANTIDAD',
+          cantidad: 5,
+          motivo: 'INGRESO_MERCADERIA',
+          detalle: null,
+        });
+        expect(ajustados).toHaveLength(1);
+      });
+
+      it('en el conteo cambian el stock real, no la cantidad', async () => {
+        enElCelular();
+        await abrir(tornillo(12));
+
+        await tocar(mas);
+        await tocar(mas);
+        await tocar(mas);
+
+        expect(campo().id).toBe('stock-real');
+        expect(campo().value).toBe('3');
+        expect(texto('.vista-previa .quedara')).toBe('3 unidades');
+        expect(texto('.vista-previa .diferencia')).toBe('-9 unidades');
+      });
+
+      it('parten de lo que se escribió, también con coma decimal en los artículos por metro', async () => {
+        enElCelular();
+        await abrir(tornillo(150, 'METRO'));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await escribir('#cantidad', '2,5');
+
+        await tocar(mas);
+        expect(campo().value).toBe('3,5');
+        await tocar(menos);
+        await tocar(menos);
+        expect(campo().value).toBe('1,5');
+        expect(texto('.quedara')).toBe('151,5 metros');
+      });
+
+      it('en un artículo por unidad un decimal escrito pasa al entero siguiente o anterior', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await escribir('#cantidad', '1,5');
+
+        await tocar(mas);
+        expect(campo().value).toBe('2');
+
+        await escribir('#cantidad', '1,5');
+        await tocar(menos);
+        expect(campo().value).toBe('1');
+      });
+
+      it('no bajan de cero: el − se apaga y explica por qué, con el texto de siempre', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        expect(boton(menos).getAttribute('aria-disabled')).toBe('true');
+        expect(boton(mas).hasAttribute('aria-disabled')).toBe(false);
+
+        await tocar(menos);
+
+        expect(campo().value).toBe('');
+        expect(texto('.motivo-accion')).toBe('Escribí la cantidad sin signo y elegí si entra o sale.');
+        expect(el().querySelector('.motivo-accion')!.getAttribute('role')).toBe('status');
+
+        await tocar(mas);
+        expect(campo().value).toBe('1');
+        expect(boton(menos).hasAttribute('aria-disabled')).toBe(false);
+        expect(el().querySelector('.motivo-accion')).toBeNull();
+
+        await tocar(menos);
+        await tocar(menos);
+        expect(campo().value).toBe('0');
+        expect(boton(menos).getAttribute('aria-disabled')).toBe('true');
+      });
+
+      it('en el conteo el − explica con el texto del stock real', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+
+        await tocar(menos);
+
+        expect(campo().value).toBe('');
+        expect(texto('.motivo-accion')).toBe('El stock real no puede ser negativo.');
+      });
+
+      it('no pasan del máximo del backend: el + se apaga y explica por qué', async () => {
+        enElCelular();
+        await abrir(tornillo(10, 'METRO'));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await escribir('#cantidad', '999999999999,5');
+        expect(boton(mas).getAttribute('aria-disabled')).toBe('true');
+
+        await tocar(mas);
+
+        expect(campo().value).toBe('999999999999,5');
+        expect(texto('.motivo-accion')).toBe(
+          'La cantidad es demasiado grande: el máximo es 999.999.999.999,999.',
+        );
+
+        await tocar(menos);
+        expect(campo().value).toBe('999999999998,5');
+        expect(boton(mas).hasAttribute('aria-disabled')).toBe(false);
+      });
+
+      it('al tocarlos se borra el error del campo, como al escribir, y siguen sin mandar nada', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await confirmar();
+        expect(texto('#cantidad-error')).toBe('Escribí la cantidad que entra o sale.');
+
+        await tocar(mas);
+
+        expect(el().querySelector('#cantidad-error')).toBeNull();
+        expect(servicio.ajustarStock).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('«Queda» en vivo', () => {
+      it('es la misma vista previa de hoy con el rótulo «Queda»: «Queda 12 → 17 unidades»', async () => {
+        enElCelular();
+        await abrir(tornillo(12));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+        await escribir('#cantidad', '5');
+
+        expect(queda()).toBe('Queda|12 →|17 unidades');
+        expect(el().querySelector('.quedara')!.classList).toContain('sube');
+      });
+
+      it('en el conteo muestra también la diferencia, y con algo inválido sigue el «—» de siempre', async () => {
+        enElCelular();
+        await abrir(tornillo(12));
+        await escribir('#stock-real', '9');
+        expect(queda()).toBe('Queda|12 →|9 unidades|-3 unidades');
+        expect(el().querySelector('.quedara')!.classList).toContain('baja');
+
+        await escribir('#stock-real', '9,5');
+        expect(texto('.vista-previa .quedara')).toBe('—');
+      });
+    });
+
+    describe('pie fijo con Cancelar y Guardar ajuste', () => {
+      it('Cancelar a la izquierda y Guardar ajuste a la derecha, los mismos botones de hoy', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+
+        const pie = el().querySelector('.acciones-panel')!;
+        expect(pie.classList).toContain('ficha-pie');
+        const botones = Array.from(pie.querySelectorAll('button'));
+        expect(botones.map((b) => b.textContent!.trim())).toEqual(['Cancelar', 'Guardar ajuste']);
+        expect(botones.map((b) => b.type)).toEqual(['button', 'submit']);
+
+        botones[0].click();
+        expect(canceladas).toBe(1);
+        expect(servicio.ajustarStock).not.toHaveBeenCalled();
+      });
+
+      it('Guardar ajuste valida como hoy (todos los errores juntos) y con datos válidos emite el mismo resultado', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        await confirmar();
+        expect(texto('#stock-real-error')).toBe('Escribí el stock real que contaste.');
+        expect(texto('#motivo-error')).toBe('Elegí el motivo del ajuste.');
+        expect(servicio.ajustarStock).not.toHaveBeenCalled();
+
+        await tocar('.paso-mas');
+        await escribir('#stock-real', '12');
+        await escribir('#motivo', 'CONTEO');
+        await escribir('#detalle', '  remito 123 ');
+        await confirmar();
+
+        expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+          modo: 'STOCK_REAL',
+          stockReal: 12,
+          motivo: 'CONTEO',
+          detalle: 'remito 123',
+        });
+        expect(ajustados).toEqual([{ articuloId: 7, stockAnterior: 10, diferencia: 2, stockActual: 12 }]);
+      });
+
+      it('mientras guarda queda apagado (aria-disabled), un segundo toque no repite el pedido y explica por qué', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        const pendiente = new Subject<AjusteStockResponse>();
+        servicio.ajustarStock.mockReturnValue(pendiente);
+        await escribir('#stock-real', '12');
+        await escribir('#motivo', 'CONTEO');
+        expect(boton('.confirmar').hasAttribute('aria-disabled')).toBe(false);
+
+        await confirmar();
+        expect(boton('.confirmar').getAttribute('aria-disabled')).toBe('true');
+        expect(el().querySelector('.motivo-accion')).toBeNull();
+
+        await confirmar();
+        expect(servicio.ajustarStock).toHaveBeenCalledTimes(1);
+        expect(texto('.motivo-accion')).toBe('Guardando el ajuste: esperá un momento.');
+
+        pendiente.next({ articuloId: 7, stockAnterior: 10, diferencia: 2, stockActual: 12 });
+        fixture.detectChanges();
+        expect(boton('.confirmar').hasAttribute('aria-disabled')).toBe(false);
+        expect(el().querySelector('.motivo-accion')).toBeNull();
+      });
+
+      it('el error general del backend se sigue viendo arriba del pie', async () => {
+        enElCelular();
+        await abrir(tornillo(10));
+        servicio.ajustarStock.mockReturnValue(
+          throwError(() => new HttpErrorResponse({ status: 404, error: { message: 'Artículo no encontrado' } })),
+        );
+        await escribir('#stock-real', '12');
+        await escribir('#motivo', 'CONTEO');
+
+        await confirmar();
+
+        expect(texto('.error[role="alert"]')).toBe('Artículo no encontrado');
+        expect(el().querySelector('.error[role="alert"]')!.compareDocumentPosition(el().querySelector('.acciones-panel')!)).toBe(
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+      });
+    });
   });
 });
