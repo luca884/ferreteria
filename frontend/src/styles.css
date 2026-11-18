@@ -3235,6 +3235,133 @@ ul.error {
   }
 }
 
+/* ---------- Cobro mixto y cuenta corriente en el celular (movil-sectores T9b, S2, S5) ---------- */
+/*
+ * Sigue el artboard 06 de movil-mostrador dentro de la pantalla completa de T9a. Es sólo presentación del mismo DOM: las
+ * filas del mixto, el resumen, la cuenta corriente y el pie tienen los mismos manejadores, textos y pedido de siempre. La
+ * única marca nueva es `cobro-exceso` (la pone el componente sólo en el celular cuando el pie dice «Autorizar exceso…»),
+ * para apilar esos botones de texto largo. El escritorio y la tablet no la tienen y no cambian (S5). Todo cuelga de
+ * `app-dialogo-cobro` para ganarle a los estilos del componente, y va acá por el tope de 8 kB de `mostrador.css`.
+ */
+@media screen and (max-width: 639.98px) {
+  /*
+   * Las filas del mixto, como «Recibido» de T9a, van arriba de la lista de medios: con ocho formas de pago la lista pasa la
+   * pantalla y las filas quedaban abajo, tapadas por el pie y, al escribir, por el teclado. La línea de la cuenta (el exceso,
+   * o saldo y límite) también sube: con «Autorizar exceso…» en el pie, lo que explica el exceso tiene que verse sin
+   * scrollear. Es sólo el orden en pantalla (el DOM y el Tab son los de siempre).
+   */
+  app-dialogo-cobro .cobro-celular > :is(.mixto, .cuenta-corriente) {
+    order: 1;
+  }
+
+  /* El mixto es una tarjeta: una fila de 56 px por forma (nombre a la izquierda, importe a la derecha) y, al pie, el resumen. */
+  app-dialogo-cobro .cobro-celular > .mixto {
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-dialogo-cobro .cobro-celular .mixto .fila-pago {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 11rem);
+    gap: var(--e-3);
+    min-height: 56px;
+    padding: var(--e-1) var(--e-4);
+    border-bottom: 1px solid var(--borde-suave);
+    font-size: var(--texto-md);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  app-dialogo-cobro .cobro-celular .mixto .fila-pago input {
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    font-size: 1.0625rem;
+  }
+  /* La razón de una fila apagada (cuenta corriente sin cliente...): una franja debajo de su fila, no un texto suelto. */
+  app-dialogo-cobro .cobro-celular .mixto .razon-fila {
+    margin: 0;
+    padding: var(--e-2) var(--e-4);
+    border-bottom: 1px solid var(--borde-suave);
+    background: var(--superficie-2);
+    line-height: 1.4;
+  }
+  /* «Falta», «Se pasa» o «Completo» y el error de «los pagos tienen que sumar»: franjas a lo ancho al pie de la tarjeta. */
+  app-dialogo-cobro .cobro-celular .mixto .resumen-mixto {
+    padding: var(--e-3) var(--e-4);
+    background: var(--exito-fondo);
+    font-size: var(--texto-md);
+    text-align: left;
+  }
+  app-dialogo-cobro .cobro-celular .mixto .resumen-mixto:is(.falta-mixto, .pasa-mixto) {
+    background: var(--error-fondo);
+  }
+  app-dialogo-cobro .cobro-celular .mixto .error {
+    padding: var(--e-3) var(--e-4);
+    border: 0;
+    border-top: 1px solid var(--error-borde);
+    border-radius: 0;
+  }
+
+  /* Saldo, límite y disponible (Dueño), «Alcanza» (Vendedor) o el exceso: una tarjeta, como el artboard. */
+  app-dialogo-cobro .cobro-celular > .cuenta-corriente {
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  app-dialogo-cobro .cobro-celular > .cuenta-corriente.excede {
+    border-color: var(--advertencia-borde);
+    border-left: 4px solid var(--advertencia-marca);
+    background: var(--advertencia-fondo);
+  }
+
+  /*
+   * Por qué una forma está apagada («Elegí un cliente…», «No alcanza el límite…»): dentro de su fila, debajo del nombre (con
+   * ocho formas, la frase de abajo de la lista quedaba fuera de la pantalla). La frase de abajo sigue ahí, enlazada con
+   * `aria-describedby`, sólo para los lectores de pantalla.
+   */
+  app-dialogo-cobro .cobro-celular .medios .medio.medio .razon-en-medio {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    margin-top: var(--e-1);
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  app-dialogo-cobro .cobro-celular .razon-medio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /*
+   * Con «Autorizar exceso…» el pie apila sus botones: lado a lado, el texto largo («Autorizar exceso, cobrar y facturar»)
+   * se partía en tres o cuatro renglones. Quedan uno arriba del otro, a lo ancho y de 52 px; el pie crece y el scroll
+   * deja más lugar abajo para que al enfocar un campo no quede tapado.
+   */
+  app-dialogo-cobro .dialogo.cobro.cobro-celular.cobro-exceso {
+    scroll-padding-bottom: 168px;
+  }
+  app-dialogo-cobro .dialogo.cobro-exceso .ficha-pie .formas-de-cobrar {
+    flex-direction: column;
+  }
+  app-dialogo-cobro .dialogo.cobro-exceso .ficha-pie :is(.formas-de-cobrar > button) {
+    flex: none;
+    width: 100%;
+  }
+}
+
 /*
  * El TOTAL de la barra fija del Mostrador con un importe de ocho cifras (L24 punto 11 de movil-sectores): a 360 px el
  * «$ 12.338.460,00» a 22 px llegaba a 2 px del ⋯ (el piso de 1.375rem de `totales-ticket` lo dejaba crecer más de lo que

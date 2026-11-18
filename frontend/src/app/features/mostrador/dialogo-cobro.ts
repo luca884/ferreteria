@@ -96,6 +96,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       <div
         class="dialogo cobro"
         [class.cobro-celular]="celular"
+        [class.cobro-exceso]="celular && autoriza()"
         tabindex="-1"
         role="dialog"
         aria-modal="true"
@@ -175,6 +176,13 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
                   <small class="marca-recargo">+{{ o.recargo }}&nbsp;%</small>
                 } @else if (o.descuento) {
                   <small class="marca-recargo marca-descuento">−{{ o.descuento }}&nbsp;%</small>
+                }
+                @if (celular) {
+                  <!-- movil-sectores T9b: en la lista larga del celular la razón va en la propia fila apagada, a la vista. Es la misma
+                       frase de abajo (que sigue siendo la descripción enlazada y queda sólo para los lectores): acá no se lee dos veces. -->
+                  @if (o.deshabilitada; as razon) {
+                    <small class="razon-en-medio" aria-hidden="true">{{ razon }}</small>
+                  }
                 }
               </button>
             }

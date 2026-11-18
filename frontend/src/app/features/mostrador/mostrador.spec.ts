@@ -7038,4 +7038,641 @@ describe('Mostrador', () => {
       });
     });
   });
+
+  /**
+   * movil-sectores T9b (item 6: el flujo de la plata): el pago mixto y la cuenta corriente en el celular. Es sólo cómo se ven:
+   * lo que se manda, lo que se dice y lo que se rechaza tiene que ser idéntico en el celular y en el escritorio, así que cada
+   * escenario de plata corre en los dos con los literales de hoy (los tests de plata pasan también en la base: fijan lo que
+   * hace el código). Lo único nuevo son las clases de presentación del celular (`cobro-exceso`).
+   */
+  describe('celular: el cobro mixto y la cuenta corriente (movil-sectores T9b)', () => {
+    const LETRAS_T9B: FacturacionDelMostrador['letras'] = {
+      CONSUMIDOR_FINAL: 'B',
+      RESPONSABLE_INSCRIPTO: 'A',
+      MONOTRIBUTISTA: 'A',
+      EXENTO: 'B',
+    };
+    const MODOS_T9B: [string, string | null][] = [
+      ['celular', '639.98px'],
+      ['escritorio', null],
+    ];
+    const CC = formaDe(9, 'Cuenta corriente', 'CUENTA_CORRIENTE');
+    /** Efectivo 1, Débito 2, Crédito 3 (con 10 % de recargo), Transferencia 4 y Cuenta corriente 9. */
+    const FORMAS_T9B = [...FORMAS_BASE.slice(0, 2), formaDe(3, 'Crédito', 'CREDITO', 10), FORMAS_BASE[3], CC];
+    const RENGLONES = [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }];
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const pantalla = () => el().querySelector<HTMLElement>('app-dialogo-cobro [role="dialog"]');
+    const enCobro = (selector: string) => pantalla()!.querySelector<HTMLElement>(selector);
+    const textoDe = (selector: string) => normal(enCobro(selector)?.textContent);
+    const boton = (selector: string) => el().querySelector<HTMLButtonElement>(`app-dialogo-cobro ${selector}`)!;
+    const medio = (nombre: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-cobro button[role="radio"]')).find((b) =>
+        normal(b.textContent).startsWith(nombre),
+      )!;
+    const elegido = () => normal(el().querySelector('app-dialogo-cobro button[role="radio"][aria-checked="true"]')?.textContent);
+    const campoDe = (formaPagoId: number) =>
+      el().querySelector<HTMLInputElement>(`app-dialogo-cobro input[data-forma="${formaPagoId}"]`)!;
+    const botonCobrarDelTicket = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) => b.textContent!.includes('Cobrar'))!;
+
+    const ALCANZA = { habilitada: true, alcanza: true };
+    const DUENO_ALCANZA = { habilitada: true, alcanza: true, limite: 10000, saldo: 1000, disponible: 9000 };
+    const SE_PASA = { habilitada: true, alcanza: false, limite: 5000, saldo: 4000, disponible: 1000 };
+    const CIFRAS = { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 3000, exceso: 2000 };
+    const MENSAJE_LIMITE = 'Esta venta supera el límite de cuenta corriente del cliente.';
+    const limite = (cuentaCorriente: unknown, message = MENSAJE_LIMITE) => ({
+      status: 422,
+      message,
+      timestamp: 't',
+      motivo: 'LIMITE_CUENTA_CORRIENTE',
+      articulos: [],
+      cuentaCorriente,
+    });
+
+    function comoCelular(consulta: string | null) {
+      if (consulta) vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      destino.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    }
+
+    /** Ticket de 2 martillos ($ 3.000,00), con el buscador enfocado; con `conCliente`, Ferretería Norte SRL (id 2) elegida con F9. */
+    async function conMartillos(rol: 'DUENO' | 'VENDEDOR', conCliente = false, formas: FormaPago[] = FORMAS_T9B) {
+      await crear(cajaAbierta, formas, rol);
+      for (const q of ['M', 'M']) {
+        await escribir(q);
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+      if (conCliente) {
+        await tecla('F9');
+        await tecla('ArrowDown');
+        await tecla('Enter');
+      }
+    }
+
+    async function abrirCobro(cuenta: unknown = null) {
+      if (cuenta !== null) clientesApi.cuenta.mockReturnValue(of(cuenta));
+      botonCobrarDelTicket().click();
+      await refrescar();
+    }
+
+    async function elegirMedio(nombre: string) {
+      medio(nombre).click();
+      await refrescar();
+    }
+
+    async function cargar(formaPagoId: number, texto: string) {
+      const c = campoDe(formaPagoId);
+      c.value = texto;
+      c.dispatchEvent(new Event('input', { bubbles: true }));
+      await refrescar();
+    }
+
+    async function pulsar(selector: string) {
+      boton(selector).click();
+      await refrescar();
+    }
+
+    async function rechazada(indice: number, status: number, cuerpo: unknown) {
+      cobros[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    async function cobrada(indice: number, pagos: { medio: string; monto: number }[], total: number, numero = 10) {
+      cobros[indice].respuesta.next({
+        venta: {
+          ventaId: 50,
+          numero,
+          total,
+          fecha: '2026-10-15T10:00:00',
+          pagos: pagos.map((p, i) => ({ formaPagoId: i + 1, formaPago: p.medio, recargoPorcentaje: 0, recargo: 0, ...p })),
+          renglones: [],
+          sinStock: [],
+          facturable: true,
+        },
+        repetida: false,
+      } as unknown as VentaCobrada);
+      cobros[indice].respuesta.complete();
+      await refrescar();
+    }
+
+    describe.each(MODOS_T9B)('el pago mixto es el mismo en el %s', (_modo, consulta) => {
+      beforeEach(() => comoCelular(consulta));
+
+      it('reparte el total entre medios: dice lo que falta, el recargo y el total, y manda los pagos con el total mostrado con recargo', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+        await elegirMedio('Mixto');
+        expect(elegido()).toBe('Mixto');
+        expect(textoDe('.resumen-mixto')).toBe('Falta $ 3.000,00');
+        expect(textoDe('.cabecera .total')).toBe('$ 3.000,00');
+
+        await cargar(1, '1000');
+        expect(textoDe('.resumen-mixto')).toBe('Falta $ 2.000,00');
+        await cargar(3, '2000');
+
+        expect(textoDe('.resumen-mixto')).toBe('Completo');
+        expect(textoDe('.recargo')).toBe('Recargo $ 200,00');
+        expect(textoDe('.cabecera .total')).toBe('$ 3.200,00');
+        await pulsar('button.cobrar');
+
+        expect(cobros).toHaveLength(1);
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3200,
+          pagos: [
+            { formaPagoId: 1, monto: 1000 },
+            { formaPagoId: 3, monto: 2000 },
+          ],
+        });
+        expect('formaPagoId' in cobros[0].pedido).toBe(false);
+
+        await cobrada(0, [{ medio: 'EFECTIVO', monto: 1000 }, { medio: 'CREDITO', monto: 2200 }], 3200);
+
+        expect(pantalla()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(normal(el().querySelector('.zona-busqueda .aviso')?.textContent)).toBe('Venta N.º 10 cobrada: $ 3.200,00');
+      });
+
+      it('tres medios, uno con recargo: manda sólo los que tienen importe', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+        await elegirMedio('Mixto');
+
+        await cargar(1, '500');
+        await cargar(2, '1500');
+        await cargar(4, '1000');
+        expect(textoDe('.resumen-mixto')).toBe('Completo');
+        expect(enCobro('.recargo')).toBeNull();
+        await pulsar('button.cobrar');
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          pagos: [
+            { formaPagoId: 1, monto: 500 },
+            { formaPagoId: 2, monto: 1500 },
+            { formaPagoId: 4, monto: 1000 },
+          ],
+        });
+      });
+
+      it('si se pasa dice cuánto y, como si falta, no manda nada y deja el ticket intacto con el mensaje de hoy', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+        await elegirMedio('Mixto');
+
+        await cargar(1, '2000');
+        await cargar(2, '1500');
+        expect(textoDe('.resumen-mixto')).toBe('Se pasa $ 500,00');
+        await pulsar('button.cobrar');
+        expect(cobros).toHaveLength(0);
+        expect(textoDe('[role="alert"]')).toBe('Los pagos tienen que sumar el total.');
+
+        await cargar(2, '500');
+        expect(enCobro('[role="alert"]')).toBeNull();
+        await cargar(2, '0');
+        expect(textoDe('.resumen-mixto')).toBe('Falta $ 1.000,00');
+        await pulsar('button.cobrar');
+
+        expect(cobros).toHaveLength(0);
+        expect(textoDe('[role="alert"]')).toBe('Los pagos tienen que sumar el total.');
+        expect(pantalla()).not.toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+      });
+
+      it('un rechazo del servidor deja el mixto abierto con lo cargado y el ticket intacto; el reintento manda lo mismo con la misma clave', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+        await elegirMedio('Mixto');
+        await cargar(1, '1000');
+        await cargar(3, '2000');
+        await pulsar('button.cobrar');
+        const mensaje =
+          'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.';
+
+        await rechazada(0, 422, { status: 422, message: mensaje, timestamp: 't', motivo: 'CONSUMIDOR_FINAL_SIN_DATOS', articulos: [] });
+
+        expect(pantalla()).not.toBeNull();
+        expect(textoDe('.aviso')).toBe(mensaje);
+        expect(textoDe('.resumen-mixto')).toBe('Completo');
+        expect(renglonesTicket()).toHaveLength(1);
+
+        await pulsar('button.cobrar');
+
+        expect(cobros).toHaveLength(2);
+        expect(cobros[1].pedido).toEqual(cobros[0].pedido);
+        expect(cobros[1].pedido.clave).toBe('clave-1');
+      });
+
+      it('con facturación y cliente los dos botones mandan los pagos y el clienteId; «sin factura» agrega facturable false', async () => {
+        facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS_T9B };
+        await conMartillos('VENDEDOR', true);
+        await abrirCobro();
+        await elegirMedio('Mixto');
+        await cargar(1, '1000');
+        await cargar(2, '2000');
+        expect(textoDe('.comprobante')).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+        expect(textoDe('.pista-factura')).toBe('Elegí con un clic si la venta se factura.');
+
+        await pulsar('button.facturar');
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          pagos: [
+            { formaPagoId: 1, monto: 1000 },
+            { formaPagoId: 2, monto: 2000 },
+          ],
+          clienteId: 2,
+        });
+
+        await rechazada(0, 500, null);
+        expect(textoDe('.aviso')).toBe('No se pudo cobrar. Probá de nuevo.');
+        await pulsar('button.sin-factura');
+        expect(cobros[1].pedido).toEqual({ ...cobros[0].pedido, facturable: false });
+        expect(cobros[1].pedido.clave).toBe('clave-1');
+      });
+    });
+
+    describe.each(MODOS_T9B)('la cuenta corriente es la misma en el %s', (_modo, consulta) => {
+      beforeEach(() => comoCelular(consulta));
+
+      it('con cliente y cuenta habilitada: el Dueño ve saldo, límite y disponible y la venta manda formaPagoId y clienteId', async () => {
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+
+        expect(medio('Cuenta corriente').hasAttribute('aria-disabled')).toBe(false);
+        await elegirMedio('Cuenta corriente');
+        expect(elegido()).toBe('Cuenta corriente');
+        expect(textoDe('.cuenta-corriente')).toBe('Saldo $ 1.000,00 · Límite $ 10.000,00 · Disponible $ 9.000,00');
+        expect(normal(boton('button.cobrar').textContent)).toBe('Cobrar');
+        await pulsar('button.cobrar');
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          formaPagoId: 9,
+          clienteId: 2,
+        });
+        expect('autorizaExceso' in cobros[0].pedido).toBe(false);
+
+        await cobrada(0, [{ medio: 'CUENTA_CORRIENTE', monto: 3000 }], 3000);
+        expect(normal(el().querySelector('.zona-busqueda .aviso')?.textContent)).toBe(
+          'Venta N.º 10 cobrada a cuenta corriente: $ 3.000,00',
+        );
+      });
+
+      it('el Vendedor sólo ve «Alcanza», sin cifras', async () => {
+        await conMartillos('VENDEDOR', true);
+        await abrirCobro(ALCANZA);
+
+        await elegirMedio('Cuenta corriente');
+
+        expect(textoDe('.cuenta-corriente')).toBe('Alcanza');
+        expect(normal(pantalla()!.textContent)).not.toMatch(/Saldo|Límite|Disponible/);
+      });
+
+      it('sin cliente la opción está apagada con su razón, no se elige y no se pide la cuenta', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+
+        const cc = medio('Cuenta corriente');
+        expect(cc.getAttribute('aria-disabled')).toBe('true');
+        expect(cc.getAttribute('aria-describedby')).toBe('razon-medio-9');
+        expect(textoDe('#razon-medio-9')).toBe('Elegí un cliente para vender a cuenta corriente.');
+        await elegirMedio('Cuenta corriente');
+
+        expect(elegido()).toBe('Efectivo');
+        expect(clientesApi.cuenta).not.toHaveBeenCalled();
+        await pulsar('button.cobrar');
+        expect(cobros[0].pedido).toEqual({ clave: 'clave-1', renglones: RENGLONES, totalMostrado: 3000, formaPagoId: 1 });
+      });
+
+      it('con el cliente sin cuenta corriente habilitada la razón nombra al cliente y manda a Clientes (Dueño) o al Dueño (Vendedor)', async () => {
+        await conMartillos('DUENO', true);
+        await abrirCobro({ habilitada: false });
+        expect(textoDe('#razon-medio-9')).toBe('Ferretería Norte SRL no tiene cuenta corriente habilitada. Habilitala desde Clientes.');
+        expect(medio('Cuenta corriente').getAttribute('aria-disabled')).toBe('true');
+      });
+
+      it('en el mixto la fila de cuenta corriente sin cliente está apagada con su razón y no suma al pedido', async () => {
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+        await elegirMedio('Mixto');
+
+        expect(campoDe(9).disabled).toBe(true);
+        expect(campoDe(9).getAttribute('aria-describedby')).toBe('razon-fila-9');
+        expect(textoDe('#razon-fila-9')).toBe('Elegí un cliente para vender a cuenta corriente.');
+        await cargar(1, '3000');
+        await pulsar('button.cobrar');
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          pagos: [{ formaPagoId: 1, monto: 3000 }],
+        });
+        expect('clienteId' in cobros[0].pedido).toBe(false);
+      });
+
+      it('en el mixto con cliente una parte va a cuenta corriente: manda los pagos y el clienteId', async () => {
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Mixto');
+
+        expect(campoDe(9).disabled).toBe(false);
+        await cargar(1, '1000');
+        await cargar(9, '2000');
+        expect(textoDe('.resumen-mixto')).toBe('Completo');
+        await pulsar('button.cobrar');
+
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          pagos: [
+            { formaPagoId: 1, monto: 1000 },
+            { formaPagoId: 9, monto: 2000 },
+          ],
+          clienteId: 2,
+        });
+        expect('autorizaExceso' in cobros[0].pedido).toBe(false);
+      });
+    });
+
+    describe.each(MODOS_T9B)('autorizar el exceso es lo mismo en el %s', (_modo, consulta) => {
+      beforeEach(() => comoCelular(consulta));
+
+      async function cobrarACuentaComoDueno() {
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Cuenta corriente');
+        await pulsar('button.cobrar');
+        clientesApi.cuenta.mockReturnValue(of(SE_PASA));
+        await rechazada(0, 422, limite(CIFRAS));
+      }
+
+      it('el Dueño ve el aviso del servidor y el exceso, el ticket sigue intacto y «Autorizar exceso y cobrar» reenvía con autorizaExceso y la misma clave', async () => {
+        await cobrarACuentaComoDueno();
+
+        expect(pantalla()).not.toBeNull();
+        expect(textoDe('.aviso')).toBe(MENSAJE_LIMITE);
+        expect(textoDe('.cuenta-corriente')).toBe('Supera el límite por $ 2.000,00 (límite $ 5.000,00, saldo $ 4.000,00)');
+        expect(normal(boton('button.cobrar').textContent)).toBe('Autorizar exceso y cobrar');
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(cobros).toHaveLength(1);
+
+        await pulsar('button.cobrar');
+
+        expect(cobros).toHaveLength(2);
+        expect(cobros[1].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: RENGLONES,
+          totalMostrado: 3000,
+          formaPagoId: 9,
+          clienteId: 2,
+          autorizaExceso: true,
+        });
+        expect(cobros[1].pedido.clave).toBe(cobros[0].pedido.clave);
+      });
+
+      it('con facturación los dos botones dicen «Autorizar exceso…» y mandan autorizaExceso con el clienteId', async () => {
+        facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS_T9B };
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Cuenta corriente');
+        await pulsar('button.facturar');
+        clientesApi.cuenta.mockReturnValue(of(SE_PASA));
+        await rechazada(0, 422, limite(CIFRAS));
+
+        expect(normal(boton('button.sin-factura').textContent)).toBe('Autorizar exceso y cobrar sin factura');
+        expect(normal(boton('button.facturar').textContent)).toBe('Autorizar exceso, cobrar y facturar');
+
+        await pulsar('button.facturar');
+        expect(cobros[1].pedido).toEqual({ ...cobros[0].pedido, autorizaExceso: true });
+        expect(cobros[1].pedido.clave).toBe('clave-1');
+        expect('facturable' in cobros[1].pedido).toBe(false);
+
+        await rechazada(1, 422, limite(CIFRAS));
+        await pulsar('button.sin-factura');
+        expect(cobros[2].pedido).toEqual({ ...cobros[0].pedido, autorizaExceso: true, facturable: false });
+        expect(cobros[2].pedido.clave).toBe('clave-1');
+      });
+
+      it('en el mixto el exceso rechazado también se autoriza: manda los pagos con autorizaExceso y la misma clave', async () => {
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Mixto');
+        await cargar(1, '1000');
+        await cargar(9, '2000');
+        await pulsar('button.cobrar');
+        await rechazada(0, 422, limite(CIFRAS));
+
+        expect(textoDe('.cuenta-corriente')).toBe('Supera el límite por $ 2.000,00 (límite $ 5.000,00, saldo $ 4.000,00)');
+        expect(normal(boton('button.cobrar').textContent)).toBe('Autorizar exceso y cobrar');
+        expect(renglonesTicket()).toHaveLength(1);
+        await pulsar('button.cobrar');
+
+        expect(cobros[1].pedido).toEqual({ ...cobros[0].pedido, autorizaExceso: true });
+        expect(cobros[1].pedido.clave).toBe('clave-1');
+        expect(cobros[1].pedido.pagos).toEqual([
+          { formaPagoId: 1, monto: 1000 },
+          { formaPagoId: 9, monto: 2000 },
+        ]);
+      });
+
+      it('el Vendedor lee «Pedile al Dueño», sin cifras ni «Autorizar»: la cuenta queda apagada y el ticket intacto', async () => {
+        await conMartillos('VENDEDOR', true);
+        await abrirCobro(ALCANZA);
+        await elegirMedio('Cuenta corriente');
+        await pulsar('button.cobrar');
+        clientesApi.cuenta.mockReturnValue(of({ habilitada: true, alcanza: false }));
+
+        await rechazada(0, 422, limite({ puedeAutorizar: false }, `${MENSAJE_LIMITE} Pedile al Dueño que la autorice.`));
+
+        expect(textoDe('.aviso')).toBe(`${MENSAJE_LIMITE} Pedile al Dueño que la autorice.`);
+        expect(enCobro('.cuenta-corriente')).toBeNull();
+        expect(normal(boton('button.cobrar').textContent)).toBe('Cobrar');
+        expect(textoDe('#razon-medio-9')).toBe('No alcanza el límite de la cuenta corriente. Pedile al Dueño.');
+        expect(medio('Cuenta corriente').getAttribute('aria-disabled')).toBe('true');
+        expect(elegido()).toBe('Efectivo');
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(cobros).toHaveLength(1);
+      });
+    });
+
+    describe.each(MODOS_T9B)('cerrar por un rechazo del servidor en el %s', (modo, consulta) => {
+      beforeEach(() => comoCelular(consulta));
+
+      it('CAJA_CERRADA cierra el cobro y conserva el ticket; el foco va al buscador sólo fuera del celular', async () => {
+        await conMartillos('VENDEDOR');
+        expect(document.activeElement).toBe(campo());
+        await abrirCobro();
+        await elegirMedio('Mixto');
+        await cargar(1, '3000');
+        await pulsar('button.cobrar');
+
+        await rechazada(0, 422, { status: 422, message: 'Abrí la caja para vender.', motivo: 'CAJA_CERRADA', articulos: [] });
+
+        expect(pantalla()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(normal(el().querySelector('.zona-busqueda .aviso')?.textContent)).toBe('Abrí la caja para vender.');
+        if (modo === 'celular') expect(document.activeElement).not.toBe(campo());
+        else expect(document.activeElement).toBe(campo());
+
+        // El ticket y su clave siguen: al volver a cobrar se manda lo mismo.
+        await abrirCobro();
+        await pulsar('button.cobrar');
+        expect(cobros).toHaveLength(2);
+        expect(cobros[1].pedido).toEqual({ clave: 'clave-1', renglones: RENGLONES, totalMostrado: 3000, formaPagoId: 1 });
+      });
+    });
+
+    describe('la presentación del celular', () => {
+      const raiz = () => pantalla()!;
+
+      async function conExceso(rol: 'DUENO' | 'VENDEDOR' = 'DUENO') {
+        await conMartillos(rol, true);
+        await abrirCobro(rol === 'DUENO' ? DUENO_ALCANZA : ALCANZA);
+        await elegirMedio('Cuenta corriente');
+        await pulsar('button.cobrar');
+        await rechazada(0, 422, limite(rol === 'DUENO' ? CIFRAS : { puedeAutorizar: false }));
+      }
+
+      it('el mixto del celular sigue en la pantalla completa: una fila por forma, el resumen y el pie fijo con la acción', async () => {
+        comoCelular('639.98px');
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Mixto');
+
+        expect(raiz().classList).toContain('cobro-celular');
+        expect(Array.from(raiz().querySelectorAll('.mixto > .fila-pago')).map((f) => normal(f.textContent))).toEqual([
+          'Efectivo $',
+          'Débito $',
+          'Crédito $',
+          'Transferencia $',
+          'Cuenta corriente $',
+        ]);
+        expect(raiz().querySelector('.mixto > .resumen-mixto')).not.toBeNull();
+        const pie = raiz().querySelector<HTMLElement>(':scope > .dialogo-acciones.ficha-pie')!;
+        expect(normal(pie.textContent)).toBe('Cobrar');
+        expect(raiz().lastElementChild).toBe(pie);
+        expect(raiz().classList).not.toContain('cobro-exceso');
+      });
+
+      it('con «Autorizar exceso…» el pie del celular se marca (`cobro-exceso`) para apilar sus botones; sin exceso, no', async () => {
+        comoCelular('639.98px');
+        await conExceso('DUENO');
+
+        expect(raiz().classList).toContain('cobro-celular');
+        expect(raiz().classList).toContain('cobro-exceso');
+        expect(normal(raiz().querySelector(':scope > .dialogo-acciones.ficha-pie')!.textContent)).toBe('Autorizar exceso y cobrar');
+
+        // Elegir otra forma ya no autoriza nada: la marca sale.
+        await elegirMedio('Efectivo');
+        expect(raiz().classList).not.toContain('cobro-exceso');
+      });
+
+      it('el Vendedor, que no autoriza nada, nunca ve la marca del exceso', async () => {
+        comoCelular('639.98px');
+        await conExceso('VENDEDOR');
+
+        expect(raiz().classList).not.toContain('cobro-exceso');
+      });
+
+      it('con facturación y exceso la marca está también y el pie sigue con sus dos botones (el DOM no cambia, sólo se apilan)', async () => {
+        comoCelular('639.98px');
+        facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS_T9B };
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Cuenta corriente');
+        await pulsar('button.facturar');
+        await rechazada(0, 422, limite(CIFRAS));
+
+        expect(raiz().classList).toContain('cobro-exceso');
+        const botones = Array.from(raiz().querySelectorAll<HTMLElement>(':scope > .ficha-pie .formas-de-cobrar > button'));
+        expect(botones.map((b) => normal(b.textContent))).toEqual([
+          'Autorizar exceso y cobrar sin factura',
+          'Autorizar exceso, cobrar y facturar',
+        ]);
+      });
+
+      it.each([
+        ['el escritorio', null],
+        ['la tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s el DOM del cobro no cambia: sin barra ni pie fijo, sin marcas del celular, con «Cancelar»', async (_nombre, consulta) => {
+        comoCelular(consulta);
+        await conExceso('DUENO');
+
+        expect(raiz().classList).not.toContain('cobro-celular');
+        expect(raiz().classList).not.toContain('cobro-exceso');
+        expect(raiz().querySelector('.ficha-barra, .ficha-pie')).toBeNull();
+        expect(raiz().querySelector('button.cancelar')).not.toBeNull();
+        expect(normal(raiz().querySelector('button.cobrar')!.textContent)).toBe('Autorizar exceso y cobrar');
+      });
+
+      it('la forma apagada del celular dice su razón en su propia fila (sin leerse dos veces) y la frase enlazada sigue abajo', async () => {
+        comoCelular('639.98px');
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+
+        const cc = medio('Cuenta corriente');
+        expect(cc.getAttribute('aria-disabled')).toBe('true');
+        const enLaFila = cc.querySelector('.razon-en-medio')!;
+        expect(normal(enLaFila.textContent)).toBe('Elegí un cliente para vender a cuenta corriente.');
+        expect(enLaFila.getAttribute('aria-hidden')).toBe('true');
+        expect(el().querySelector(`#${cc.getAttribute('aria-describedby')}`)!.textContent!.trim()).toBe(
+          'Elegí un cliente para vender a cuenta corriente.',
+        );
+        // Sólo la apagada la lleva: las demás formas quedan como siempre.
+        expect(el().querySelectorAll('app-dialogo-cobro .razon-en-medio')).toHaveLength(1);
+        expect(normal(medio('Efectivo').textContent)).toBe('Efectivo');
+      });
+
+      it('con el cliente y la cuenta que no alcanza, el Vendedor lee en la fila «No alcanza el límite…»', async () => {
+        comoCelular('639.98px');
+        await conMartillos('VENDEDOR', true);
+        await abrirCobro({ habilitada: true, alcanza: false });
+        expect(normal(medio('Cuenta corriente').querySelector('.razon-en-medio')?.textContent)).toBe(
+          'No alcanza el límite de la cuenta corriente. Pedile al Dueño.',
+        );
+      });
+
+      it.each([
+        ['el escritorio', null],
+        ['la tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s la razón de la forma apagada sigue sólo debajo de la lista, como siempre', async (_nombre, consulta) => {
+        comoCelular(consulta);
+        await conMartillos('VENDEDOR');
+        await abrirCobro();
+
+        expect(el().querySelector('app-dialogo-cobro .razon-en-medio')).toBeNull();
+        expect(normal(medio('Cuenta corriente').textContent)).toBe('Cuenta corriente');
+        expect(textoDe('#razon-medio-9')).toBe('Elegí un cliente para vender a cuenta corriente.');
+      });
+
+      it.each([
+        ['el escritorio', null],
+        ['la tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s el mixto conserva su DOM de siempre', async (_nombre, consulta) => {
+        comoCelular(consulta);
+        await conMartillos('DUENO', true);
+        await abrirCobro(DUENO_ALCANZA);
+        await elegirMedio('Mixto');
+
+        expect(raiz().querySelectorAll('.mixto > label.fila-pago')).toHaveLength(5);
+        expect(raiz().classList).not.toContain('cobro-celular');
+        expect(raiz().querySelector(':scope > .mixto')).not.toBeNull();
+      });
+    });
+  });
 });
