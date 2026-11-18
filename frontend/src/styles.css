@@ -5035,3 +5035,174 @@ app-cuenta-cliente .acciones-cuenta {
     margin: 0;
   }
 }
+
+/* ---------- Ventas: cobranza, ajustes y anular recibo en el celular (movil-sectores T12b, S2, S5, S7) ---------- */
+
+/*
+ * Cobrar, Recargo, Descuento y Anular recibo, abiertos desde la cuenta corriente de un cliente, pasan a pantalla completa
+ * en el celular (artboards 09 y 13 de movil-ventas): la flecha «Volver» con el título arriba, el contenido que scrollea y
+ * la acción principal en un pie fijo. Es sólo presentación (S1): el estado, la validación y lo que se manda son los de
+ * siempre, y la plata no se toca. Cada diálogo pone `.dialogo-cuenta-celular` (y la barra, el pie y el marco de la
+ * imputación) sólo cuando se abre en el celular, así que el escritorio y la tablet conservan su DOM y su diálogo centrado
+ * (S5). Reusa la barra y el pie de las fichas (`.ficha-barra`, `.ficha-volver`, `.ficha-pie`). Todo cuelga de
+ * `app-dialogo-…` y repite clases (`.dialogo-cuenta-celular` dos veces, `.dialogo-acciones.ficha-pie`) para ganarle sin !important al CSS de cada
+ * componente, que se carga después de este archivo y que Angular marca con su atributo en cada parte del selector; ese
+ * CSS no se toca por el tope de 8 kB.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Cubre toda la pantalla (también la barra de destinos), sin el velo ni la tarjeta del diálogo. */
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-fondo {
+    padding: 0;
+    place-items: stretch;
+    background: var(--superficie);
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo.dialogo-cuenta-celular {
+    gap: var(--e-3);
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+    /* La barra y el pie son fijos: al enfocar un campo queda entre ellos, no atrás del pie ni del teclado. */
+    scroll-padding: 72px 0 96px;
+  }
+  /* Lo que va entre la barra y el pie, con el margen de las pantallas completas. */
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular > :not(.ficha-barra, .ficha-pie) {
+    flex: none;
+    margin-inline: var(--pantalla-x);
+  }
+  /* «Cobrar a Constructora del Puerto SA» entra en hasta dos renglones y recién después se corta. */
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular .ficha-barra h2 {
+    display: -webkit-box;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--texto-lg);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  /*
+   * El pie fijo, de 52 px: «Cancelar» a la izquierda y la acción principal a la derecha, como los artboards. «Cancelar y
+   * empezar de nuevo» (un envío sin confirmar) ocupa su propio renglón arriba. La flecha «Volver» ya cierra: el «Cancelar»
+   * que el pie de las fichas esconde se muestra acá (los artboards lo dibujan), salvo en la confirmación del ajuste, donde
+   * el pie es «Volver» (al paso 1) y «Confirmar».
+   */
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie {
+    flex-flow: row wrap;
+    align-items: stretch;
+    justify-content: stretch;
+    margin: auto 0 0;
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie > button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    padding: var(--e-2);
+    border-radius: var(--radio-lg);
+    font-size: var(--texto-md);
+    font-weight: 600;
+    white-space: normal;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie > button.reiniciar {
+    flex: 1 1 100%;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste, app-dialogo-anulacion) .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie:not(:has(> .confirmar-ajuste)) > button.cancelar {
+    display: inline-flex;
+    order: 0;
+  }
+  /* Anular recibo, en rojo y relleno como el artboard 13 (el botón de escritorio es sólo de borde rojo). */
+  app-dialogo-anulacion .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie > button.anular-recibo.peligro:not(:disabled),
+  app-dialogo-anulacion .dialogo-cuenta-celular.dialogo-cuenta-celular > .dialogo-acciones.ficha-pie > button.anular-recibo.peligro:hover:not(:disabled) {
+    border-color: var(--error);
+    background: var(--error);
+    color: #fff;
+  }
+
+  /* Total, importe y medio: controles táctiles de siempre, el medio en botones de 52 px (artboard 09). */
+  app-dialogo-cobranza .dialogo-cuenta-celular.dialogo-cuenta-celular .medio {
+    min-height: 52px;
+  }
+  /* «← → cambian el medio» es de teclado: en el celular sobra (sigue siendo la descripción enlazada del grupo). */
+  app-dialogo-cobranza .dialogo-cuenta-celular.dialogo-cuenta-celular .pista-medios {
+    display: none;
+  }
+
+  /*
+   * La imputación del cobro y del descuento: la misma tabla, una fila por comprobante, sin scroll de costado (a 390 y 360
+   * px la tabla medía 460 px dentro de su propio scroll). La referencia con su fecha y, debajo, lo pendiente; a la derecha el
+   * campo de 44 px con su error debajo. La cabecera de la tabla queda sólo para los lectores de pantalla.
+   */
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .tabla-scroll.imputacion-celular {
+    overflow: visible;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion,
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody {
+    display: block;
+    background: none;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 9.5rem);
+    column-gap: var(--e-3);
+    align-items: center;
+    padding: var(--e-3) 0;
+    border-bottom: 1px solid var(--borde);
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody tr:last-child {
+    border-bottom: 0;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody tr > :is(th, td) {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody th {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-wrap: anywhere;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody td:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody td:nth-child(2)::before {
+    content: 'pendiente\00a0';
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody td:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody td:nth-child(3) app-campo-moneda {
+    display: flex;
+    width: 100%;
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputacion-celular table.imputacion tbody td:nth-child(3) input {
+    width: 100%;
+    min-width: 0;
+    height: var(--alto-tactil);
+  }
+  :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputar-en-orden {
+    align-self: stretch;
+    min-height: var(--alto-tactil);
+  }
+}

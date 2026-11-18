@@ -12,6 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { MontoPipe, formatearMonto } from '../../../core/formato/monto';
+import { esCelular } from '../../../shared/es-celular';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { diaDeCaja } from '../../caja/caja.models';
 import {
@@ -44,6 +45,13 @@ export const HOY = new InjectionToken<() => string>('HOY', {
 export class DialogoAnulacion {
   private readonly injector = inject(Injector);
   private readonly hoy = inject(HOY);
+
+  /**
+   * En el celular es una pantalla completa (movil-sectores T12b): la flecha «Volver» arriba y la acción principal en un pie
+   * fijo. Se lee al abrir: no sigue la rotación. Es sólo cómo se ve: el estado, la validación, los manejadores y lo que se
+   * confirma son los de siempre, y en la tablet y el escritorio el DOM no cambia.
+   */
+  protected readonly celular = esCelular();
 
   readonly recibo = input.required<Recibo>();
   /** El contenedor lo prende mientras el POST está en curso. */

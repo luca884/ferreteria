@@ -2,6 +2,7 @@
 <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
   <div
     class="dialogo anulacion"
+    [class.dialogo-cuenta-celular]="celular"
     tabindex="-1"
     role="dialog"
     aria-modal="true"
@@ -9,7 +10,19 @@
     appTrampaFoco
     (keydown)="alTeclear($event)"
   >
-    <h2 id="dialogo-anulacion-titulo">Anular recibo N.º {{ recibo().numero }}</h2>
+    @if (celular) {
+      <!-- movil-sectores T12b: en el celular es una pantalla completa: la flecha «Volver» arriba (cierra, como «Cancelar») y la acción fija abajo. -->
+      <div class="ficha-barra">
+        <button type="button" class="ficha-volver" aria-label="Volver" [disabled]="enVuelo()" (click)="cancelarAnulacion()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+        </button>
+        <h2 id="dialogo-anulacion-titulo">Anular recibo N.º {{ recibo().numero }}</h2>
+      </div>
+    } @else {
+      <h2 id="dialogo-anulacion-titulo">Anular recibo N.º {{ recibo().numero }}</h2>
+    }
 
     @if (error(); as texto) {
       <p class="error error-servidor" role="alert">{{ texto }}</p>
@@ -72,7 +85,7 @@
       <small class="contador" aria-hidden="true">{{ motivo().length }}/{{ maximo }}</small>
     </div>
 
-    <div class="dialogo-acciones">
+    <div class="dialogo-acciones" [class.ficha-pie]="celular">
       <button
         type="button"
         class="cancelar"
