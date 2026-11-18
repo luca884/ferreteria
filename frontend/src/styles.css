@@ -2255,3 +2255,40 @@ ul.error {
     order: -1;
   }
 }
+
+/* ---------- Alta y errores del artículo en el celular (movil-sectores T5, 5d, S7) ---------- */
+
+/*
+ * El alta (`/articulos/nuevo`) usa la misma ficha de pantalla completa de la sección anterior (`.ficha-celular`), vacía y con
+ * el código sugerido. Acá van sólo sus dos detalles: la ayuda fija del precio como aviso y el resumen «Revisá estos datos»
+ * con un renglón de 44 px por campo (el renglón abre la tarjeta del campo y lo enfoca). Los estilos de la oferta móvil están
+ * en oferta-articulo.css. El escritorio no cambia (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  app-articulo-form.ficha-celular > .ayuda.ayuda-alta {
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--acento-borde);
+    border-radius: var(--radio-lg);
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+    font-size: var(--texto-sm);
+  }
+  app-articulo-form.ficha-celular .errores-campos.resumen-errores ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  app-articulo-form.ficha-celular .resumen-errores .enlace-error {
+    display: block;
+    width: 100%;
+    min-height: var(--alto-tactil);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    text-decoration: underline;
+  }
+}

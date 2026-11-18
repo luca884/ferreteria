@@ -3464,22 +3464,13 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('app-confirmacion')!.textContent).toContain('¿Descartar los cambios?');
     });
 
-    it('en el escritorio, y en el alta del celular, no hay nada de esto: la barra y los fieldsets de siempre', async () => {
+    it('en el escritorio no hay nada de esto: la barra y los fieldsets de siempre', async () => {
       await crearComponente({ id: '5' });
       expect(el().classList).not.toContain('ficha-celular');
       expect(el().querySelector('.ficha-barra, .ficha-mas, .seccion-cabecera, .resumen-celular')).toBeNull();
       expect(el().querySelector('app-barra-acciones h1')!.textContent!.trim()).toBe('Editar artículo');
       expect(el().querySelector('legend')!.textContent).toBe('Identificación');
       expect(el().querySelector('dl.solo-lectura')).not.toBeNull();
-      expect(el().querySelector('.acciones-form')!.classList).not.toContain('ficha-pie');
-
-      TestBed.resetTestingModule();
-      enElCelular();
-      await crearComponente();
-      expect(el().classList).not.toContain('ficha-celular');
-      expect(el().querySelector('.ficha-barra, .ficha-mas, .seccion-cabecera, .resumen-celular')).toBeNull();
-      expect(el().querySelector('app-barra-acciones h1')!.textContent!.trim()).toBe('Nuevo artículo');
-      expect(el().querySelector('legend')!.textContent).toBe('Identificación');
       expect(el().querySelector('.acciones-form')!.classList).not.toContain('ficha-pie');
     });
 
@@ -3646,7 +3637,7 @@ describe('ArticuloForm', () => {
         await crearComponente({ id: '5' });
 
         const titulos = Array.from(el().querySelectorAll('.seccion-cabecera .seccion-titulo')).map((t) => t.textContent);
-        expect(titulos).toEqual(['Identificación', 'Precio', 'Clasificación y códigos', 'Stock', 'De dónde sale el precio']);
+        expect(titulos).toEqual(['Identificación', 'Precio', 'Clasificación y códigos', 'Stock', 'Oferta', 'De dónde sale el precio']);
         expect(Array.from(el().querySelectorAll('.seccion-cabecera')).every((b) => b.tagName === 'BUTTON' && b.getAttribute('type') === 'button')).toBe(true);
         expect(cabecera('Identificación').getAttribute('aria-expanded')).toBe('true');
         expect(seccion('identificacion').classList).not.toContain('cerrada');
@@ -3800,6 +3791,204 @@ describe('ArticuloForm', () => {
       const oferta = el().querySelector('app-oferta-articulo')!;
       expect(oferta).not.toBeNull();
       expect(el().querySelector('form.articulo')!.compareDocumentPosition(oferta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
+  /*
+   * movil-sectores T5 (5d; S1, S2, S5, S7): el alta (`/articulos/nuevo`) en el celular es la misma ficha de pantalla
+   * completa, vacía y con el código sugerido; el resumen «Revisá estos datos» lista lo inválido y cada renglón abre la
+   * tarjeta del campo y lo enfoca; el escritorio no cambia. Vitest no lee styles.css: las medidas se ven en el navegador.
+   */
+  describe('alta en el celular (movil-sectores T5, 5d)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    afterEach(() => vi.unstubAllGlobals());
+
+    const cabecera = (titulo: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('.seccion-cabecera')).find(
+        (b) => b.querySelector('.seccion-titulo')?.textContent?.trim() === titulo,
+      )!;
+    const renglones = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('.resumen-errores .enlace-error')).map((b) => b.textContent!.trim());
+    const renglon = (texto: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('.resumen-errores .enlace-error')).find((b) => b.textContent!.trim() === texto)!;
+
+    it('es la ficha de pantalla completa: barra «Volver» con «Nuevo artículo», sin ⋯ ni resumen, y las tarjetas plegables', async () => {
+      enElCelular();
+      await crearComponente({ codigoSugerido: 'TOR-001' });
+
+      expect(el().classList).toContain('ficha-celular');
+      expect(el().querySelector('app-barra-acciones')).toBeNull();
+      const barra = el().querySelector('.ficha-barra')!;
+      expect(barra.querySelector('.ficha-volver')!.getAttribute('aria-label')).toBe('Volver');
+      expect(barra.querySelector('h1')!.textContent!.trim()).toBe('Nuevo artículo');
+      expect(el().querySelector('.ficha-mas, .resumen-celular, dl.solo-lectura')).toBeNull();
+      const titulos = Array.from(el().querySelectorAll('.seccion-cabecera .seccion-titulo')).map((t) => t.textContent);
+      expect(titulos).toEqual(['Identificación', 'Precio', 'Clasificación y códigos', 'Stock']);
+      expect(cabecera('Identificación').getAttribute('aria-expanded')).toBe('true');
+      expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('false');
+      expect(el().querySelector('fieldset.seccion.precio')!.classList).toContain('cerrada');
+      // Vacío, con el código que se sugiere hoy y la ayuda fija del precio.
+      expect(input('codigoInterno').value).toBe('TOR-001');
+      expect(input('descripcion').value).toBe('');
+      expect(el().querySelector('.ayuda')!.textContent).toContain('El precio final lo calcula el sistema');
+      expect(el().querySelector('.ayuda')!.classList).toContain('ayuda-alta');
+    });
+
+    it('el pie fijo tiene Cancelar y Guardar; Guardar guarda lo mismo de siempre y no tiene motivo propio', async () => {
+      enElCelular();
+      await crearComponente();
+      const pie = el().querySelector('.acciones-form')!;
+      expect(pie.classList).toContain('ficha-pie');
+      const guardar = pie.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      expect(guardar.textContent!.trim()).toBe('Guardar');
+      expect(guardar.hasAttribute('aria-disabled')).toBe(false);
+      expect(pie.querySelector('a.cancelar')!.textContent!.trim()).toBe('Cancelar');
+
+      await completarMinimos();
+      guardar.click();
+      await refrescar();
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+      expect(servicio.crear.mock.calls[0][0]).toMatchObject({ codigoInterno: 'TOR-001', descripcion: 'Tornillo', costo: 100 });
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+    });
+
+    it('«Volver» vuelve al listado; con el formulario modificado pregunta antes de descartar', async () => {
+      enElCelular();
+      await crearComponente({ codigoSugerido: 'TOR-001' });
+
+      el().querySelector<HTMLButtonElement>('.ficha-volver')!.click();
+      await refrescar();
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+
+      navigate.mockClear();
+      await escribir('descripcion', 'Tornillo');
+      el().querySelector<HTMLButtonElement>('.ficha-volver')!.click();
+      await refrescar();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(el().querySelector('app-confirmacion')!.textContent).toContain('¿Descartar los cambios?');
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-confirmacion button')).find((b) => b.textContent?.trim() === 'Descartar')!.click();
+      await refrescar();
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+    });
+
+    describe('el resumen «Revisá estos datos»', () => {
+      it('no está hasta que se intenta guardar', async () => {
+        enElCelular();
+        await crearComponente();
+        expect(el().querySelector('.resumen-errores')).toBeNull();
+      });
+
+      it('lista los campos inválidos con el mismo mensaje de cada campo, abre sus tarjetas y no guarda', async () => {
+        enElCelular();
+        await crearComponente({ codigoSugerido: 'TOR-001' });
+
+        await enviar();
+
+        expect(servicio.crear).not.toHaveBeenCalled();
+        const resumen = el().querySelector('.resumen-errores')!;
+        expect(resumen.getAttribute('role')).toBe('alert');
+        expect(resumen.querySelector('strong')!.textContent).toBe('Revisá estos datos:');
+        expect(renglones()).toEqual(['La descripción es obligatoria.', 'El costo es obligatorio.']);
+        // El mismo texto de cada campo.
+        expect(el().querySelector('#descripcion-error')!.textContent!.trim()).toBe('La descripción es obligatoria.');
+        expect(el().querySelector('#costo-error')!.textContent!.trim()).toBe('El costo es obligatorio.');
+        // La tarjeta con un error se abre; la que no, queda plegada.
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('true');
+        expect(cabecera('Stock').getAttribute('aria-expanded')).toBe('false');
+        // Un solo resumen: no se repite el banner del escritorio.
+        expect(el().querySelectorAll('.errores-campos')).toHaveLength(1);
+      });
+
+      it('cada renglón enfoca su campo, y abre la tarjeta si la plegaron', async () => {
+        enElCelular();
+        await crearComponente({ codigoSugerido: 'TOR-001' });
+        await enviar();
+
+        cabecera('Precio').click();
+        await refrescar();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('false');
+
+        renglon('El costo es obligatorio.').click();
+        await refrescar();
+        expect(cabecera('Precio').getAttribute('aria-expanded')).toBe('true');
+        expect(document.activeElement).toBe(input('costo'));
+
+        renglon('La descripción es obligatoria.').click();
+        await refrescar();
+        expect(document.activeElement).toBe(input('descripcion'));
+      });
+
+      it('al corregir un campo su renglón sale; con todo corregido el resumen desaparece y se guarda', async () => {
+        enElCelular();
+        await crearComponente({ codigoSugerido: 'TOR-001' });
+        await enviar();
+
+        await escribir('descripcion', 'Tornillo');
+        expect(renglones()).toEqual(['El costo es obligatorio.']);
+        await escribir('costo', '100');
+        expect(el().querySelector('.resumen-errores')).toBeNull();
+
+        await enviar();
+        expect(servicio.crear).toHaveBeenCalledTimes(1);
+      });
+
+      it('suma los errores del backend, con su campo, y abre la tarjeta que los trae', async () => {
+        enElCelular();
+        await crearComponente({ codigoSugerido: 'TOR-001' });
+        await completarMinimos();
+        servicio.crear.mockReturnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { message: 'Datos inválidos', errors: { ubicacion: 'La ubicación es muy larga.', margenPorcentaje: 'El margen es inválido.' } },
+              }),
+          ),
+        );
+
+        await enviar();
+
+        expect(renglones()).toEqual(['El margen es inválido.', 'La ubicación es muy larga.']);
+        expect(el().querySelectorAll('.errores-campos')).toHaveLength(1);
+        expect(cabecera('Stock').getAttribute('aria-expanded')).toBe('true');
+        renglon('La ubicación es muy larga.').click();
+        await refrescar();
+        expect(document.activeElement).toBe(input('ubicacion'));
+      });
+    });
+
+    it('en el escritorio el alta no cambia: la barra, los fieldsets y el banner de siempre', async () => {
+      await crearComponente({ codigoSugerido: 'TOR-001' });
+
+      expect(el().classList).not.toContain('ficha-celular');
+      expect(el().querySelector('.ficha-barra, .ficha-mas, .seccion-cabecera, .resumen-celular, .resumen-errores')).toBeNull();
+      expect(el().querySelector('app-barra-acciones h1')!.textContent!.trim()).toBe('Nuevo artículo');
+      expect(el().querySelector('legend')!.textContent).toBe('Identificación');
+      expect(el().querySelector('.acciones-form')!.classList).not.toContain('ficha-pie');
+      expect(el().querySelector('.ayuda')!.classList).not.toContain('ayuda-alta');
+      expect(el().querySelector('fieldset.seccion.precio')!.classList).not.toContain('cerrada');
+
+      await escribir('codigoInterno', '');
+      await enviar();
+      expect(el().querySelector('.resumen-errores')).toBeNull();
+      expect(el().querySelector('#codigoInterno-error')!.textContent!.trim()).toBe('El código interno es obligatorio.');
+    });
+
+    it('la oferta de un artículo existente se arma plegable (celular) y con el select (escritorio)', async () => {
+      enElCelular();
+      await crearComponente({ id: '5' });
+      const seccion = el().querySelector('app-oferta-articulo .oferta-articulo')!;
+      expect(seccion.classList).toContain('oferta-celular');
+      expect(seccion.querySelector('.seccion-cabecera')!.getAttribute('aria-expanded')).toBe('false');
+      expect(el().querySelector('app-oferta-articulo #oferta-tipo')).toBeNull();
+
+      TestBed.resetTestingModule();
+      vi.unstubAllGlobals();
+      await crearComponente({ id: '5' });
+      expect(el().querySelector('app-oferta-articulo .oferta-celular, app-oferta-articulo .seccion-cabecera, app-oferta-articulo .tipo-segmentado')).toBeNull();
+      expect(el().querySelector('app-oferta-articulo select#oferta-tipo')).not.toBeNull();
     });
   });
 });
