@@ -217,6 +217,14 @@ export class Articulos implements OnInit {
     });
   }
 
+  /**
+   * movil-sectores T5 (5c), «Tocá la fila»: en el celular un toque en la fila abre su ficha, que ahora lleva las
+   * acciones del artículo. En el escritorio un clic sólo elige la fila (el doble clic y Enter abren la ficha).
+   */
+  protected abrirFichaEnElCelular(articulo: Articulo): void {
+    if (esCelular()) this.abrirFicha(articulo);
+  }
+
   protected pedirBaja(): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     const articulo = this.filas.elegido();

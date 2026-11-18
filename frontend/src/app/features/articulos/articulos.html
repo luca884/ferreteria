@@ -278,7 +278,7 @@
               class="elegible"
               [attr.aria-selected]="articulo.id === filas.elegidoId()"
               [attr.tabindex]="filas.esTabulable(articulo, i) ? 0 : -1"
-              (click)="filas.elegir(articulo)"
+              (click)="filas.elegir(articulo); abrirFichaEnElCelular(articulo)"
               (focus)="filas.elegir(articulo)"
               (dblclick)="abrirFicha(articulo)"
               (keydown)="filas.alTeclear($event, articulo, i)"

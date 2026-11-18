@@ -1415,6 +1415,72 @@ describe('Articulos', () => {
       await crearComponente(true, pagina([articulo(1)], 0, 1, 1));
       expect(el().querySelector('.conteo-movil')!.textContent!.trim()).toBe('1 artículo');
     });
+
+    /*
+     * 5c: «Tocá la fila». La ficha lleva ahora las acciones del artículo, así que en el celular un toque en la fila la
+     * abre y las acciones de la barra se esconden; el escritorio sigue eligiendo con un clic y abriendo con doble clic.
+     */
+    describe('tocar la fila (movil-sectores T5, 5c)', () => {
+      const ABRE_LA_7 = [['/articulos', 7], { queryParams: { elegido: 7 }, queryParamsHandling: 'merge' }];
+
+      it('en el celular un toque en la fila abre su ficha, con la dirección de vuelta', async () => {
+        enElCelular();
+        await crearComponente(true, pagina([articulo(7), articulo(8)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar).toHaveBeenCalledTimes(1);
+        expect(navegar.mock.calls[0]).toEqual(ABRE_LA_7);
+      });
+
+      it('el Vendedor también abre la ficha de solo lectura con un toque', async () => {
+        enElCelular();
+        await crearComponente(false, pagina([articulo(7)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar.mock.calls[0]).toEqual(ABRE_LA_7);
+      });
+
+      it('en el escritorio un clic sólo elige la fila: no navega', async () => {
+        await crearComponente(true, pagina([articulo(7), articulo(8)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar).not.toHaveBeenCalled();
+        expect(filas()[0].getAttribute('aria-selected')).toBe('true');
+        expect(el().querySelector('.elegido')!.textContent).toContain('Elegido');
+      });
+
+      it('en el escritorio el doble clic y Enter siguen abriendo la ficha', async () => {
+        await crearComponente(true, pagina([articulo(7)]));
+
+        filas()[0].querySelector('.descripcion')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        await refrescar();
+
+        expect(navegar.mock.calls.at(-1)).toEqual(ABRE_LA_7);
+      });
+
+      it('las acciones de un artículo siguen en la barra del DOM, y sólo en el celular se esconden', async () => {
+        await crearComponente(true);
+
+        const acciones = ['.editar', '.ajustar-stock', '.movimientos', '.clientes', '.desactivar'];
+        for (const accion of acciones) expect(barra(accion)).not.toBeNull();
+        const reglas = reglasDe('.editar').filter((regla) => regla.estilo.getPropertyValue('display') === 'none');
+        expect(reglas.length).toBeGreaterThan(0);
+        expect(reglas.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+        // La regla que las esconde nombra todas las acciones de la fila, no sólo Editar.
+        const textoDeLaRegla = Array.from(document.styleSheets)
+          .flatMap((hoja) => Array.from(hoja.cssRules))
+          .flatMap((regla) => Array.from((regla as CSSMediaRule).cssRules ?? []))
+          .map((regla) => (regla as CSSStyleRule).selectorText ?? '')
+          .find((selector) => selector.includes('.editar') && selector.includes('.desactivar'))!;
+        for (const accion of [...acciones, '.reactivar', '.ver-ficha']) expect(textoDeLaRegla).toContain(accion);
+      });
+    });
   });
 
   /*

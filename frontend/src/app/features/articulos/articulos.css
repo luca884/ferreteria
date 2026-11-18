@@ -206,6 +206,15 @@ th.actualizacion {
     display: none;
   }
   /*
+   * movil-sectores T5 (5c): las acciones de un artículo (Editar, Ajustar stock, Movimientos, Clientes, Reactivar, Dar de
+   * baja y Ver ficha) pasan a la ficha, que se abre con un toque en la fila; en la barra del celular ya no están. El
+   * motivo de Ajustar stock apagado, que hablaba de ese botón, tampoco.
+   */
+  app-barra-acciones :is(.editar, .ajustar-stock, .movimientos, .clientes, .reactivar, .desactivar, .ver-ficha, .separador-barra),
+  .motivo-linea {
+    display: none;
+  }
+  /*
    * El renglón del buscador queda pegado abajo de la barra —que ya es sticky arriba del contenido— mientras la lista
    * scrollea: los 60 px son el alto de la barra en el celular (styles.css).
    */
