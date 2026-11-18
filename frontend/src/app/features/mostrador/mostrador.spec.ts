@@ -5678,8 +5678,8 @@ describe('Mostrador', () => {
     afterEach(() => vi.unstubAllGlobals());
 
     /** Ticket con «Artículo 1» ($ 100) y «Artículo 2» ($ 200) por unidad. */
-    async function conTicket(vigente: CajaVigente = cajaAbierta) {
-      await crear(vigente);
+    async function conTicket(vigente: CajaVigente = cajaAbierta, rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR') {
+      await crear(vigente, FORMAS_BASE, rol);
       for (const [i, q] of [[1, 'A'], [2, 'B']] as const) {
         await escribir(q);
         await enter();
@@ -5688,6 +5688,8 @@ describe('Mostrador', () => {
     }
 
     async function tocarRenglon(i: number) {
+      // Un toque de verdad sobre el renglón (que no se enfoca) saca el foco del buscador; `click()` de jsdom no lo hace.
+      (document.activeElement as HTMLElement | null)?.blur();
       renglonesTicket()[i].click();
       await refrescar();
     }
@@ -5775,7 +5777,7 @@ describe('Mostrador', () => {
         expect(normal(motivo()?.textContent)).toBe('Cerrá el diálogo para seguir con el ticket.');
       });
 
-      it('Esc la cierra, deja el ticket como estaba y el foco vuelve al buscador', async () => {
+      it('Esc la cierra, deja el ticket como estaba y el foco NO va al buscador (no sube el teclado)', async () => {
         comoCelular();
         await conTicket();
         await tocarRenglon(0);
@@ -5785,7 +5787,7 @@ describe('Mostrador', () => {
 
         expect(hoja()).toBeNull();
         expect(cantidades()).toEqual(['1', '1']);
-        expect(document.activeElement).toBe(campo());
+        expect(document.activeElement).not.toBe(campo());
       });
 
       it('un toque en el velo la cierra', async () => {
@@ -5797,7 +5799,7 @@ describe('Mostrador', () => {
         await refrescar();
 
         expect(hoja()).toBeNull();
-        expect(document.activeElement).toBe(campo());
+        expect(document.activeElement).not.toBe(campo());
       });
 
       it('Cantidad abre la hoja de la cantidad con el paso, y + y Aceptar cambian el renglón por el mismo camino de hoy', async () => {
@@ -5908,6 +5910,300 @@ describe('Mostrador', () => {
         await refrescar();
 
         expect(renglonesTicket()).toHaveLength(2);
+      });
+    });
+
+    describe('«Más acciones» del ticket (movil-sectores T8b)', () => {
+      const masAcciones = () => el().querySelector<HTMLButtonElement>('button.mas-acciones-ticket');
+      const hojaMas = () => el().querySelector<HTMLElement>('app-hoja-mas-acciones [role="dialog"].hoja-inferior');
+      const filaMas = (texto: string) =>
+        Array.from(hojaMas()!.querySelectorAll<HTMLButtonElement>('.accion-hoja')).find((b) =>
+          normal(b.textContent).startsWith(texto),
+        )!;
+      const filasMas = () =>
+        Array.from(hojaMas()!.querySelectorAll<HTMLElement>('.accion-hoja')).map((b) =>
+          normal(b.querySelector('span')!.firstChild!.textContent),
+        );
+      const dialogoAbierto = (selector: string) =>
+        el().querySelector<HTMLElement>(`${selector} [role="dialog"], ${selector} [role="alertdialog"]`);
+      const botoneraBoton = (etiqueta: string) =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find(
+          (b) => normal(b.textContent) === etiqueta,
+        )!;
+      const ayuda = (texto: string) => normal(filaMas(texto).querySelector('small')?.textContent);
+      const SIN_RENGLONES = 'Agregá un renglón para usar esta acción.';
+
+      async function abrirMas() {
+        masAcciones()!.click();
+        await refrescar();
+      }
+      async function esc() {
+        document.activeElement!.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+        await refrescar();
+      }
+
+      it('el botón ⋯ se llama «Más acciones del ticket» y abre la hoja con el total y la cuenta de renglones', async () => {
+        comoCelular();
+        await conTicket();
+
+        expect(masAcciones()!.getAttribute('aria-label')).toBe('Más acciones del ticket');
+        expect(masAcciones()!.getAttribute('type')).toBe('button');
+        expect(hojaMas()).toBeNull();
+
+        await abrirMas();
+
+        expect(hojaMas()).not.toBeNull();
+        expect(normal(hojaMas()!.querySelector('h2')?.textContent)).toBe('Acciones del ticket');
+        expect(normal(hojaMas()!.querySelector('.hoja-inferior-subtitulo')?.textContent)).toBe('2 renglones · $ 300,00');
+        expect(hojaMas()!.contains(document.activeElement)).toBe(true);
+      });
+
+      it('el Vendedor y el Dueño ven las mismas cinco acciones: la hoja no da ni saca nada por rol', async () => {
+        for (const rol of ['VENDEDOR', 'DUENO'] as const) {
+          TestBed.resetTestingModule();
+          comoCelular();
+          await conTicket(cajaAbierta, rol);
+          await abrirMas();
+
+          expect(filasMas()).toEqual(['Cliente', 'Descuento total', 'Presupuesto', 'Remito', 'Vaciar ticket']);
+        }
+      });
+
+      it('Cliente abre el selector de cliente de siempre', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+
+        filaMas('Cliente').click();
+        await refrescar();
+
+        expect(hojaMas()).toBeNull();
+        expect(dialogoAbierto('app-dialogo-cliente')).not.toBeNull();
+      });
+
+      it('la fila de Cliente dice «Consumidor Final» mientras el ticket no tiene cliente', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+        expect(ayuda('Cliente')).toBe('Consumidor Final');
+      });
+
+      it('Descuento total abre el diálogo de F6 y al aceptar el total baja y el ticket lo dice', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+
+        filaMas('Descuento total').click();
+        await refrescar();
+
+        expect(hojaMas()).toBeNull();
+        const dialogoDescuento = dialogoAbierto('app-dialogo-descuento')!;
+        expect(normal(dialogoDescuento.querySelector('h2')?.textContent)).toBe('Descuento de todo el ticket');
+        const campoDescuento = dialogoDescuento.querySelector<HTMLInputElement>('input')!;
+        campoDescuento.value = '10';
+        campoDescuento.dispatchEvent(new Event('input'));
+        await refrescar();
+        dialogoDescuento.querySelector<HTMLButtonElement>('button.aceptar')!.click();
+        await refrescar();
+
+        expect(dialogoAbierto('app-dialogo-descuento')).toBeNull();
+        expect(totalGrande()).toBe('$ 270,00');
+        expect(normal(el().querySelector('app-totales-ticket .descuento')?.textContent)).toBe('Descuento −$ 30,00');
+      });
+
+      it('Presupuesto y Remito abren sus diálogos de siempre', async () => {
+        comoCelular();
+        await conTicket();
+
+        await abrirMas();
+        filaMas('Presupuesto').click();
+        await refrescar();
+        expect(hojaMas()).toBeNull();
+        expect(dialogoAbierto('app-dialogo-presupuesto')).not.toBeNull();
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-presupuesto button'))
+          .find((b) => normal(b.textContent) === 'Cancelar')!
+          .click();
+        await refrescar();
+
+        await abrirMas();
+        filaMas('Remito').click();
+        await refrescar();
+        expect(dialogoAbierto('app-dialogo-remito')).not.toBeNull();
+      });
+
+      it('sin caja Presupuesto y Remito siguen andando: sólo «Cobrar» pide la caja', async () => {
+        comoCelular();
+        await conTicket({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false });
+        await abrirMas();
+
+        expect(filaMas('Presupuesto').hasAttribute('aria-disabled')).toBe(false);
+        expect(filaMas('Remito').hasAttribute('aria-disabled')).toBe(false);
+      });
+
+      it('Vaciar ticket pide la confirmación de siempre; cancelar no cambia nada y confirmar vacía el ticket', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+
+        filaMas('Vaciar').click();
+        await refrescar();
+
+        expect(hojaMas()).toBeNull();
+        const confirmacion = dialogoAbierto('app-dialogo-confirmacion')!;
+        expect(normal(confirmacion.querySelector('h2')?.textContent)).toContain('¿Vaciar el ticket?');
+        expect(normal(confirmacion.textContent)).toContain('Se pierden 2 renglones.');
+        Array.from(confirmacion.querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => normal(b.textContent) === 'Cancelar')!
+          .click();
+        await refrescar();
+        expect(renglonesTicket()).toHaveLength(2);
+
+        await abrirMas();
+        filaMas('Vaciar').click();
+        await refrescar();
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-confirmacion button'))
+          .find((b) => normal(b.textContent) === 'Vaciar')!
+          .click();
+        await refrescar();
+
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(localStorage.getItem('ticket:3:7')).toBeNull();
+      });
+
+      it('con el ticket vacío las acciones que necesitan renglones se apagan con su motivo y no hacen nada; Cliente anda', async () => {
+        comoCelular();
+        await crear();
+        await abrirMas();
+
+        expect(normal(hojaMas()!.querySelector('.hoja-inferior-subtitulo')?.textContent)).toBe('0 renglones · $ 0,00');
+        for (const texto of ['Descuento total', 'Presupuesto', 'Remito', 'Vaciar']) {
+          expect(filaMas(texto).getAttribute('aria-disabled')).toBe('true');
+          expect(normal(filaMas(texto).querySelector('small')?.textContent)).toBe(SIN_RENGLONES);
+        }
+        expect(filaMas('Cliente').hasAttribute('aria-disabled')).toBe(false);
+
+        for (const texto of ['Descuento total', 'Presupuesto', 'Remito', 'Vaciar']) {
+          filaMas(texto).click();
+          await refrescar();
+        }
+
+        // La hoja sigue abierta y no se abrió ningún otro diálogo.
+        expect(hojaMas()).not.toBeNull();
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+      });
+
+      it('Esc cierra la hoja, el ticket queda igual y el foco vuelve al ⋯ y no al buscador', async () => {
+        comoCelular();
+        await conTicket();
+        // El buscador tenía el foco (con el teclado arriba) cuando se tocó el ⋯.
+        campo().focus();
+        await abrirMas();
+
+        await esc();
+
+        expect(hojaMas()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(2);
+        expect(document.activeElement).toBe(masAcciones());
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('un toque en el velo cierra la hoja y tampoco enfoca el buscador', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+
+        el().querySelector<HTMLElement>('app-hoja-mas-acciones .hoja-inferior-fondo')!.click();
+        await refrescar();
+
+        expect(hojaMas()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('con la hoja abierta la botonera explica que hay que cerrarla', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+
+        botoneraBoton('Presupuesto').click();
+        await refrescar();
+
+        expect(normal(motivo()?.textContent)).toBe('Cerrá el diálogo para seguir con el ticket.');
+      });
+
+      it('con un diálogo abierto el ⋯ no abre una segunda hoja', async () => {
+        comoCelular();
+        await conTicket();
+        await abrirMas();
+        filaMas('Vaciar').click();
+        await refrescar();
+
+        masAcciones()!.click();
+        await refrescar();
+
+        expect(hojaMas()).toBeNull();
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+      });
+
+      it('los diez botones de la botonera siguen en la página y andan igual en el celular (sólo se esconden con CSS)', async () => {
+        comoCelular();
+        await conTicket();
+
+        expect(Array.from(el().querySelectorAll('app-botonera button')).map((b) => normal(b.textContent))).toEqual([
+          'Buscar',
+          'Cantidad',
+          'Descuento',
+          'Dto. total',
+          'Cobrar',
+          'Presupuesto',
+          'Remito',
+          'Cliente',
+          'Quitar',
+          'Vaciar',
+        ]);
+        botoneraBoton('Dto. total').click();
+        await refrescar();
+        expect(normal(dialogoAbierto('app-dialogo-descuento')?.querySelector('h2')?.textContent)).toBe(
+          'Descuento de todo el ticket',
+        );
+      });
+
+      describe('fuera del celular nada cambia', () => {
+        it('en el escritorio un diálogo se cierra con Esc y el foco vuelve al buscador, como siempre', async () => {
+          await conTicket();
+          botoneraBoton('Dto. total').click();
+          await refrescar();
+          expect(dialogoAbierto('app-dialogo-descuento')).not.toBeNull();
+
+          await esc();
+
+          expect(dialogoAbierto('app-dialogo-descuento')).toBeNull();
+          expect(document.activeElement).toBe(campo());
+        });
+
+        it('en el escritorio la botonera abre las mismas acciones que antes', async () => {
+          await conTicket();
+
+          botoneraBoton('Vaciar').click();
+          await refrescar();
+
+          expect(normal(dialogoAbierto('app-dialogo-confirmacion')?.querySelector('h2')?.textContent)).toContain(
+            '¿Vaciar el ticket?',
+          );
+          expect(hojaMas()).toBeNull();
+        });
+
+        it('en la tablet (hasta 1023 px) el diálogo también devuelve el foco al buscador', async () => {
+          comoCelular('1023.98px');
+          await conTicket();
+          botoneraBoton('Dto. total').click();
+          await refrescar();
+
+          await esc();
+
+          expect(document.activeElement).toBe(campo());
+        });
       });
     });
 

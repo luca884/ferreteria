@@ -2663,9 +2663,12 @@ ul.error {
     background: rgb(255 255 255 / 0.25);
     color: var(--profundo-texto-tenue);
   }
-  /* Los dos del TOTAL dejan lugar al botón más angosto y más separado del borde. */
+  /*
+   * El TOTAL deja lugar a «Cobrar» (más angosto y separado del borde) y, desde 8b, al ⋯ que está a su izquierda: el ancho
+   * de «Cobrar», el ⋯ y el aire entre los tres.
+   */
   app-mostrador .panel-derecho app-totales-ticket .totales {
-    padding-right: calc(var(--ancho-cobrar, 132px) + var(--e-2));
+    padding-right: calc(var(--ancho-cobrar, 132px) - var(--e-3) + var(--e-2) * 3 + var(--alto-tactil));
   }
   /*
    * El motivo por el que «Cobrar» no se puede usar se ve pegado a la barra y no arriba, donde el celular ya no lo
@@ -2768,9 +2771,93 @@ ul.error {
   .accion-hoja.peligro svg {
     color: var(--error);
   }
-  /* «Quitar renglón» en rojo pero con el mismo filete gris que las otras acciones. */
-  app-hoja-renglon .accion-hoja.peligro {
+  /* «Quitar renglón» y «Vaciar ticket» en rojo pero con el mismo filete gris que las otras acciones. */
+  app-hoja-renglon .accion-hoja.peligro,
+  app-hoja-mas-acciones .accion-hoja.peligro {
     border-color: transparent;
     border-top-color: var(--borde-suave);
+  }
+}
+
+/*
+ * 8b: «Más acciones». En el celular los diez botones de arriba del Mostrador se esconden (siguen en la página: su
+ * manejador es el único de cada acción) y las acciones de todo el ticket pasan a la hoja que abre el ⋯ de la barra de
+ * cobro. De 640 px para arriba el ⋯ no existe y la botonera queda como estaba (S5).
+ */
+.mas-acciones-ticket {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /*
+   * La botonera deja sólo «Cobrar», que ya está fija abajo: los demás botones no se muestran y la barra de arriba, que
+   * sólo los tenía a ellos, no ocupa lugar. `.accion-barra` va repetida para ganarle a los estilos del componente.
+   */
+  app-mostrador app-botonera button.accion-barra.accion-barra:not(.cobrar-fijo) {
+    display: none;
+  }
+  app-mostrador app-barra-acciones {
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+  }
+
+  /*
+   * El TOTAL en dos líneas, como el artboard: arriba «TOTAL · N renglones» en chico y abajo el importe, alineado a la
+   * izquierda. Con el ⋯ al lado de «Cobrar» el importe en la misma fila que el rótulo ya no entraba a 360 px (un total de
+   * $ 12.345,67 se metía debajo del ⋯); en su propia línea entran hasta siete cifras.
+   */
+  app-mostrador .panel-derecho app-totales-ticket .totales {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+  }
+  app-mostrador app-totales-ticket .totales .cabecera {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--e-2);
+    font-size: var(--texto-xs);
+  }
+  app-mostrador app-totales-ticket .totales .total {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  /*
+   * El ⋯ de la barra de cobro: a la izquierda de «Cobrar», centrado en el alto de la barra del TOTAL, de 44×44 px, en
+   * blanco con filete como el ⋯ del artboard (que lo dibuja de 52: acá 44 para que el TOTAL conserve lugar a 360 px).
+   */
+  app-mostrador .mas-acciones-ticket.mas-acciones-ticket {
+    position: fixed;
+    right: calc(var(--ancho-cobrar, 132px) - var(--e-3) + var(--e-2) * 2);
+    bottom: calc(
+      var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px) + (var(--alto-barra-total, 64px) - var(--alto-tactil)) / 2
+    );
+    z-index: calc(var(--z-barra) - 1);
+    display: grid;
+    place-items: center;
+    width: var(--alto-tactil);
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.4);
+    border-radius: var(--radio-lg);
+    background: transparent;
+    color: #fff;
+  }
+  /*
+   * La fila apagada de «Más acciones», como en el artboard: sin el fondo gris de un botón apagado (con la hoja de fondo
+   * blanco se leía como una fila elegida), con el mismo filete suave y con su ícono apagado.
+   */
+  app-hoja-mas-acciones .accion-hoja[aria-disabled='true'] {
+    border-color: transparent;
+    border-top-color: var(--borde-suave);
+    background: transparent;
+  }
+  app-hoja-mas-acciones .accion-hoja[aria-disabled='true'] svg {
+    color: var(--texto-deshabilitado);
   }
 }

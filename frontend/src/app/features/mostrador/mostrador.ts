@@ -17,6 +17,7 @@ import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
+import { HojaMasAcciones } from './hoja-mas-acciones';
 import { HojaRenglon } from './hoja-renglon';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
@@ -110,6 +111,8 @@ type Dialogo =
   | { tipo: 'descuento'; indice: number }
   /** movil-sectores T8a: la hoja del renglón del celular, que elige entre cantidad, descuento y quitar. */
   | { tipo: 'renglon'; indice: number }
+  /** movil-sectores T8b: la hoja «Más acciones» del celular, con las acciones de todo el ticket. */
+  | { tipo: 'masAcciones' }
   | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' }
   | { tipo: 'presupuesto' }
@@ -174,6 +177,7 @@ interface Escaneo {
     DialogoRemito,
     ListaResultados,
     FichaArticulo,
+    HojaMasAcciones,
     HojaRenglon,
     TicketLista,
     PrimerosPasos,
@@ -405,12 +409,22 @@ export class Mostrador {
    * cobrar, además, con la caja abierta).
    */
   protected readonly motivos = computed<Partial<Record<AccionBotonera, string>>>(() => {
-    const motivos: Partial<Record<AccionBotonera, string>> = {};
     if (this.dialogo() !== null) {
       // Con un diálogo abierto no se hace nada desde la botonera ni con las teclas: la razón es la misma para todas.
+      const motivos: Partial<Record<AccionBotonera, string>> = {};
       for (const { accion } of atajosDeBotonera()) motivos[accion as AccionBotonera] = MOTIVO_DIALOGO;
       return motivos;
     }
+    return this.motivosDeLasAcciones();
+  });
+
+  /**
+   * Los motivos de cada acción por lo que hay en el ticket y en la caja, sin mirar si hay un diálogo abierto. La hoja «Más
+   * acciones» del celular es ella misma un diálogo abierto: lee esta tabla, no `motivos`, que con ella abierta diría
+   * «Cerrá el diálogo» en todas las filas.
+   */
+  protected readonly motivosDeLasAcciones = computed<Partial<Record<AccionBotonera, string>>>(() => {
+    const motivos: Partial<Record<AccionBotonera, string>> = {};
     // Sin renglones no hay nada sobre lo que actuar. El presupuesto y el remito no tocan la caja: siguen sin ella.
     const conRenglones = this.ticket.ticket().renglones.length > 0;
     if (!conRenglones) for (const accion of NECESITAN_RENGLONES) motivos[accion] = MOTIVO_SIN_RENGLONES;
@@ -595,6 +609,29 @@ export class Mostrador {
     this.dialogo.set({ tipo: accion, indice });
   }
 
+  /**
+   * El ⋯ de la barra de cobro del celular (movil-sectores T8b): abre la hoja con las acciones de todo el ticket. Le da el
+   * foco al botón antes de abrir (Safari del iPhone no se lo da al tocarlo): así, al cerrar la hoja, el foco vuelve al ⋯ y
+   * no cae en el buscador, que subiría el teclado.
+   */
+  protected abrirMasAcciones(evento: Event): void {
+    if (this.dialogo()) return;
+    if (evento.currentTarget instanceof HTMLElement) evento.currentTarget.focus();
+    this.avisar(null);
+    this.callarMotivo();
+    this.dialogo.set({ tipo: 'masAcciones' });
+  }
+
+  /**
+   * Una fila de «Más acciones»: hace lo mismo que el botón de la botonera (`ejecutar` es el único lugar donde cada acción
+   * sabe qué abrir). Una acción que hoy no se puede usar no hace nada: la fila ya dice el motivo.
+   */
+  protected accionDeLaHoja(accion: AccionBotonera): void {
+    if (this.motivosDeLasAcciones()[accion] !== undefined) return;
+    this.avisar(null);
+    this.ejecutar(accion);
+  }
+
   /** Con un diálogo abierto el buscador no le roba el foco (R-039). */
   private enfocarSinDialogo(): void {
     if (!this.dialogo()) this.caja().enfocar();
@@ -697,9 +734,13 @@ export class Mostrador {
   protected cerrarDialogo(): void {
     // No se cierra el cobro mientras viaja la venta: se perdería el resultado.
     if (this.enVuelo()) return;
+    const eraHoja = this.dialogo()?.tipo === 'renglon' || this.dialogo()?.tipo === 'masAcciones';
     this.dialogo.set(null);
     this.avisoCobro.set(null);
     this.soltarCuenta();
+    // En el celular, cerrar una hoja sin elegir nada no enfoca el buscador: subiría el teclado. El foco vuelve a lo que la
+    // abrió (`appTrampaFoco`). En el escritorio y la tablet sigue yendo al buscador: el lector y las teclas F dependen de eso.
+    if (eraHoja && esCelular()) return;
     this.caja().enfocar();
   }
 

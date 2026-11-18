@@ -171,6 +171,14 @@
     </div>
   }
   <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
+  <!-- movil-sectores T8b: sólo del celular (styles.css lo esconde de 640 px para arriba). Abre «Más acciones». -->
+  <button type="button" class="mas-acciones-ticket" aria-label="Más acciones del ticket" aria-haspopup="dialog" (click)="abrirMasAcciones($event)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  </button>
 </aside>
 
 @if (dialogo(); as abierto) {
@@ -185,6 +193,16 @@
           (cerrar)="cerrarDialogo()"
         />
       }
+    }
+    @case ('masAcciones') {
+      <app-hoja-mas-acciones
+        [renglones]="ticket.ticket().renglones.length"
+        [totalCentavos]="ticket.total()"
+        [cliente]="ticket.ticket().clienteNombre ?? null"
+        [motivos]="motivosDeLasAcciones()"
+        (accion)="accionDeLaHoja($event)"
+        (cerrar)="cerrarDialogo()"
+      />
     }
     @case ('cantidad') {
       @if (renglonDe(abierto.indice); as r) {
