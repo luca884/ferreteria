@@ -3373,3 +3373,119 @@ ul.error {
     font-size: clamp(1.125rem, 5.2vw, 1.75rem);
   }
 }
+
+/* ---------- Presupuesto y remito en pantalla completa en el celular (movil-sectores T10, S2, S5, S7) ---------- */
+/*
+ * «Guardar presupuesto» y «Emitir remito» (artboard 07 de movil-mostrador) pasan a pantalla completa con la flecha «Volver»
+ * arriba, el resumen debajo y el pie fijo con «Cancelar» y la acción. Los componentes (`DialogoPresupuesto`, `DialogoRemito`)
+ * ponen `.presupuesto-celular` / `.remito-celular` sólo en el celular, así que el escritorio y la tablet conservan su DOM y su
+ * diálogo centrado (S5). Es sólo presentación: el estado, la validación, los textos y lo que se manda son los de siempre.
+ * Reusa la barra y el pie de las fichas (`.ficha-barra`, `.ficha-volver`, `.ficha-pie`). Todo cuelga de `app-dialogo-…` para
+ * ganarle a los estilos del componente, que se cargan después de este archivo; va acá por el tope de tamaño de `mostrador.css`.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Cubre toda la pantalla (también la barra de destinos), sin el velo ni la tarjeta del diálogo. */
+  :is(app-dialogo-presupuesto, app-dialogo-remito) .dialogo-fondo {
+    padding: 0;
+    place-items: stretch;
+    background: var(--superficie);
+  }
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) {
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: 0;
+    overflow-x: hidden;
+    border-radius: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+    /* La barra y el pie son fijos: al enfocar un campo queda entre ellos, no atrás del pie ni de la barra. */
+    scroll-padding: 128px 0 96px;
+  }
+
+  /* El resumen («3 renglones · $ 8.272,00») como la franja del artboard, justo debajo de la barra. */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) > .cabecera {
+    flex: none;
+    margin: 0;
+    padding: var(--e-3) var(--pantalla-x);
+    border-bottom: 1px solid var(--borde);
+    background: var(--superficie-2);
+  }
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) .resumen {
+    color: var(--texto);
+    font-size: var(--texto-md);
+    white-space: normal;
+  }
+
+  /* Lo que va entre el resumen y el pie, con el margen de las pantallas completas. */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular)
+    > :not(.ficha-barra, .ficha-pie, .cabecera) {
+    flex: none;
+    margin: var(--e-3) var(--pantalla-x) 0;
+  }
+  /* La nota de la spec del remito, como el aviso informativo del artboard. */
+  app-dialogo-remito .dialogo.remito-celular > .nota {
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--info-borde);
+    border-radius: var(--radio-lg);
+    background: var(--info-fondo);
+    color: var(--info);
+    font-size: var(--texto-sm);
+    font-weight: 500;
+  }
+  /* El cliente del ticket, como el campo de sólo lectura del artboard («Cliente: …»). */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) > .cliente-elegido {
+    display: flex;
+    align-items: center;
+    gap: var(--e-1);
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie-3);
+    overflow-wrap: anywhere;
+  }
+  /* «Observaciones (opcional)» en una sola línea, como el rótulo del artboard, y el campo debajo a todo el ancho. */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) > .campo {
+    flex-flow: row wrap;
+    align-items: baseline;
+    gap: var(--e-1) var(--e-1);
+  }
+  /* Los campos de texto, de 44 px y a lo ancho; la validez también (el artboard la dibuja a todo el ancho, en mono). */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) .campo input {
+    flex: 1 0 100%;
+    width: 100%;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border-radius: var(--radio-lg);
+  }
+  app-dialogo-presupuesto .dialogo.presupuesto-celular .campo.corto input {
+    max-width: none;
+    font-family: var(--fuente-mono);
+    text-align: left;
+  }
+
+  /*
+   * El pie fijo, de 52 px como el artboard: «Cancelar» y la acción lado a lado (la acción, más ancha). El `.ficha-pie > .cancelar`
+   * de las fichas se esconde porque ahí «Volver» ya descarta; acá el artboard conserva «Cancelar», así que vuelve a verse.
+   */
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) .dialogo-acciones.ficha-pie {
+    flex-flow: row nowrap;
+    align-items: stretch;
+    justify-content: stretch;
+    padding-top: var(--e-3);
+  }
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) .ficha-pie > button {
+    display: inline-flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  :is(app-dialogo-presupuesto .dialogo.presupuesto-celular, app-dialogo-remito .dialogo.remito-celular) .ficha-pie > .aceptar {
+    flex-grow: 2;
+  }
+}

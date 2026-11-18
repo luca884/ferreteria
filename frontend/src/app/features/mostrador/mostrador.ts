@@ -135,7 +135,9 @@ interface FacturaCobrada {
  * Los diálogos que en el celular son una hoja o una pantalla completa (movil-sectores T8): al cerrarlos el foco no va al
  * buscador del mostrador, porque subiría el teclado. La cantidad es la hoja que abre la del renglón (8c); el cliente es el
  * selector a pantalla completa (8c). El descuento y «Quitar» del renglón los abre esa hoja (T9a, L24 punto 10); el cobro es
- * la pantalla completa de T9a: sólo la venta cobrada vuelve al buscador (ver `alCobrar`).
+ * la pantalla completa de T9a: sólo la venta cobrada vuelve al buscador (ver `alCobrar`). El presupuesto y el remito son las
+ * pantallas completas de T10 (el documento guardado abre su hoja de siempre, o sin hoja vuelve al buscador: ver
+ * `abrirHoja`); el descuento total y «Vaciar» son los diálogos que abre «Más acciones».
  */
 const CIERRAN_SIN_ENFOCAR_EN_CELULAR: ReadonlySet<Dialogo['tipo']> = new Set([
   'renglon',
@@ -145,6 +147,10 @@ const CIERRAN_SIN_ENFOCAR_EN_CELULAR: ReadonlySet<Dialogo['tipo']> = new Set([
   'descuento',
   'quitar',
   'cobro',
+  'presupuesto',
+  'remito',
+  'descuentoTotal',
+  'vaciar',
 ]);
 
 /** La marca del ambiente en el rótulo del cobro: en producción no hay. */
@@ -728,19 +734,19 @@ export class Mostrador {
         this.leerFormas();
         this.avisoLimite.set(null);
         this.leerCuenta();
-        // En el celular el buscador casi siempre tiene el foco (el lector): si lo conservara, `appTrampaFoco` se lo devolvería
-        // al cerrar el cobro y subiría el teclado. Se suelta antes de abrir, como con la hoja del renglón (T8a); el cobro
-        // enfoca su propio campo al abrir.
-        if (esCelular() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        // El cobro enfoca su propio campo al abrir.
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'cobro' });
         return;
       }
       case 'presupuesto':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'presupuesto' });
         return;
       case 'remito':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'remito' });
         return;
       case 'cliente':
@@ -749,10 +755,12 @@ export class Mostrador {
         return;
       case 'vaciar':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'vaciar' });
         return;
       case 'descuentoTotal':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'descuentoTotal' });
         return;
       case 'cantidad':
@@ -765,6 +773,15 @@ export class Mostrador {
         return;
       }
     }
+  }
+
+  /**
+   * En el celular el buscador casi siempre tiene el foco (el lector): si lo conservara, `appTrampaFoco` se lo devolvería al
+   * cerrar la pantalla completa y subiría el teclado. Se suelta antes de abrir, como con la hoja del renglón (T8a), el cobro
+   * (T9a), el presupuesto, el remito, el descuento total y «Vaciar» (T10). En el escritorio y la tablet no se toca.
+   */
+  private soltarFocoEnCelular(): void {
+    if (esCelular() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }
 
   protected cerrarDialogo(enfocarBuscador = false): void {
@@ -1026,7 +1043,8 @@ export class Mostrador {
           this.enVuelo.set(false);
           const sinHoja = `No se pudo abrir la hoja para imprimirlo: abrilo con «${aviso.documento?.texto}» e imprimilo desde ahí.`;
           this.avisar({ ...aviso, advertencia: aviso.advertencia ? `${aviso.advertencia} ${sinHoja}` : sinHoja });
-          this.cerrarDialogo();
+          // El documento quedó guardado: es una acción completada y el foco vuelve al buscador también en el celular, como hoy.
+          this.cerrarDialogo(true);
         },
       });
   }

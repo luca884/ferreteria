@@ -1597,7 +1597,7 @@ describe('Mostrador', () => {
     const martillo = (cambios: Partial<ArticuloMostrador> = {}) =>
       articulo(1, { descripcion: 'Martillo', precioFinal: 1500, ...cambios });
 
-    /** Ticket de 2 martillos ($ 1.500,00 c/u = $ 3.000,00) listo para cobrar. */
+    /** Ticket de un renglón de 2 martillos ($ 1.500,00 c/u = $ 3.000,00) listo para cobrar. */
     async function conMartillos() {
       await crear();
       await escanear('M', martillo());
@@ -1677,7 +1677,7 @@ describe('Mostrador', () => {
       const visa6 = formaDe(7, 'Visa 6 cuotas', 'CREDITO', 10);
       const conVisa = [...FORMAS_BASE, visa6];
 
-      /** Ticket de 2 martillos ($ 3.000,00) con esas formas. */
+      /** Ticket de un renglón de 2 martillos ($ 3.000,00) con esas formas. */
       async function conMartillosYFormas(formas: FormaPago[]) {
         await crear(cajaAbierta, formas);
         await escanear('M', martillo());
@@ -6608,7 +6608,7 @@ describe('Mostrador', () => {
       await refrescar();
     }
 
-    /** Ticket de 2 martillos ($ 3.000,00); el buscador queda enfocado, como lo deja el lector. */
+    /** Ticket de un renglón de 2 martillos ($ 3.000,00); el buscador queda enfocado, como lo deja el lector. */
     async function conMartillos(formas: FormaPago[] = FORMAS_BASE, rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR') {
       await crear(cajaAbierta, formas, rol);
       for (const q of ['M', 'M']) {
@@ -6697,7 +6697,7 @@ describe('Mostrador', () => {
         expect(normal(el().querySelector('.zona-busqueda .aviso .vuelto')?.textContent)).toBe('$ 700,00');
       });
 
-      /** Ticket de 2 martillos con «Ferretería Norte SRL» elegida con F9 y la facturación activa. */
+      /** Ticket de un renglón de 2 martillos con «Ferretería Norte SRL» elegida con F9 y la facturación activa. */
       async function conClienteYFacturacion() {
         facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS_T9 };
         await conMartillos();
@@ -7100,7 +7100,7 @@ describe('Mostrador', () => {
       await refrescar();
     }
 
-    /** Ticket de 2 martillos ($ 3.000,00), con el buscador enfocado; con `conCliente`, Ferretería Norte SRL (id 2) elegida con F9. */
+    /** Ticket de un renglón de 2 martillos ($ 3.000,00), con el buscador enfocado; con `conCliente`, Ferretería Norte SRL (id 2) elegida con F9. */
     async function conMartillos(rol: 'DUENO' | 'VENDEDOR', conCliente = false, formas: FormaPago[] = FORMAS_T9B) {
       await crear(cajaAbierta, formas, rol);
       for (const q of ['M', 'M']) {
@@ -7672,6 +7672,694 @@ describe('Mostrador', () => {
         expect(raiz().querySelectorAll('.mixto > label.fila-pago')).toHaveLength(5);
         expect(raiz().classList).not.toContain('cobro-celular');
         expect(raiz().querySelector(':scope > .mixto')).not.toBeNull();
+      });
+    });
+  });
+
+  /**
+   * movil-sectores T10 (artboard 07 de movil-mostrador): en el celular el presupuesto y el remito son pantallas completas con
+   * «Volver» y el pie fijo, y se abren desde «Más acciones». Es sólo cómo se ven: lo que se manda, lo que se dice, lo que se
+   * rechaza y el documento que se produce tienen que ser idénticos en el celular y en el escritorio, así que cada escenario
+   * corre en los dos con los mismos literales. Y, desde el celular, cerrar el presupuesto, el remito, el descuento total y
+   * «Vaciar» no enfoca el buscador (subiría el teclado); tras completar el documento la hoja sigue siendo la de hoy.
+   */
+  describe('celular: presupuesto y remito a pantalla completa (movil-sectores T10)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+
+    interface Envio {
+      pedido: Record<string, unknown>;
+      respuesta: Subject<unknown>;
+    }
+    interface Documento {
+      nombre: 'presupuesto' | 'remito';
+      etiqueta: string;
+      tag: string;
+      titulo: string;
+      confirma: string;
+      botonera: string;
+      /** Lo que el pedido lleva además de la clave, los renglones y el total. */
+      extra: Record<string, unknown>;
+      /** Los datos que se escriben en el diálogo y lo que viaja. */
+      escribe: Record<string, string>;
+      viaja: Record<string, unknown>;
+      envios: () => Envio[];
+      respuestaOk: () => unknown;
+      fallo: string;
+      avisoOk: string;
+      tituloHoja: string;
+    }
+    const PRESUPUESTO = (): Documento => ({
+      nombre: 'presupuesto',
+      etiqueta: 'Presupuesto',
+      tag: 'app-dialogo-presupuesto',
+      titulo: 'Guardar presupuesto',
+      confirma: 'Guardar',
+      botonera: 'Presupuesto',
+      extra: { diasValidez: 15 },
+      escribe: { cliente: 'Obra Perez', validez: '30', observaciones: 'Entrega el viernes' },
+      viaja: { clienteNombre: 'Obra Perez', diasValidez: 30, observaciones: 'Entrega el viernes' },
+      envios: () => guardados as unknown as Envio[],
+      respuestaOk: () =>
+        ({
+          presupuesto: {
+            presupuestoId: 8, numero: 12, estado: 'PENDIENTE', fecha: '2026-10-18T10:00:00', vence: '2026-11-02', vencido: false,
+            subtotal: 3000, descuentoPorcentaje: 0, descuento: 0, neto: 0, iva: 0, total: 3000, renglones: [],
+          },
+          repetido: false,
+        }) satisfies PresupuestoEmitido,
+      fallo: 'No se pudo guardar el presupuesto. Probá de nuevo.',
+      avisoOk: 'Presupuesto N.º 12 guardado: $ 3.000,00 Ver el presupuesto',
+      tituloHoja: 'Presupuesto N.º 12',
+    });
+    const REMITO = (): Documento => ({
+      nombre: 'remito',
+      etiqueta: 'Remito',
+      tag: 'app-dialogo-remito',
+      titulo: 'Emitir remito',
+      confirma: 'Emitir',
+      botonera: 'Remito',
+      extra: {},
+      escribe: { cliente: 'Obra Perez', observaciones: 'Entrega el viernes' },
+      viaja: { clienteNombre: 'Obra Perez', observaciones: 'Entrega el viernes' },
+      envios: () => emitidos as unknown as Envio[],
+      respuestaOk: () =>
+        ({
+          remito: {
+            remitoId: 8, numero: 5, estado: 'EMITIDO', fecha: '2026-10-18T10:00:00',
+            subtotal: 3000, descuentoPorcentaje: 0, descuento: 0, neto: 0, iva: 0, total: 3000, renglones: [], sinStock: [],
+          },
+          repetido: false,
+        }) satisfies RemitoEmitido,
+      fallo: 'No se pudo emitir el remito. Probá de nuevo.',
+      avisoOk: 'Remito N.º 5 emitido: $ 3.000,00 Ver el remito',
+      tituloHoja: 'Remito N.º 5',
+    });
+    const MODOS: [string, string | null][] = [
+      ['celular', '639.98px'],
+      ['escritorio', null],
+    ];
+    const COMBINACIONES = MODOS.flatMap(([modo, consulta]) =>
+      [PRESUPUESTO, REMITO].map((d) => [d().nombre, modo, consulta] as [Documento['nombre'], string, string | null]),
+    );
+
+    const el$ = (selector: string) => el().querySelector<HTMLElement>(selector);
+    const pantalla = (d: Documento) => el$(`${d.tag} [role="dialog"]`);
+    const hojaImprimible = () => el$('app-documento-no-fiscal-imprimible [role="dialog"]');
+    const botonDe = (d: Documento, texto: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>(`${d.tag} button`)).find((b) => normal(b.textContent) === texto)!;
+    const campoDe = (d: Documento, nombre: string) => el$(`${d.tag} input[name="${nombre}"]`) as HTMLInputElement;
+    const avisoDelDialogo = (d: Documento) => normal(el$(`${d.tag} [role="status"]`)?.textContent);
+    const avisoDeLaPagina = () => normal(el$('.zona-busqueda .aviso')?.textContent);
+    const totalDelTicket = () => normal(el$('app-totales-ticket .total')?.textContent);
+    const hojaMas = () => el$('app-hoja-mas-acciones [role="dialog"].hoja-inferior');
+    const filaMas = (texto: string) =>
+      Array.from(hojaMas()!.querySelectorAll<HTMLButtonElement>('.accion-hoja')).find((b) => normal(b.textContent).startsWith(texto))!;
+    const botoneraBoton = (etiqueta: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) => normal(b.textContent) === etiqueta)!;
+    const rechazo = (status: number, motivo: string, articulos: unknown[], message = 'rechazo') => ({
+      status, message, timestamp: '2026-10-18T10:00:00', motivo, articulos,
+    });
+
+    function comoCelular(consulta: string | null) {
+      if (consulta) vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      destino.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    }
+
+    /** Ticket de un renglón de 2 martillos ($ 3.000,00); el buscador queda enfocado, como lo deja el lector. */
+    async function conMartillos(rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR') {
+      await crear(cajaAbierta, FORMAS_BASE, rol);
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+    }
+
+    /** En el celular, por «Más acciones»; en el escritorio, por el botón de la botonera. */
+    async function abrir(d: Documento, celular: boolean) {
+      if (celular) {
+        el$('button.mas-acciones-ticket')!.click();
+        await refrescar();
+        filaMas(d.etiqueta).click();
+      } else {
+        botoneraBoton(d.botonera).click();
+      }
+      await refrescar();
+    }
+
+    async function conCliente() {
+      await tecla('F9');
+      await tecla('ArrowDown');
+      await tecla('Enter');
+    }
+
+    async function respondeOk(d: Documento) {
+      const e = d.envios()[0];
+      e.respuesta.next(d.respuestaOk());
+      e.respuesta.complete();
+      await refrescar();
+    }
+
+    async function falla(d: Documento, indice: number, status: number, cuerpo: unknown = null) {
+      d.envios()[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    function escribirEn(campoInput: HTMLInputElement, valor: string) {
+      campoInput.value = valor;
+      campoInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    describe.each(COMBINACIONES)('el %s en el %s', (nombre, modo, consulta) => {
+      const d = (nombre === 'presupuesto' ? PRESUPUESTO : REMITO)();
+      const celular = modo === 'celular';
+      const base = { clave: 'clave-1', renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }], totalMostrado: 3000 };
+
+      it('se abre sin mandar nada y muestra el título, los renglones y el total', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+
+        await abrir(d, celular);
+
+        expect(pantalla(d)).not.toBeNull();
+        expect(normal(pantalla(d)!.querySelector('h2')!.textContent)).toBe(d.titulo);
+        expect(normal(pantalla(d)!.querySelector('.cabecera')!.textContent)).toContain('1 renglón · $ 3.000,00');
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+        expect(d.envios()).toHaveLength(0);
+      });
+
+      it('«' + d.confirma + '» manda el pedido de siempre, con la clave del ticket', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        expect(d.envios()).toHaveLength(1);
+        expect(d.envios()[0].pedido).toEqual({ ...base, ...d.extra });
+      });
+
+      it('Enter manda el mismo pedido', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+
+        await tecla('Enter');
+
+        expect(d.envios()).toHaveLength(1);
+        expect(d.envios()[0].pedido).toEqual({ ...base, ...d.extra });
+      });
+
+      it('lo que se escribió en el diálogo viaja en el pedido', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        for (const [campoNombre, valor] of Object.entries(d.escribe)) escribirEn(campoDe(d, campoNombre), valor);
+
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        expect(d.envios()[0].pedido).toEqual({ ...base, ...d.extra, ...d.viaja });
+      });
+
+      it('con un cliente elegido el diálogo lo muestra y el pedido manda el clienteId, no el texto libre', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await conCliente();
+        await abrir(d, celular);
+
+        expect(normal(el$(`${d.tag} .cliente-elegido`)!.textContent)).toBe('Cliente: Ferretería Norte SRL');
+        expect(campoDe(d, 'cliente')).toBeNull();
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        expect(d.envios()[0].pedido).toEqual({ ...base, ...d.extra, clienteId: 2 });
+      });
+
+      it('el pedido lleva el descuento del ticket y el total ya descontado', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await tecla('F6');
+        escribirEn(el$('app-dialogo-descuento input') as HTMLInputElement, '10');
+        await refrescar();
+        await tecla('Enter');
+
+        await abrir(d, celular);
+        expect(normal(pantalla(d)!.querySelector('.cabecera')!.textContent)).toContain('1 renglón · $ 2.700,00');
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        expect(d.envios()[0].pedido).toEqual({ ...base, ...d.extra, descuentoPorcentaje: 10, totalMostrado: 2700 });
+      });
+
+      it('con el POST en curso Esc no cierra, el botón no manda otro y el ticket sigue', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await tecla('Escape');
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        expect(pantalla(d)).not.toBeNull();
+        expect(d.envios()).toHaveLength(1);
+        expect(renglonesTicket()).toHaveLength(1);
+      });
+
+      it('un error de red deja el diálogo abierto con el aviso de hoy, no pierde el ticket y el reintento usa la misma clave', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await falla(d, 0, 500);
+
+        expect(pantalla(d)).not.toBeNull();
+        expect(avisoDelDialogo(d)).toBe(d.fallo);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+        botonDe(d, d.confirma).click();
+        await refrescar();
+        expect(d.envios()).toHaveLength(2);
+        expect(d.envios()[1].pedido).toEqual({ ...base, ...d.extra });
+      });
+
+      it('un 503 muestra el mensaje del servidor dentro del diálogo y el reintento usa la misma clave', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await falla(d, 0, 503, { status: 503, message: 'El sistema está ocupado, reintentá.' });
+
+        expect(avisoDelDialogo(d)).toBe('El sistema está ocupado, reintentá.');
+        botonDe(d, d.confirma).click();
+        await refrescar();
+        expect(d.envios()[1].pedido['clave']).toBe('clave-1');
+      });
+
+      it('si cambió un precio: actualiza el ticket, avisa en el diálogo y reintenta con el total nuevo y la misma clave', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await falla(d, 0, 409, {
+          ...rechazo(409, 'PRECIOS_CAMBIADOS', [{ articuloId: 1, descripcion: 'Martillo', precioMostrado: 1500, precioActual: 1800 }]),
+          total: 3600,
+        });
+
+        expect(avisoDelDialogo(d)).toBe('Cambió el precio de "Martillo": ahora $ 1.800,00.');
+        expect(totalDelTicket()).toBe('$ 3.600,00');
+        expect(normal(pantalla(d)!.querySelector('.cabecera')!.textContent)).toContain('$ 3.600,00');
+        botonDe(d, d.confirma).click();
+        await refrescar();
+        expect(d.envios()[1].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1800 }],
+          totalMostrado: 3600,
+          ...d.extra,
+        });
+      });
+
+      it('si un artículo ya no se puede vender: cierra, conserva el ticket, marca el renglón y avisa; el foco va al buscador sólo fuera del celular', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await falla(d, 0, 422, rechazo(422, 'ARTICULO_DADO_DE_BAJA', [{ articuloId: 1, descripcion: 'Martillo' }], '"Martillo" fue dado de baja. Sacalo del ticket para seguir.'));
+
+        expect(pantalla(d)).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(renglonesTicket()[0].textContent).toContain('Artículo dado de baja');
+        expect(avisoDeLaPagina()).toBe('"Martillo" fue dado de baja. Sacalo del ticket para seguir.');
+        if (celular) expect(document.activeElement).not.toBe(campo());
+        else expect(document.activeElement).toBe(campo());
+      });
+
+      it('al completarse vacía el ticket, avisa el número y abre la hoja del documento: Esc la cierra y el foco vuelve al buscador, como hoy', async () => {
+        const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await respondeOk(d);
+
+        expect(pantalla(d)).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(localStorage.getItem('ticket:3:7')).toBeNull();
+        expect(avisoDeLaPagina()).toBe(d.avisoOk);
+        expect(leerEmisor).toHaveBeenCalledTimes(1);
+        expect(normal(hojaImprimible()!.querySelector('h2')!.textContent)).toBe(d.tituloHoja);
+        await tecla('Enter', hojaImprimible()!);
+        expect(imprimir).toHaveBeenCalledTimes(1);
+        await tecla('Escape');
+        imprimir.mockRestore();
+
+        expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('sin los datos de la ferretería el documento queda guardado, sin hoja, con el aviso de hoy y el foco en el buscador', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        leerEmisor.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+        await abrir(d, celular);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await respondeOk(d);
+
+        expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(avisoDeLaPagina()).toContain(d.avisoOk.replace(/ Ver el .*/, ''));
+        expect(normal(el$('.aviso.advertencia')?.textContent)).toContain('No se pudo abrir la hoja para imprimirlo');
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('Esc cierra sin mandar nada y deja el ticket intacto; el foco va al buscador sólo fuera del celular', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+        escribirEn(campoDe(d, 'cliente'), 'Obra Perez');
+
+        await tecla('Escape');
+
+        expect(pantalla(d)).toBeNull();
+        expect(d.envios()).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+        if (celular) expect(document.activeElement).not.toBe(campo());
+        else expect(document.activeElement).toBe(campo());
+      });
+
+      it('«Cancelar» cierra igual que Esc: sin mandar nada y con el mismo foco', async () => {
+        comoCelular(consulta);
+        await conMartillos();
+        await abrir(d, celular);
+
+        botonDe(d, 'Cancelar').click();
+        await refrescar();
+
+        expect(pantalla(d)).toBeNull();
+        expect(d.envios()).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+        if (celular) expect(document.activeElement).not.toBe(campo());
+        else expect(document.activeElement).toBe(campo());
+      });
+    });
+
+    describe('en el celular se ve como pantalla completa', () => {
+      it.each([PRESUPUESTO, REMITO])('el %#: «Volver», el título, el resumen, el cliente y el pie fijo con la acción', async (hacer) => {
+        const d = hacer();
+        comoCelular('639.98px');
+        await conMartillos();
+        await conCliente();
+
+        await abrir(d, true);
+
+        const raiz = pantalla(d)!;
+        expect(raiz.classList).toContain(`${d.nombre}-celular`);
+        expect(raiz.querySelector('.ficha-barra .ficha-volver')!.getAttribute('aria-label')).toBe('Volver');
+        expect(normal(raiz.querySelector('.ficha-barra h2')!.textContent)).toBe(d.titulo);
+        expect(normal(raiz.querySelector('.cabecera')!.textContent)).toBe('1 renglón · $ 3.000,00');
+        expect(normal(raiz.querySelector('.cliente-elegido')!.textContent)).toBe('Cliente: Ferretería Norte SRL');
+        expect(Array.from(raiz.querySelectorAll('.dialogo-acciones.ficha-pie button')).map((b) => normal(b.textContent))).toEqual(['Cancelar', d.confirma]);
+        expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+      });
+
+      it.each([PRESUPUESTO, REMITO])('el %#: «Volver» cierra sin mandar nada, deja el ticket intacto y el foco NO va al buscador', async (hacer) => {
+        const d = hacer();
+        comoCelular('639.98px');
+        await conMartillos();
+        expect(document.activeElement).toBe(campo());
+        await abrir(d, true);
+
+        el$(`${d.tag} .ficha-volver`)!.click();
+        await refrescar();
+
+        expect(pantalla(d)).toBeNull();
+        expect(d.envios()).toHaveLength(0);
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(totalDelTicket()).toBe('$ 3.000,00');
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it.each([PRESUPUESTO, REMITO])('el %#: con F8 o la botonera y el buscador enfocado (teclado físico), cerrar tampoco vuelve al buscador', async (hacer) => {
+        const d = hacer();
+        comoCelular('639.98px');
+        await conMartillos();
+        expect(document.activeElement).toBe(campo());
+
+        if (d.nombre === 'presupuesto') await tecla('F8');
+        else {
+          botoneraBoton('Remito').click();
+          await refrescar();
+        }
+        expect(pantalla(d)).not.toBeNull();
+        await tecla('Escape');
+
+        expect(pantalla(d)).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it.each([PRESUPUESTO, REMITO])('el %#: con la validación de la validez (sólo el presupuesto) o sin datos, un rechazo del servidor cierra sin enfocar el buscador y conserva el ticket', async (hacer) => {
+        const d = hacer();
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrir(d, true);
+        botonDe(d, d.confirma).click();
+        await refrescar();
+
+        await falla(d, 0, 422, rechazo(422, 'CLAVE_CON_OTRO_CONTENIDO', [], 'Ya se emitió con otros datos'));
+
+        expect(pantalla(d)).toBeNull();
+        expect(avisoDeLaPagina()).toBe('Ya se emitió con otros datos');
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
+      });
+
+      it('presupuesto: una validez fuera de 1 a 90 no manda nada, dice por qué y deja el diálogo y el ticket como están', async () => {
+        const d = PRESUPUESTO();
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrir(d, true);
+        escribirEn(campoDe(d, 'validez'), '91');
+
+        botonDe(d, 'Guardar').click();
+        await refrescar();
+
+        expect(d.envios()).toHaveLength(0);
+        expect(normal(el$(`${d.tag} [role="alert"]`)!.textContent)).toBe('La validez va de 1 a 90 días.');
+        expect(pantalla(d)).not.toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).toBe(campoDe(d, 'validez'));
+      });
+
+      it('con «Volver» tocado mientras viaja el pedido no se cierra: se perdería el resultado', async () => {
+        const d = REMITO();
+        comoCelular('639.98px');
+        await conMartillos();
+        await abrir(d, true);
+        botonDe(d, 'Emitir').click();
+        await refrescar();
+
+        el$(`${d.tag} .ficha-volver`)!.click();
+        await refrescar();
+
+        expect(pantalla(d)).not.toBeNull();
+        expect(d.envios()).toHaveLength(1);
+      });
+
+      it.each(['VENDEDOR', 'DUENO'] as const)('el %s ve la misma pantalla y manda el mismo pedido', async (rol) => {
+        comoCelular('639.98px');
+        const d = PRESUPUESTO();
+        await conMartillos(rol);
+        await abrir(d, true);
+
+        expect(pantalla(d)!.classList).toContain('presupuesto-celular');
+        botonDe(d, 'Guardar').click();
+        await refrescar();
+        expect(d.envios()[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          diasValidez: 15,
+        });
+      });
+    });
+
+    describe('«Más acciones»: apagadas explican por qué', () => {
+      it.each([['Presupuesto'], ['Remito']])('con el ticket vacío «%s» está apagada con su motivo y al tocarla no abre nada', async (fila) => {
+        comoCelular('639.98px');
+        await crear();
+        el$('button.mas-acciones-ticket')!.click();
+        await refrescar();
+
+        const boton = filaMas(fila);
+        expect(boton.getAttribute('aria-disabled')).toBe('true');
+        expect(normal(boton.querySelector('small')!.textContent)).toBe('Agregá un renglón para usar esta acción.');
+        boton.click();
+        await refrescar();
+
+        expect(el().querySelector('app-dialogo-presupuesto, app-dialogo-remito')).toBeNull();
+        expect(hojaMas()).not.toBeNull();
+      });
+    });
+
+    describe('fuera del celular el presupuesto y el remito no cambian', () => {
+      it.each([
+        ['el escritorio', null],
+        ['la tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s son el diálogo centrado de siempre, con «Cancelar», sin barra ni pie fijo', async (_nombre, consulta) => {
+        for (const hacer of [PRESUPUESTO, REMITO]) {
+          const d = hacer();
+          comoCelular(consulta);
+          await conMartillos();
+
+          await abrir(d, false);
+
+          expect(pantalla(d)!.classList).not.toContain(`${d.nombre}-celular`);
+          expect(el().querySelector(`${d.tag} .ficha-barra, ${d.tag} .ficha-volver, ${d.tag} .ficha-pie`)).toBeNull();
+          expect(normal(pantalla(d)!.querySelector('.cabecera h2')!.textContent)).toBe(d.titulo);
+          expect(Array.from(pantalla(d)!.querySelectorAll('.dialogo-acciones button')).map((b) => normal(b.textContent))).toEqual(['Cancelar', d.confirma]);
+          botonDe(d, 'Cancelar').click();
+          await refrescar();
+          expect(document.activeElement).toBe(campo());
+          TestBed.resetTestingModule();
+        }
+      });
+    });
+
+    /** El descuento de todo el ticket y «Vaciar» (L24 punto 10): al cerrarlos en el celular no sube el teclado. */
+    describe('cerrar el descuento total y «Vaciar» en el celular', () => {
+      const dialogoDescuento = () => el$('app-dialogo-descuento [role="dialog"]');
+      const confirmacion = () => el$('app-dialogo-confirmacion [role="alertdialog"], app-dialogo-confirmacion [role="dialog"]');
+      const botonDeConfirmacion = (texto: string) =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-confirmacion button')).find((b) => normal(b.textContent) === texto)!;
+
+      describe.each(MODOS)('en el %s', (modo, consulta) => {
+        const celular = modo === 'celular';
+        const enfocaElBuscador = () => (celular ? expect(document.activeElement).not.toBe(campo()) : expect(document.activeElement).toBe(campo()));
+
+        it('«Dto. total»: Esc cierra sin cambiar el total', async () => {
+          comoCelular(consulta);
+          await conMartillos();
+          expect(document.activeElement).toBe(campo());
+          botoneraBoton('Dto. total').click();
+          await refrescar();
+          expect(dialogoDescuento()).not.toBeNull();
+
+          await tecla('Escape');
+
+          expect(dialogoDescuento()).toBeNull();
+          expect(totalDelTicket()).toBe('$ 3.000,00');
+          enfocaElBuscador();
+        });
+
+        it('«Dto. total»: «Cancelar» cierra sin cambiar el total', async () => {
+          comoCelular(consulta);
+          await conMartillos();
+          botoneraBoton('Dto. total').click();
+          await refrescar();
+
+          Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-descuento button')).find((b) => normal(b.textContent) === 'Cancelar')!.click();
+          await refrescar();
+
+          expect(dialogoDescuento()).toBeNull();
+          expect(totalDelTicket()).toBe('$ 3.000,00');
+          enfocaElBuscador();
+        });
+
+        it('«Dto. total»: aplicar el 10 % baja el total por el mismo camino de hoy', async () => {
+          comoCelular(consulta);
+          await conMartillos();
+          botoneraBoton('Dto. total').click();
+          await refrescar();
+
+          escribirEn(dialogoDescuento()!.querySelector('input')!, '10');
+          await refrescar();
+          Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-descuento button')).find((b) => normal(b.textContent) === 'Aceptar')!.click();
+          await refrescar();
+
+          expect(dialogoDescuento()).toBeNull();
+          expect(totalDelTicket()).toBe('$ 2.700,00');
+          enfocaElBuscador();
+        });
+
+        it('«Vaciar»: Esc y «Cancelar» dejan el ticket como estaba', async () => {
+          comoCelular(consulta);
+          await conMartillos();
+          botoneraBoton('Vaciar').click();
+          await refrescar();
+          expect(confirmacion()).not.toBeNull();
+
+          await tecla('Escape');
+          expect(confirmacion()).toBeNull();
+          expect(renglonesTicket()).toHaveLength(1);
+          enfocaElBuscador();
+
+          campo().focus();
+          botoneraBoton('Vaciar').click();
+          await refrescar();
+          botonDeConfirmacion('Cancelar').click();
+          await refrescar();
+          expect(confirmacion()).toBeNull();
+          expect(renglonesTicket()).toHaveLength(1);
+          enfocaElBuscador();
+        });
+
+        it('«Vaciar»: confirmar vacía el ticket', async () => {
+          comoCelular(consulta);
+          await conMartillos();
+          botoneraBoton('Vaciar').click();
+          await refrescar();
+
+          botonDeConfirmacion('Vaciar').click();
+          await refrescar();
+
+          expect(confirmacion()).toBeNull();
+          expect(renglonesTicket()).toHaveLength(0);
+          expect(localStorage.getItem('ticket:3:7')).toBeNull();
+          enfocaElBuscador();
+        });
+      });
+
+      it('desde «Más acciones» en el celular el descuento total y «Vaciar» tampoco devuelven el foco al buscador', async () => {
+        comoCelular('639.98px');
+        await conMartillos();
+        el$('button.mas-acciones-ticket')!.click();
+        await refrescar();
+        filaMas('Descuento total').click();
+        await refrescar();
+        await tecla('Escape');
+        expect(dialogoDescuento()).toBeNull();
+        expect(document.activeElement).not.toBe(campo());
+
+        el$('button.mas-acciones-ticket')!.click();
+        await refrescar();
+        filaMas('Vaciar').click();
+        await refrescar();
+        await tecla('Escape');
+        expect(confirmacion()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(document.activeElement).not.toBe(campo());
       });
     });
   });

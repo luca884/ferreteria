@@ -211,4 +211,159 @@ describe('DialogoRemito', () => {
       expect(el().querySelector('.cliente-elegido')).toBeNull();
     });
   });
+
+  /**
+   * movil-sectores T10 (artboard 07 de movil-mostrador): en el celular «Emitir remito» es una pantalla completa con
+   * «Volver» arriba, el resumen y la nota de la spec debajo y el pie fijo con «Cancelar» y «Emitir». Es el mismo componente
+   * con el mismo estado y los mismos manejadores: cambia dónde y cómo se ve. Vitest no lee `styles.css`.
+   */
+  describe('en el celular: pantalla completa (movil-sectores T10)', () => {
+    const comoCelular = (consulta = '639.98px') =>
+      vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    afterEach(() => vi.unstubAllGlobals());
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const pantalla = () => el().querySelector<HTMLElement>('[role="dialog"]')!;
+    const volver = () => el().querySelector<HTMLButtonElement>('.ficha-barra .ficha-volver');
+    const pie = () => el().querySelector<HTMLElement>('.dialogo.remito-celular > .dialogo-acciones.ficha-pie');
+    const botonesDelPie = () => Array.from(pie()!.querySelectorAll('button')).map((b) => normal(b.textContent));
+    const emitir = () => el().querySelector<HTMLButtonElement>('.aceptar')!;
+    const NOTA = 'El remito descuenta el stock ahora y no cobra: se factura después desde Remitos.';
+
+    it('se dibuja como pantalla completa: la barra con «Volver» y el título, el resumen, la nota, los campos y el pie fijo', async () => {
+      comoCelular();
+      await abrir({ total: 827200, renglones: 3 });
+
+      expect(pantalla().classList).toContain('remito-celular');
+      expect(pantalla().getAttribute('aria-modal')).toBe('true');
+      expect(pantalla().firstElementChild!.classList).toContain('ficha-barra');
+      expect(normal(el().querySelector('.ficha-barra h2')!.textContent)).toBe('Emitir remito');
+      expect(pantalla().getAttribute('aria-labelledby')).toBe(el().querySelector('.ficha-barra h2')!.id);
+      expect(el().querySelectorAll('h2')).toHaveLength(1);
+      expect(volver()!.getAttribute('aria-label')).toBe('Volver');
+      expect(volver()!.getAttribute('type')).toBe('button');
+      expect(normal(el().querySelector('.cabecera')!.textContent)).toBe('3 renglones · $ 8.272,00');
+      expect(normal(el().querySelector('.nota')!.textContent)).toBe(NOTA);
+      expect(pie()).not.toBeNull();
+      expect(botonesDelPie()).toEqual(['Cancelar', 'Emitir']);
+      expect(emitir().classList).toContain('primario');
+      expect(emitir().getAttribute('type')).toBe('button');
+    });
+
+    it('los campos y el foco son los de siempre: cliente (con el foco) y observaciones', async () => {
+      comoCelular();
+      await abrir();
+
+      expect(document.activeElement).toBe(cliente());
+      expect(cliente().maxLength).toBe(80);
+      expect(observaciones().maxLength).toBe(200);
+    });
+
+    it('la flecha «Volver» cancela sin emitir, aunque haya datos escritos', async () => {
+      comoCelular();
+      await abrir();
+      escribir(cliente(), 'Obra Perez');
+
+      volver()!.click();
+
+      expect(cancelados).toBe(1);
+      expect(confirmados).toEqual([]);
+    });
+
+    it('Esc y «Cancelar» del pie también cancelan sin emitir', async () => {
+      comoCelular();
+      await abrir();
+
+      tecla(cliente(), 'Escape');
+      (el().querySelector('.cancelar') as HTMLButtonElement).click();
+
+      expect(cancelados).toBe(2);
+      expect(confirmados).toEqual([]);
+    });
+
+    describe.each([
+      ['celular', '639.98px'],
+      ['escritorio', '__ninguna__'],
+    ])('lo que se emite es lo mismo en el %s', (_modo, consulta) => {
+      it('«Emitir» manda el cliente y las observaciones que se escribieron', async () => {
+        comoCelular(consulta);
+        await abrir();
+        escribir(cliente(), 'Constructora del Puerto SA');
+        escribir(observaciones(), 'Retira Marcos, camioneta blanca');
+
+        emitir().click();
+
+        expect(confirmados).toEqual([
+          { clienteNombre: 'Constructora del Puerto SA', observaciones: 'Retira Marcos, camioneta blanca' },
+        ]);
+      });
+
+      it('Enter emite sin cliente ni observaciones', async () => {
+        comoCelular(consulta);
+        await abrir();
+
+        tecla(observaciones(), 'Enter');
+
+        expect(confirmados).toEqual([{}]);
+      });
+
+      it('con un cliente elegido muestra «Cliente: …», no pide el texto libre y no manda clienteNombre', async () => {
+        comoCelular(consulta);
+        await abrir({ clienteElegido: 'Constructora del Puerto SA' });
+
+        expect(el().querySelector('input[name="cliente"]')).toBeNull();
+        expect(normal(el().querySelector('.cliente-elegido')!.textContent)).toBe('Cliente: Constructora del Puerto SA');
+        expect(document.activeElement).toBe(observaciones());
+        emitir().click();
+
+        expect(confirmados).toEqual([{}]);
+      });
+
+      it('con el POST en curso «Emitir» no manda otro, y al terminar con un error se puede volver a emitir', async () => {
+        comoCelular(consulta);
+        await abrir();
+        fixture.componentRef.setInput('enVuelo', true);
+        fixture.detectChanges();
+
+        emitir().click();
+        expect(confirmados).toEqual([]);
+
+        fixture.componentRef.setInput('enVuelo', false);
+        fixture.detectChanges();
+        emitir().click();
+
+        expect(confirmados).toEqual([{}]);
+      });
+
+      it('muestra el aviso del contenedor, la nota y el total de la cabecera', async () => {
+        comoCelular(consulta);
+        await abrir({ total: 360000, renglones: 1 });
+        fixture.componentRef.setInput('aviso', 'Cambió el precio de "Tornillo": ahora $ 180,00.');
+        fixture.detectChanges();
+
+        expect(normal(el().querySelector('[role="status"]')!.textContent)).toBe('Cambió el precio de "Tornillo": ahora $ 180,00.');
+        expect(normal(el().querySelector('.nota')!.textContent)).toBe(NOTA);
+        expect(normal(el().querySelector('.cabecera')!.textContent)).toContain('1 renglón · $ 3.600,00');
+      });
+    });
+
+    describe('fuera del celular el diálogo no cambia', () => {
+      it.each([
+        ['escritorio', '__ninguna__'],
+        ['tablet (hasta 1023 px)', '1023.98px'],
+      ])('en %s sigue siendo el diálogo centrado, con el título en la cabecera, sin barra ni pie fijo', async (_nombre, consulta) => {
+        comoCelular(consulta);
+        await abrir();
+
+        expect(el().querySelector('.remito-celular, .ficha-barra, .ficha-volver, .ficha-pie')).toBeNull();
+        expect(normal(el().querySelector('.cabecera h2')!.textContent)).toBe('Emitir remito');
+        expect(Array.from(el().querySelectorAll('.dialogo-acciones button')).map((b) => normal(b.textContent))).toEqual(['Cancelar', 'Emitir']);
+      });
+
+      it('sin matchMedia (pruebas, impresión) tampoco', async () => {
+        await abrir();
+
+        expect(el().querySelector('.remito-celular, .ficha-barra')).toBeNull();
+      });
+    });
+  });
 });
