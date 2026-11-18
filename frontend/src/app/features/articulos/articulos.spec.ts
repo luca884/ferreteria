@@ -2045,4 +2045,301 @@ describe('Articulos', () => {
       expect(evento.defaultPrevented).toBe(true);
     });
   });
+  /*
+   * movil-sectores T7: escáner de código de barras por cámara en el buscador del celular (S1; L18, L19). Sólo en el
+   * celular y sólo si el navegador trae `BarcodeDetector` y `getUserMedia`; un permiso negado nunca se recuerda. El CSS
+   * (botón y pantalla) no se evalúa en Vitest: se mide en el navegador.
+   */
+  describe('celular: escáner por cámara (movil-sectores T7)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    const CODIGO = '7790001000123';
+    const con = () => pagina([articulo(1), articulo(2, { descripcion: 'Bulón 3/8', codigoBarras: CODIGO, stockActual: 12 })]);
+
+    let getUserMedia: ReturnType<typeof vi.fn>;
+    let pista: { stop: ReturnType<typeof vi.fn>; getCapabilities: () => object; applyConstraints: () => Promise<void> };
+    let porLeer: string[];
+
+    /** Simula el navegador del celular: `BarcodeDetector` y `getUserMedia` (que concede o niega el permiso). */
+    function instalarNavegador(opciones: { detector?: boolean; camara?: boolean; denegar?: boolean } = {}) {
+      const { detector = true, camara = true, denegar = false } = opciones;
+      pista = { stop: vi.fn(), getCapabilities: () => ({}), applyConstraints: async () => undefined };
+      porLeer = [];
+      getUserMedia = vi.fn(async () => {
+        if (denegar) throw new DOMException('Permission denied', 'NotAllowedError');
+        return { getTracks: () => [pista], getVideoTracks: () => [pista] };
+      });
+      if (detector) {
+        vi.stubGlobal(
+          'BarcodeDetector',
+          class {
+            detect = async () => (porLeer.length > 0 ? [{ rawValue: porLeer.shift()! }] : []);
+          },
+        );
+      }
+      if (camara) Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+      // jsdom no reproduce video: el video «tiene imagen» y reproducir no hace nada.
+      Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { get: () => 4, configurable: true });
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    }
+
+    const tras = async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+    };
+    const lectura = async () => {
+      await vi.advanceTimersByTimeAsync(600);
+      fixture.detectChanges();
+    };
+    const botonEscanear = () => el().querySelector<HTMLButtonElement>('form.busqueda-movil button.escanear');
+    const escaner = () => el().querySelector('app-escaner-camara');
+    const enEscaner = (nombre: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-escaner-camara button')).find(
+        (b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === nombre,
+      )!;
+    async function abrirEscaner() {
+      botonEscanear()!.click();
+      await tras();
+    }
+    const DENEGADA =
+      'No pudimos usar la cámara. Si la bloqueaste, habilitala desde los permisos del navegador y volvé a intentar.';
+
+    // jsdom no evalúa media queries y `articulos.css` esconde el buscador del celular por defecto: sin esto no se le puede
+    // dar el foco. Es la misma regla que el CSS aplica a 390 px.
+    let estiloDelCelular: HTMLStyleElement;
+
+    beforeEach(() => {
+      localStorage.clear();
+      vi.useFakeTimers();
+      estiloDelCelular = document.createElement('style');
+      estiloDelCelular.textContent = '.herramientas-movil { display: block !important; }';
+      document.head.appendChild(estiloDelCelular);
+    });
+    afterEach(() => {
+      estiloDelCelular.remove();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+      Reflect.deleteProperty(HTMLMediaElement.prototype, 'readyState');
+      localStorage.clear();
+    });
+
+    it('con BarcodeDetector y getUserMedia, el celular muestra el botón de cámara dentro del buscador, de Dueño y de Vendedor', async () => {
+      for (const dueno of [true, false]) {
+        TestBed.resetTestingModule();
+        enElCelular();
+        instalarNavegador();
+        await crearComponente(dueno, con());
+
+        const boton = botonEscanear()!;
+        expect(boton).not.toBeNull();
+        expect(boton.getAttribute('type')).toBe('button');
+        expect(boton.getAttribute('aria-label')).toBe('Escanear código de barras con la cámara');
+        expect(el().querySelectorAll('button.escanear').length).toBe(1);
+        expect(escaner()).toBeNull();
+      }
+    });
+
+    it('sin BarcodeDetector no hay botón (se escribe a mano, como siempre)', async () => {
+      enElCelular();
+      instalarNavegador({ detector: false });
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+      expect(el().querySelector('#q-movil')).not.toBeNull();
+    });
+
+    it('sin getUserMedia no hay botón', async () => {
+      enElCelular();
+      instalarNavegador({ camara: false });
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+    });
+
+    it('en el escritorio (no es el celular) no hay botón aunque el navegador tenga todo', async () => {
+      instalarNavegador();
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+      expect(el().querySelector('app-escaner-camara')).toBeNull();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
+
+    it('al tocarlo abre el escáner y pide la cámara trasera; la lista queda como estaba', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      const llamadasAntes = servicio.buscar.mock.calls.length;
+
+      await abrirEscaner();
+
+      expect(escaner()).not.toBeNull();
+      expect(el().querySelector('app-escaner-camara [role="dialog"]')).not.toBeNull();
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+      const pedido = getUserMedia.mock.calls[0][0] as MediaStreamConstraints;
+      expect((pedido.video as MediaTrackConstraints).facingMode).toEqual({ ideal: 'environment' });
+      expect(servicio.buscar.mock.calls.length).toBe(llamadasAntes);
+      expect(pista.stop).not.toHaveBeenCalled();
+    });
+
+    it('permiso negado: muestra el mensaje; al cerrar y volver a entrar la cámara se pide de nuevo y no se guarda nada', async () => {
+      enElCelular();
+      instalarNavegador({ denegar: true });
+      const guardar = vi.spyOn(Storage.prototype, 'setItem');
+      await crearComponente(true, con());
+
+      await abrirEscaner();
+      expect(el().querySelector('app-escaner-camara [role="alert"]')!.textContent!.trim()).toBe(DENEGADA);
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+      enEscaner('Cerrar el escáner').click();
+      await tras();
+      expect(escaner()).toBeNull();
+
+      await abrirEscaner();
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(el().querySelector('app-escaner-camara [role="alert"]')!.textContent!.trim()).toBe(DENEGADA);
+
+      enEscaner('Intentar de nuevo').click();
+      await tras();
+      expect(getUserMedia).toHaveBeenCalledTimes(3);
+
+      expect(guardar).not.toHaveBeenCalled();
+      expect(localStorage.length).toBe(0);
+    });
+
+    it('lee un código, apaga la cámara y «Abrir ficha» navega como abrirFicha, con elegido', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      navegar.mockClear();
+
+      porLeer.push(CODIGO);
+      await lectura();
+
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+      expect(servicio.buscar.mock.calls.at(-1)![0]).toBe(CODIGO);
+      const tarjeta = el().querySelector('app-escaner-camara .leido')!;
+      expect(tarjeta.textContent).toContain('Bulón 3/8');
+      expect(tarjeta.textContent).toContain('stock 12');
+
+      enEscaner('Abrir ficha').click();
+      await tras();
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 2], {
+        queryParams: { elegido: 2 },
+        queryParamsHandling: 'merge',
+      });
+      expect(escaner()).toBeNull();
+    });
+
+    it('un código que no es de ningún artículo lo dice y deja escribirlo a mano', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+
+      porLeer.push('0000000000000');
+      await lectura();
+
+      expect(el().querySelector('app-escaner-camara')!.textContent).toContain(
+        'No encontramos un artículo con el código 0000000000000.',
+      );
+      expect(enEscaner('Abrir ficha')).toBeUndefined();
+      expect(enEscaner('Escanear de nuevo')).toBeDefined();
+    });
+
+    it('«Escribir el código a mano» cierra el escáner, completa el buscador con el código, busca y le da el foco', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      porLeer.push('0000000000000');
+      await lectura();
+      servicio.buscar.mockClear();
+
+      enEscaner('Escribir el código a mano').click();
+      await tras();
+      await refrescar();
+
+      expect(escaner()).toBeNull();
+      const campo = el().querySelector<HTMLInputElement>('#q-movil')!;
+      expect(campo.value).toBe('0000000000000');
+      expect(servicio.buscar.mock.calls[0][0]).toBe('0000000000000');
+      expect(document.activeElement).toBe(campo);
+    });
+
+    it('«Escribir el código a mano» desde un permiso negado sólo cierra y enfoca el buscador, sin tocar lo escrito', async () => {
+      enElCelular();
+      instalarNavegador({ denegar: true });
+      await crearComponente(true, con(), null, '/?q=tornillo');
+      await abrirEscaner();
+      servicio.buscar.mockClear();
+
+      enEscaner('Escribir el código a mano').click();
+      await tras();
+
+      expect(escaner()).toBeNull();
+      const campo = el().querySelector<HTMLInputElement>('#q-movil')!;
+      expect(campo.value).toBe('tornillo');
+      expect(servicio.buscar).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(campo);
+    });
+
+    it('Esc y la ✕ cierran el escáner, apagan la cámara y devuelven el foco al botón de cámara', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      botonEscanear()!.focus();
+      await abrirEscaner();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await tras();
+
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(botonEscanear());
+
+      await abrirEscaner();
+      enEscaner('Cerrar el escáner').click();
+      await tras();
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(2);
+    });
+
+    it('al salir de la pantalla (navegar a otra) la cámara se apaga', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      expect(pista.stop).not.toHaveBeenCalled();
+
+      fixture.destroy();
+
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('si la pantalla deja de ser la del celular (se gira) con el escáner abierto, se cierra', async () => {
+      let esCelular = true;
+      const oyentes: (() => void)[] = [];
+      vi.stubGlobal('matchMedia', (consulta: string) => ({
+        get matches() {
+          return esCelular && consulta.includes('639.98px');
+        },
+        media: consulta,
+        addEventListener: (_: string, f: () => void) => oyentes.push(f),
+        removeEventListener: () => undefined,
+      }));
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+
+      esCelular = false;
+      oyentes.forEach((f) => f());
+      await tras();
+
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+    });
+  });
 });

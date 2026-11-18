@@ -1,0 +1,106 @@
+<!--
+  Pantalla completa del escáner (artboard 01 de movil-articulos, `.camara`): ✕ y linterna arriba, el visor con la pista y
+  abajo la tarjeta con lo leído o con lo que falló. Siempre hay una salida a mano: nada depende de que la cámara ande.
+-->
+@let e = estado();
+<div
+  #pantalla
+  class="escaner"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="escaner-titulo"
+  tabindex="-1"
+  appTrampaFoco
+>
+  <h2 id="escaner-titulo" class="sr-only">Escanear código de barras</h2>
+  <video #video class="video" autoplay muted playsinline [class.oculto]="e.tipo !== 'mirando'"></video>
+  <div class="tope">
+    <button type="button" class="icono cerrar-escaner" aria-label="Cerrar el escáner" (click)="cerrar.emit()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    @if (tieneLinterna() && e.tipo === 'mirando') {
+      <button
+        type="button"
+        class="icono linterna"
+        [attr.aria-label]="linternaEncendida() ? 'Apagar la linterna' : 'Encender la linterna'"
+        [attr.aria-pressed]="linternaEncendida()"
+        (click)="alternarLinterna()"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21h6M10 17h4l1-4a6 6 0 1 0-6 0l1 4Z" /></svg>
+      </button>
+    }
+  </div>
+
+  @switch (e.tipo) {
+    @case ('abriendo') {
+      <p class="pista" role="status">Pidiendo permiso para usar la cámara…</p>
+    }
+    @case ('mirando') {
+      <div class="visor" aria-hidden="true"></div>
+      <p class="pista">Apuntá al código de barras</p>
+    }
+    @case ('buscando') {
+      <p class="pista" role="status">Buscando el código {{ e.codigo }}…</p>
+    }
+  }
+
+  @if (e.tipo === 'falla') {
+    <div class="tarjeta">
+      <p class="mensaje" role="alert">{{ textosFalla[e.causa] }}</p>
+      <div class="acciones">
+        <button type="button" class="primario" (click)="iniciar()">Intentar de nuevo</button>
+        <button type="button" class="a-mano" (click)="aMano()">
+          <ng-container *ngTemplateOutlet="aManoIcono" />
+          <span>Escribir el código a mano</span>
+        </button>
+      </div>
+    </div>
+  } @else if (e.tipo === 'leido') {
+    <div class="tarjeta leido" role="status">
+      <div class="fila-leida">
+        <div class="datos">
+          <div class="desc">{{ e.articulo.descripcion }}</div>
+          <div class="meta">
+            <span>{{ e.codigo }}</span>
+            <span>stock {{ cantidadConUnidad(e.articulo.stockActual, e.articulo.unidad) }}</span>
+            @if (!e.articulo.activo) {
+              <span class="de-baja">Dado de baja</span>
+            }
+          </div>
+        </div>
+        <div class="precio">{{ e.articulo.oferta?.precioOferta ?? e.articulo.precioFinal | monto }}{{ porUnidad(e.articulo.unidad) }}</div>
+      </div>
+      <div class="acciones">
+        <button type="button" class="primario" (click)="abrirFicha.emit(e.articulo)">Abrir ficha</button>
+        <button type="button" class="secundario" (click)="iniciar()">Escanear de nuevo</button>
+        <button type="button" class="a-mano" (click)="aMano()">
+          <ng-container *ngTemplateOutlet="aManoIcono" />
+          <span>Escribir el código a mano</span>
+        </button>
+      </div>
+    </div>
+  } @else if (e.tipo === 'sin-articulo') {
+    <div class="tarjeta">
+      <p class="mensaje" role="status">No encontramos un artículo con el código {{ e.codigo }}.</p>
+      <div class="acciones">
+        <button type="button" class="primario" (click)="aMano()">Escribir el código a mano</button>
+        <button type="button" class="secundario" (click)="iniciar()">Escanear de nuevo</button>
+      </div>
+    </div>
+  } @else if (e.tipo === 'error-busqueda') {
+    <div class="tarjeta">
+      <p class="mensaje" role="alert">No pudimos buscar el código {{ e.codigo }}. Probá de nuevo.</p>
+      <div class="acciones">
+        <button type="button" class="primario" (click)="iniciar()">Escanear de nuevo</button>
+        <button type="button" class="a-mano" (click)="aMano()">
+          <ng-container *ngTemplateOutlet="aManoIcono" />
+          <span>Escribir el código a mano</span>
+        </button>
+      </div>
+    </div>
+  }
+</div>
+
+<ng-template #aManoIcono>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></svg>
+</ng-template>

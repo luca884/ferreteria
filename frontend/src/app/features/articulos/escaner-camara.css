@@ -1,0 +1,184 @@
+/*
+ * movil-sectores T7: la pantalla del escáner. Sólo existe en el celular: desde 640 px no se dibuja (y la pantalla ni la
+ * monta). Cubre todo, también la barra de destinos, y queda debajo de los diálogos (z-dialogo), como `.ficha-pantalla`.
+ * Vive en su propio archivo porque `articulos.css` está en el tope de 8 kB.
+ */
+/* Desde 640 px (tablet, escritorio) el escáner no se ve nunca; la regla va dentro de una consulta y no en la base. */
+@media screen and (min-width: 640px) {
+  :host {
+    display: none;
+  }
+}
+
+@media screen and (max-width: 639.98px) {
+  .escaner {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--e-3);
+    padding: var(--e-4);
+    padding-bottom: max(var(--e-4), env(safe-area-inset-bottom));
+    overflow: hidden;
+    background: var(--texto);
+    color: #fff;
+  }
+
+  .escaner:focus {
+    outline: none;
+  }
+
+  .video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .video.oculto {
+    visibility: hidden;
+  }
+
+  .tope {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: var(--e-3) var(--e-4);
+  }
+
+  .icono {
+    display: grid;
+    place-items: center;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.3);
+    border-radius: var(--radio-lg);
+    background: rgb(15 23 42 / 0.55);
+    color: #fff;
+  }
+
+  .icono[aria-pressed='true'] {
+    background: #fff;
+    color: var(--texto);
+  }
+
+  .linterna {
+    margin-left: auto;
+  }
+
+  /* El marco donde se apunta, con la línea roja del artboard. */
+  .visor {
+    position: absolute;
+    top: 22%;
+    right: 36px;
+    left: 36px;
+    height: 150px;
+    border: 2px solid #fff;
+    border-radius: var(--radio-lg);
+    box-shadow: 0 0 0 9999px rgb(15 23 42 / 0.35);
+    pointer-events: none;
+  }
+
+  .visor::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    left: 10px;
+    height: 2px;
+    background: #f87171;
+  }
+
+  .pista {
+    position: relative;
+    margin: 0;
+    padding: var(--e-3) var(--e-4);
+    border-radius: var(--radio-lg);
+    background: rgb(15 23 42 / 0.55);
+    text-align: center;
+    font-size: 14px;
+  }
+
+  /* Lo leído o lo que falló: la tarjeta de abajo del artboard (`.leido`). */
+  .tarjeta {
+    position: relative;
+    padding: var(--e-3) var(--e-4) var(--e-4);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    color: var(--texto);
+  }
+
+  .mensaje {
+    margin: 0 0 var(--e-3);
+    padding-top: var(--e-1);
+    line-height: 1.4;
+  }
+
+  .fila-leida {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--e-3);
+    align-items: center;
+    padding-bottom: var(--e-2);
+  }
+
+  .datos {
+    min-width: 0;
+  }
+
+  .desc {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--e-2);
+    font-family: var(--fuente-mono);
+    font-size: 11px;
+    color: var(--texto-tenue);
+  }
+
+  .de-baja {
+    color: var(--peligro, #b91c1c);
+  }
+
+  .precio {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .acciones {
+    display: grid;
+    gap: var(--e-2);
+  }
+
+  .acciones button {
+    width: 100%;
+    min-height: var(--alto-tactil);
+    margin: 0;
+  }
+
+  .acciones .a-mano {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--e-2);
+    border: 0;
+    background: transparent;
+    color: var(--tono);
+  }
+}

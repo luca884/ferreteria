@@ -2608,3 +2608,27 @@ ul.error {
     font-weight: 600;
   }
 }
+
+/* ---------- Escáner de cámara de Artículos (movil-sectores T7) ---------- */
+/*
+ * El botón de cámara del buscador del celular; la pantalla del escáner tiene su propio archivo
+ * (`features/articulos/escaner-camara.css`). Sólo existe en el celular: fuera de él no se dibuja.
+ */
+.herramientas-movil .busqueda-movil .escanear {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  .herramientas-movil .busqueda-movil .escanear {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+    padding: 0;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--tono);
+  }
+}

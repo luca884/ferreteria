@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { mensajeDe } from '../../core/api/api-error';
@@ -19,7 +19,9 @@ import { claveDeEtiquetas, sumarEtiquetas } from '../etiquetas/etiquetas.storage
 import { RubrosService } from '../rubros/rubros.service';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
+import { CamaraEscaner } from './camara-escaner';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
+import { EscanerCamara } from './escaner-camara';
 
 const TAMANO_PAGINA = 20;
 
@@ -63,6 +65,7 @@ type Accion = 'ficha' | 'ajuste' | 'movimientos' | 'clientes' | 'baja';
     DialogoAjusteStock,
     BarraAcciones,
     HojaInferior,
+    EscanerCamara,
   ],
   templateUrl: './articulos.html',
   styleUrl: './articulos.css',
@@ -74,6 +77,8 @@ export class Articulos implements OnInit {
   private readonly avisos = inject(Avisos);
   private readonly rubrosService = inject(RubrosService);
   protected readonly auth = inject(AuthService);
+  private readonly camara = inject(CamaraEscaner);
+  private readonly buscadorMovil = viewChild<ElementRef<HTMLInputElement>>('qMovil');
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
@@ -109,6 +114,8 @@ export class Articulos implements OnInit {
   private pulsacion: { temporizador: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
   /** La pulsación larga ya entró al modo: el toque que el navegador manda al soltar no tiene que contar. */
   private pulsacionLarga = false;
+  /** movil-sectores T7: el escáner de cámara a pantalla completa está abierto (sólo en el celular). */
+  protected readonly escanerAbierto = signal(false);
   /** Nombre de cada rubro por id, para la línea de detalle de la fila del celular; vacío si no se pudo leer. */
   private readonly rubros = signal<ReadonlyMap<number, string>>(new Map());
   /** El CSV se está bajando: Exportar queda deshabilitado. */
@@ -176,6 +183,30 @@ export class Articulos implements OnInit {
   /** El rubro de la fila para la línea de detalle del celular; null si no tiene o todavía no se leyó. */
   protected rubroDe(articulo: Articulo): string | null {
     return articulo.rubroId === null ? null : (this.rubros().get(articulo.rubroId) ?? null);
+  }
+
+  /**
+   * movil-sectores T7 (S1): el botón de cámara del buscador existe sólo en el celular y sólo si el navegador trae el
+   * lector nativo de códigos y la cámara; sin eso se escribe a mano. Para el Dueño y para el Vendedor.
+   */
+  protected puedeEscanear(): boolean {
+    return esCelular() && this.camara.disponible();
+  }
+
+  /** «Escribir el código a mano» del escáner: lo cierra, completa el buscador con el código leído (si hay) y lo enfoca. */
+  protected escribirAMano(codigo: string | null): void {
+    // Primero el foco: así el cierre del escáner no se lo lleva de vuelta al botón de cámara.
+    this.buscadorMovil()?.nativeElement.focus();
+    this.escanerAbierto.set(false);
+    if (codigo === null) return;
+    this.form.setValue({ q: codigo });
+    this.buscar();
+  }
+
+  /** «Abrir ficha» del escáner: lo cierra y abre la ficha igual que un toque en la fila. */
+  protected abrirFichaEscaneada(articulo: Articulo): void {
+    this.escanerAbierto.set(false);
+    this.abrirFicha(articulo);
   }
 
   /** «Nuevo artículo»: lo mismo que el enlace «Nuevo» de la barra, para el botón flotante del celular. */
