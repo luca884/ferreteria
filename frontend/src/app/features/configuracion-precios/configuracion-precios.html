@@ -1,6 +1,17 @@
-<app-barra-acciones>
-  <h1>Margen y redondeo</h1>
-</app-barra-acciones>
+@if (celular) {
+  <div class="ficha-barra">
+    <button type="button" class="ficha-volver" aria-label="Volver" [disabled]="guardando()"
+      [attr.aria-describedby]="guardando() ? 'margen-en-vuelo' : null" (click)="salir()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+    </button>
+    <h1>Margen y redondeo</h1>
+  </div>
+} @else {
+  <app-barra-acciones>
+    <h1>Margen y redondeo</h1>
+  </app-barra-acciones>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar el margen y el redondeo.</p>
@@ -116,14 +127,45 @@
         </div>
       </fieldset>
 
-      <div class="acciones-form">
-        <button type="submit" [disabled]="guardando()">Guardar</button>
-      </div>
+      @if (celular) {
+        <div class="ficha-pie en-pagina pie-margen">
+          @if (guardando()) {
+            <span id="margen-en-vuelo" class="pista" role="status">Hay una operación en curso.</span>
+          }
+          <button type="button" class="secundario" [disabled]="guardando()"
+            [attr.aria-describedby]="guardando() ? 'margen-en-vuelo' : null" (click)="salir()">Cancelar</button>
+          <button #guardarEnPie type="submit" [disabled]="guardando()"
+            [attr.aria-describedby]="guardando() ? 'margen-en-vuelo' : null">Guardar</button>
+        </div>
+      } @else {
+        <div class="acciones-form">
+          <button type="submit" [disabled]="guardando()">Guardar</button>
+        </div>
+      }
     </form>
   }
 }
 
 @if (cambioPendiente(); as cambio) {
+  @if (celular) {
+    <app-hoja-inferior [titulo]="mensajeCambio(cambio)" [subtitulo]="cambio.titulo" (cerrar)="cerrarHoja()">
+      @if (cambio.ejemplos.length > 0) {
+        <p class="margen-por-ejemplo">Por ejemplo</p>
+        <ul class="margen-ejemplos" aria-label="Por ejemplo: precio de hoy y precio nuevo">
+          @for (e of cambio.ejemplos; track e.codigo) {
+            <li>
+              <span>{{ e.descripcion }} <small>{{ e.codigo }}</small></span>
+              <span class="margen-ejemplo-precio"><s>{{ e.precioActual | monto }}</s> → <b>{{ e.precioNuevo | monto }}</b></span>
+            </li>
+          }
+        </ul>
+      }
+      <div class="margen-hoja-acciones">
+        <button type="button" (click)="confirmarCambio()">Guardar y recalcular</button>
+        <button type="button" class="secundario" (click)="cerrarHoja()">Cancelar</button>
+      </div>
+    </app-hoja-inferior>
+  } @else {
   <app-confirmacion
     [titulo]="cambio.titulo"
     [mensaje]="mensajeCambio(cambio)"
@@ -158,4 +200,5 @@
       </div>
     }
   </app-confirmacion>
+  }
 }

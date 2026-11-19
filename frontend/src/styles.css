@@ -6703,3 +6703,76 @@ app-cuenta-cliente .acciones-cuenta {
     border-radius: var(--radio-lg);
   }
 }
+
+/* ---------- Precios: margen y redondeo en el celular (movil-sectores T14) ---------- */
+@media (max-width: 639.98px) {
+  app-configuracion-precios > .ficha-barra {
+    max-width: none;
+    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-3);
+  }
+  app-configuracion-precios .ficha-barra h1 {
+    margin: 0;
+    font-size: var(--texto-lg);
+  }
+  app-configuracion-precios .precios .seccion input,
+  app-configuracion-precios .reintentar {
+    min-height: var(--alto-tactil);
+  }
+  app-configuracion-precios #redondeo-ejemplo {
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--acento-borde);
+    border-radius: var(--radio-lg);
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+  }
+  app-configuracion-precios .pie-margen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+  app-configuracion-precios .pie-margen > button,
+  app-configuracion-precios .margen-hoja-acciones > button {
+    width: 100%;
+    min-height: 52px;
+  }
+  app-configuracion-precios .pie-margen > .pista {
+    grid-column: 1 / -1;
+  }
+  app-configuracion-precios .precios:has(> .pie-margen) {
+    padding-bottom: calc(77px + var(--e-4));
+  }
+  app-configuracion-precios .precios:has(#margen-en-vuelo) {
+    padding-bottom: calc(104px + var(--e-4));
+  }
+  app-configuracion-precios .margen-por-ejemplo {
+    margin: var(--e-2) 0 0;
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+  }
+  app-configuracion-precios .margen-ejemplos {
+    list-style: none;
+    margin: 0 0 var(--e-3);
+    padding: 0;
+  }
+  app-configuracion-precios .margen-ejemplos > li {
+    display: grid;
+    gap: var(--e-1);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+    overflow-wrap: anywhere;
+  }
+  app-configuracion-precios .margen-ejemplos small {
+    color: var(--texto-tenue);
+    font-family: var(--fuente-mono);
+  }
+  app-configuracion-precios .margen-ejemplo-precio {
+    font-variant-numeric: tabular-nums;
+  }
+  app-configuracion-precios .margen-ejemplo-precio s {
+    color: var(--texto-tenue);
+  }
+  app-configuracion-precios .margen-hoja-acciones {
+    display: grid;
+    gap: var(--e-2);
+    margin-top: var(--e-2);
+  }
+}

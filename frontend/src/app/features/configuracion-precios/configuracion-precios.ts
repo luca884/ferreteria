@@ -1,6 +1,7 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
@@ -8,6 +9,8 @@ import { precioFinalCentavos } from '../../core/formato/precio-final';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionPrecios } from '../articulos/articulo.models';
 import {
@@ -47,13 +50,16 @@ function tituloCambio(anterior: ConfiguracionPrecios | null, nueva: Configuracio
  */
 @Component({
   selector: 'app-configuracion-precios',
-  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, CampoMoneda, ImporteInput, MontoPipe],
+  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, CampoMoneda, ImporteInput, MontoPipe, HojaInferior],
   templateUrl: './configuracion-precios.html',
   styleUrl: './configuracion-precios.css',
 })
 export class PaginaConfiguracionPrecios implements OnInit {
   private readonly service = inject(ConfiguracionPreciosService);
   protected readonly auth = inject(AuthService);
+  protected readonly celular = esCelular();
+  private readonly router = this.celular ? inject(Router) : null;
+  private readonly guardarEnPie = viewChild<ElementRef<HTMLButtonElement>>('guardarEnPie');
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     margenDefectoPorcentaje: [0, [Validators.required, Validators.min(0), Validators.max(1000)]],
@@ -111,6 +117,17 @@ export class PaginaConfiguracionPrecios implements OnInit {
         this.cargaFallida.set(true);
       },
     });
+  }
+
+  /** No hay una ruta de Configuración: Volver y Cancelar salen a la lista de Artículos sin guardar. */
+  protected salir(): void {
+    if (!this.guardando()) void this.router?.navigateByUrl('/articulos');
+  }
+
+  protected cerrarHoja(): void {
+    this.cambioPendiente.set(null);
+    // Durante la consulta Guardar se deshabilita y puede perder el foco antes de que abra la hoja.
+    this.guardarEnPie()?.nativeElement.focus();
   }
 
   protected guardar(): void {
