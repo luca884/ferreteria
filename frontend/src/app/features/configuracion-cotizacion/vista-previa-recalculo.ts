@@ -14,6 +14,7 @@ import { formatearCotizacion, formatearMonto } from '../../core/formato/monto';
 export class VistaPreviaRecalculoComponent {
   readonly vista = input.required<VistaPreviaRecalculo>();
   readonly aplicando = input(false);
+  readonly celular = input(false);
   readonly aplicar = output<void>();
   readonly cancelar = output<void>();
 

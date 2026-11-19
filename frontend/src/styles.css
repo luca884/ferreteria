@@ -6776,3 +6776,180 @@ app-cuenta-cliente .acciones-cuenta {
     margin-top: var(--e-2);
   }
 }
+
+/* ---------- Precios: cotización en el celular (movil-sectores T14) ---------- */
+@media (max-width: 639.98px) {
+  app-configuracion-cotizacion > .ficha-barra {
+    max-width: none;
+    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-3);
+  }
+  app-configuracion-cotizacion .ficha-barra h1 {
+    margin: 0;
+    font-size: var(--texto-lg);
+  }
+  .contenido-cotizacion-celular {
+    /* La reserva va al final de la página, no antes del recálculo. */
+    padding-bottom: calc(77px + var(--e-4) + env(safe-area-inset-bottom, 0px));
+  }
+  .contenido-cotizacion-celular form.cotizacion-celular {
+    padding-bottom: 0;
+  }
+  .cotizacion-celular .seccion:not(.visibles) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cotizacion-celular .campo:has(> #dolarPrecios),
+  .cotizacion-celular .lado {
+    grid-column: 1 / -1;
+  }
+  .cotizacion-celular .campo > :is(select, input),
+  app-configuracion-cotizacion .reintentar {
+    min-width: 0;
+    min-height: var(--alto-tactil);
+  }
+  .cotizacion-celular .campo > label[for='activa'] {
+    position: relative;
+    min-height: var(--alto-tactil);
+    padding-inline-end: calc(52px + var(--e-3));
+  }
+  .cotizacion-celular #activa,
+  .cotizacion-celular .lado input {
+    position: absolute;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .cotizacion-celular #activa {
+    inset: 0 0 0 auto;
+    width: 52px;
+    height: 100%;
+  }
+  .cotizacion-celular label[for='activa']::before,
+  .cotizacion-celular label[for='activa']::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .cotizacion-celular label[for='activa']::before {
+    right: 0;
+    width: 52px;
+    height: 32px;
+    border-radius: 16px;
+    background: var(--borde-fuerte);
+  }
+  .cotizacion-celular label[for='activa']::after {
+    right: 23px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--superficie);
+    box-shadow: var(--sombra-1);
+  }
+  .cotizacion-celular label[for='activa']:has(:checked)::before {
+    background: var(--acento);
+  }
+  .cotizacion-celular label[for='activa']:has(:checked)::after {
+    right: 3px;
+  }
+  .cotizacion-celular label[for='activa']:has(:focus-visible)::before,
+  .cotizacion-celular .lado label:has(:focus-visible) {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+    z-index: 1;
+  }
+  .cotizacion-celular fieldset.lado {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+  .cotizacion-celular .lado .casilla {
+    position: relative;
+    align-items: start;
+    min-height: var(--alto-tactil);
+    border: 1px solid var(--borde-fuerte);
+    padding: var(--e-2);
+    font-size: var(--texto-xs);
+    overflow-wrap: anywhere;
+  }
+  .cotizacion-celular .lado .casilla:first-of-type {
+    border-radius: var(--radio-lg) 0 0 var(--radio-lg);
+  }
+  .cotizacion-celular .lado .casilla:last-of-type {
+    border-radius: 0 var(--radio-lg) var(--radio-lg) 0;
+  }
+  .cotizacion-celular .lado .casilla:has(:checked) {
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+    border-color: var(--acento);
+  }
+  .cotizacion-celular .lado input {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .cotizacion-celular .casillas {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .cotizacion-celular .visibles .casilla {
+    min-height: var(--alto-tactil);
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  .contenido-cotizacion-celular .recalculo-fila {
+    display: grid;
+  }
+  .contenido-cotizacion-celular .recalculo button:not(.ficha-pie > button) {
+    width: 100%;
+    min-height: 52px;
+  }
+  .contenido-cotizacion-celular .ficha-pie.en-pagina {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--e-2);
+  }
+  .contenido-cotizacion-celular .ficha-pie > button {
+    min-height: 52px;
+    white-space: normal;
+  }
+  /* Con la previa abierta, Guardar sigue disponible, pero sólo el pie de la previa queda fijo. */
+  .contenido-cotizacion-celular:has(.vista-previa) form .ficha-pie.en-pagina {
+    position: static;
+    padding-inline: 0;
+    z-index: auto;
+  }
+  .contenido-cotizacion-celular .ficha-pie > button:only-child {
+    grid-column: 1 / -1;
+  }
+  .contenido-cotizacion-celular .cotizacion-tarjetas {
+    display: grid;
+    gap: var(--e-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .contenido-cotizacion-celular .cotizacion-tarjeta {
+    display: grid;
+    gap: var(--e-1);
+    min-width: 0;
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    overflow-wrap: anywhere;
+  }
+  .cotizacion-tarjeta :is(s, small) {
+    color: var(--texto-tenue);
+  }
+  .cotizacion-antes-ahora {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--e-2);
+  }
+  .cotizacion-tarjeta :is(.cotizacion-antes-ahora, .cotizacion-diferencia) {
+    font-variant-numeric: tabular-nums;
+  }
+  .cotizacion-tarjeta .cotizacion-diferencia {
+    font-weight: 600;
+  }
+}

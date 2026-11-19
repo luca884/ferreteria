@@ -1,6 +1,16 @@
-<app-barra-acciones>
-  <h1>Cotización</h1>
-</app-barra-acciones>
+@if (celular) {
+  <div class="ficha-barra">
+    <button type="button" class="ficha-volver" aria-label="Volver" [disabled]="guardando()" (click)="salir()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+    </button>
+    <h1>Cotización</h1>
+  </div>
+} @else {
+  <app-barra-acciones>
+    <h1>Cotización</h1>
+  </app-barra-acciones>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar la cotización.</p>
@@ -33,12 +43,14 @@
       <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
     </div>
   } @else if (configuracion(); as actual) {
-    <div class="contenido">
+    <div class="contenido" [class.contenido-cotizacion-celular]="celular">
       <app-formulario-cotizacion
         [configuracion]="actual"
         [guardando]="guardando()"
+        [celular]="celular"
         (guardar)="guardar($event)"
         (cambios)="hayCambios.set($event)"
+        (cancelar)="salir()"
       />
 
       <section class="recalculo panel" aria-labelledby="recalculo-titulo">
@@ -55,6 +67,7 @@
               class="confirmar-dolar"
               [disabled]="ocupado()"
               [attr.aria-disabled]="ariaDe(motivos().recalcular)"
+              [attr.aria-describedby]="celular && motivoSinRecalculo() ? 'motivo-sin-recalculo' : null"
               (click)="pedirVistaPrevia()"
             >
               Ver vista previa
@@ -85,6 +98,7 @@
           <app-vista-previa-recalculo
             [vista]="vista"
             [aplicando]="recalculando()"
+            [celular]="celular"
             (aplicar)="aplicar()"
             (cancelar)="cancelarVistaPrevia()"
           />
