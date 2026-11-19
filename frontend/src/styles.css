@@ -5481,3 +5481,186 @@ app-cuenta-cliente .acciones-cuenta {
     font-weight: 600;
   }
 }
+
+/* ---------- Precios: importar en el celular (movil-sectores T13) ---------- */
+
+/*
+ * Importar lista de precios en el celular (artboard 01 de `design/movil-precios`, T13a, S2, S5, S7): una barra de cuatro
+ * pasos fija arriba que reemplaza la numeración de los títulos, el paso 1 con campos de 44 px apilados, «Elegir archivo…»
+ * en el pie fijo (`.ficha-pie.en-pagina`) con su motivo si está apagado, y la lectura como una tarjeta centrada con barra
+ * de progreso. La barra, el pie y la tarjeta sólo existen en el DOM del celular (`esCelular()`); lo de adentro del paso 1 se
+ * ajusta acá. Todo cuelga de `app-importaciones` y sube la especificidad con `:has()` para ganarle a los estilos del
+ * componente y de `app-selector-archivo` (Angular les agrega su atributo a cada parte del selector). Escritorio y tablet
+ * no cambian (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  /* La barra de pasos: pegada arriba mientras se scrollea, de borde a borde. */
+  app-importaciones > .pasos-celular {
+    position: sticky;
+    top: 0;
+    z-index: calc(var(--z-barra) - 1);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--e-1);
+    margin: 0 calc(var(--pantalla-x) * -1) var(--e-3);
+    padding: var(--e-3) var(--pantalla-x) var(--e-2);
+    list-style: none;
+    border-bottom: 1px solid var(--borde);
+    background: var(--superficie);
+  }
+  app-importaciones > .pasos-celular > li {
+    padding-top: var(--e-1);
+    border-top: 4px solid var(--borde);
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  app-importaciones > .pasos-celular > li.hecho {
+    border-top-color: var(--tono);
+  }
+  app-importaciones > .pasos-celular > li.activo {
+    border-top-color: var(--tono);
+    color: var(--tono);
+    font-weight: 600;
+  }
+
+  /* Con la barra a la vista, los títulos numerados ya no son la etiqueta del paso: quedan sólo para los lectores de pantalla. */
+  app-importaciones:has(> .pasos-celular) :is(.paso > h2, .titulo-confirmar) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* El aviso de arriba, como la alerta informativa del artboard. */
+  app-importaciones:has(> .pasos-celular) > p.ayuda:not(.leyendo, .estado-vacio) {
+    margin: 0 0 var(--e-3);
+    padding: var(--e-3);
+    border: 1px solid var(--info-borde);
+    border-radius: var(--radio-lg);
+    background: var(--info-fondo);
+    color: var(--info);
+    font-size: var(--texto-sm);
+  }
+
+  /* Paso 1: proveedor y archivo, uno bajo el otro, a todo el ancho y de 44 px. */
+  app-importaciones:has(> .pasos-celular) .paso:has(> .fila > app-selector-archivo) {
+    padding: var(--e-3) var(--e-4) var(--e-4);
+  }
+  app-importaciones:has(> .pasos-celular) .paso:has(> .fila > app-selector-archivo) > .fila {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--e-4);
+    margin-bottom: 0;
+  }
+  app-importaciones:has(> .pasos-celular) .paso:has(> .fila > app-selector-archivo) > .fila > .campo,
+  app-importaciones:has(> .pasos-celular) .paso:has(> .fila > app-selector-archivo) > .fila > app-selector-archivo {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+  app-importaciones:has(> .pasos-celular) .paso:has(> .fila > app-selector-archivo) select {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  /* La zona del archivo: sólo el nombre (o «Ningún archivo elegido»); elegir el archivo es la acción del pie. */
+  app-importaciones:has(> .pasos-celular) app-selector-archivo .zona-archivo.zona-archivo {
+    min-height: var(--alto-tactil);
+    padding: var(--e-3);
+    border-radius: var(--radio-lg);
+  }
+  app-importaciones:has(> .pie-importar) app-selector-archivo .zona-archivo .elegir-archivo {
+    display: none;
+  }
+  /* Mientras se lee, la tarjeta ocupa el lugar del paso. */
+  app-importaciones .paso.leyendo-celular {
+    display: none;
+  }
+
+  /* La lectura: una tarjeta centrada con el archivo, la barra de progreso y el aviso que rota. */
+  app-importaciones > .leyendo-tarjeta {
+    display: grid;
+    justify-items: center;
+    gap: var(--e-2);
+    margin: var(--e-4) 0;
+    padding: var(--e-5) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    text-align: center;
+  }
+  app-importaciones > .leyendo-tarjeta > svg {
+    color: var(--tono);
+  }
+  app-importaciones > .leyendo-tarjeta > .leyendo-archivo {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  app-importaciones > .leyendo-tarjeta > .barra-progreso {
+    width: 100%;
+    height: 8px;
+    margin: var(--e-2) 0;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--superficie-3);
+  }
+  /* No se sabe cuánto falta: la barra va y viene en vez de llenarse. */
+  app-importaciones > .leyendo-tarjeta > .barra-progreso > i {
+    display: block;
+    width: 40%;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--tono);
+    animation: barra-progreso-importar 1.4s ease-in-out infinite alternate;
+  }
+  app-importaciones > .leyendo-tarjeta > p.leyendo {
+    margin: 0;
+    font-size: var(--texto-md);
+    color: var(--texto);
+  }
+
+  /* El pie fijo del paso 1: la acción de 52 px y, si está apagada, su motivo arriba. El formulario deja su alto abajo. */
+  app-importaciones:has(> .pie-importar) {
+    padding-bottom: calc(69px + var(--e-4));
+  }
+  app-importaciones > .ficha-pie.pie-importar {
+    flex-direction: column;
+    gap: var(--e-2);
+  }
+  app-importaciones > .ficha-pie.pie-importar > button {
+    flex: none;
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-importaciones > .ficha-pie.pie-importar > button[aria-disabled='true'] {
+    background: var(--superficie-3);
+    border-color: var(--borde);
+    color: var(--texto-deshabilitado);
+  }
+  app-importaciones > .ficha-pie.pie-importar > .motivo-accion {
+    margin: 0;
+    font-size: var(--texto-sm);
+  }
+  @keyframes barra-progreso-importar {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(150%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    app-importaciones > .leyendo-tarjeta > .barra-progreso > i {
+      width: 55%;
+      animation: none;
+    }
+  }
+}

@@ -2,6 +2,20 @@
   <h1>Importar lista de precios</h1>
 </app-barra-acciones>
 
+@if (celular && auth.esDueno()) {
+  <ol class="pasos-celular" [attr.aria-label]="'Paso ' + pasoActual() + ' de 4'">
+    @for (nombre of nombresDePaso; track nombre; let i = $index) {
+      <li
+        [class.activo]="i + 1 === pasoActual()"
+        [class.hecho]="i + 1 < pasoActual()"
+        [attr.aria-current]="i + 1 === pasoActual() ? 'step' : null"
+      >
+        {{ i + 1 }} {{ nombre }}
+      </li>
+    }
+  </ol>
+}
+
 @if (auth.esDueno()) {
   <p class="ayuda">
     Subí la lista del proveedor (Excel, CSV o PDF), indicá en qué columnas están el código y el costo, y
@@ -55,7 +69,7 @@
       <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
     </section>
   } @else {
-  <section class="paso panel">
+  <section class="paso panel" [class.leyendo-celular]="celular && cargandoMuestra()">
     <h2>1. Proveedor y archivo</h2>
     <div class="fila">
       <div class="campo">
@@ -78,7 +92,37 @@
   </section>
 
   @if (cargandoMuestra()) {
-    <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+    @if (celular) {
+      <section class="leyendo-tarjeta">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" />
+          <path d="M14 3v5h5M9 13h6M9 17h6" />
+        </svg>
+        <b class="leyendo-archivo">{{ archivo()?.name }}</b>
+        <div class="barra-progreso" role="progressbar" aria-label="Leyendo la lista"><i></i></div>
+        <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+      </section>
+    } @else {
+      <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+    }
+  }
+
+  <!-- movil-sectores T13a: en el celular la acción del paso 1 queda fija abajo, sobre la barra de destinos. -->
+  @if (celular && pasoActual() === 1) {
+    <div class="ficha-pie en-pagina pie-importar">
+      @if (motivoElegirArchivo(); as motivoPie) {
+        <p id="motivo-elegir-archivo" class="motivo-accion" role="status">{{ motivoPie }}</p>
+      }
+      <button
+        type="button"
+        class="primario"
+        [attr.aria-disabled]="ariaDe(motivoElegirArchivo())"
+        [attr.aria-describedby]="motivoElegirArchivo() ? 'motivo-elegir-archivo' : null"
+        (click)="elegirDesdeElPie()"
+      >
+        Elegir archivo…
+      </button>
+    </div>
   }
 
   @if (muestra(); as m) {

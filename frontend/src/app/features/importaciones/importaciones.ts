@@ -19,6 +19,7 @@ import { map } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { esCelular } from '../../shared/es-celular';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -81,6 +82,10 @@ const SEGUNDOS_POR_AVISO = 3;
 const ADVERTENCIAS_POR_TANDA = 100;
 /** S5: lo que se explica al intentar confirmar sin ninguna fila para aplicar (el mismo texto de la pantalla). */
 const MOTIVO_SIN_FILAS = 'Elegí al menos una fila.';
+/** T13a: lo que explica el pie del celular mientras se lee la lista, y por eso «Elegir archivo…» está apagado. */
+const MOTIVO_LEYENDO = 'Esperá a que termine de leerse la lista.';
+/** T13a: los pasos de la barra de arriba del celular. */
+const NOMBRES_DE_PASO = ['Archivo', 'Columnas', 'Revisar', 'Confirmar'];
 /** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
 type Accion = 'confirmar';
 
@@ -208,6 +213,20 @@ export class Importaciones implements OnInit {
     () => this.cargandoMuestra() || this.generando() || this.aplicando(),
   );
   protected readonly resumen = signal<Importacion | null>(null);
+  /**
+   * En el celular (movil-sectores T13a) la pantalla se ve distinta: una barra de cuatro pasos arriba, un pie fijo con la
+   * acción del paso 1 y la lectura como tarjeta. Es sólo presentación: se lee al abrir, no sigue la rotación, y en
+   * escritorio y tablet nada de eso entra en el DOM.
+   */
+  protected readonly celular = esCelular();
+  protected readonly nombresDePaso = NOMBRES_DE_PASO;
+  /** El paso de la barra: 1 archivo, 2 columnas, 3 revisar (la vista previa) y 4 confirmar (ya aplicada). */
+  protected readonly pasoActual = computed(() =>
+    this.resumen() !== null ? 4 : this.vistaPrevia() !== null ? 3 : this.muestra() !== null ? 2 : 1,
+  );
+  /** Por qué la acción del pie del paso 1 no se puede usar: null cuando se puede (S5). */
+  protected readonly motivoElegirArchivo = computed(() => (this.trabajandoConLaLista() ? MOTIVO_LEYENDO : null));
+  private readonly selectorArchivo = viewChild(SelectorArchivo);
   /** El backend detectó que la lista cambió desde la vista previa (409) y no se pudo pedir la nueva. */
   protected readonly conflicto = signal(false);
   protected readonly rubros = signal<Rubro[]>([]);
@@ -541,6 +560,12 @@ export class Importaciones implements OnInit {
     this.proveedorId.set(valor === '' ? null : Number(valor));
     this.precargarLista();
     this.precargarMapeo();
+  }
+
+  /** La acción del pie del celular: abre el mismo selector de archivos que el del paso, salvo que se esté leyendo. */
+  protected elegirDesdeElPie(): void {
+    if (this.motivoElegirArchivo() !== null) return;
+    this.selectorArchivo()?.abrir();
   }
 
   protected elegirArchivo(archivo: File | null): void {

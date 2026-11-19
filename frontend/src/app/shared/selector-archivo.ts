@@ -127,7 +127,8 @@ export class SelectorArchivo {
   protected readonly arrastrando = signal(false);
   private readonly entrada = viewChild.required<ElementRef<HTMLInputElement>>('entrada');
 
-  protected abrir(): void {
+  /** Abre el selector de archivos del sistema. Es público para que una pantalla pueda ofrecer la misma acción en otro lugar (el pie fijo del celular). */
+  abrir(): void {
     this.entrada().nativeElement.click();
   }
 
