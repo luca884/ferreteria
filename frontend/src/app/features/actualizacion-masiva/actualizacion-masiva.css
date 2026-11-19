@@ -132,3 +132,133 @@ table.cambios .detalle-fila {
 .resultado-recortado {
   margin-top: var(--e-2);
 }
+
+@media (max-width: 639.98px) {
+  :host:has(.en-pagina) {
+    /* El espacio va al final de la página, también cuando hay vista previa o confirmación. */
+    padding-bottom: 77px;
+  }
+  :host:has(.en-pagina .pista) {
+    padding-bottom: 134px;
+  }
+  form.paso:has(> .en-pagina) {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  form.paso > h2 {
+    border: 0;
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  form.paso > .fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--e-3);
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+  }
+  form.paso > .fila:first-of-type {
+    margin-bottom: 0;
+    border-bottom: 0;
+    border-radius: var(--radio-lg) var(--radio-lg) 0 0;
+  }
+  form.paso > .fila:has(.casilla) {
+    padding-top: 0;
+    border-top: 0;
+    border-radius: 0 0 var(--radio-lg) var(--radio-lg);
+  }
+  .fila .campo { min-width: 0; }
+  .campo :is(select, input, button) {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  .casilla { min-height: var(--alto-tactil); }
+  button#modo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-2);
+    text-align: left;
+    background: var(--superficie);
+    border: 1px solid var(--borde-fuerte);
+  }
+  .fila-generar.en-pagina {
+    display: grid;
+    gap: var(--e-2);
+  }
+  .fila-generar.en-pagina > button { min-height: 52px; }
+  .fila-generar.en-pagina .pista { text-align: center; }
+
+  .opcion-masiva {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 60px;
+    padding: var(--e-2) var(--e-3);
+    border-bottom: 1px solid var(--borde);
+    cursor: pointer;
+  }
+  .opcion-masiva:last-child { border-bottom: 0; }
+  .opcion-masiva:has(input:checked) { background: var(--acento-suave); }
+  .opcion-masiva small { display: block; color: var(--texto-suave); }
+  .opcion-masiva input { justify-self: center; accent-color: var(--acento); }
+
+  .vista-previa .tarjetas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+  }
+  .vista-previa .tarjeta { display: grid; align-content: start; min-width: 0; }
+  .vista-previa .tarjeta strong { grid-row: 1; }
+  .lista-masiva {
+    display: grid;
+    gap: var(--e-2);
+    margin: 0 0 var(--e-3);
+    padding: 0;
+    list-style: none;
+  }
+  .lista-masiva > li {
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    overflow-wrap: anywhere;
+  }
+  .lista-masiva > .fuerte { background: var(--advertencia-fondo); }
+  .cambio-celular {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--e-2);
+  }
+  .precio-celular { text-align: right; }
+  .precio-celular > strong,
+  .antes-ahora > strong { color: var(--acento-profundo); }
+  .resultado-articulo { display: grid; }
+  .antes-ahora {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+    margin-top: var(--e-2);
+  }
+  .antes-ahora > strong { text-align: right; }
+  .errores-celular summary {
+    align-content: center;
+    min-height: var(--alto-tactil);
+    cursor: pointer;
+  }
+  .confirmacion {
+    background: var(--advertencia-fondo);
+    border-color: var(--advertencia-borde);
+    border-inline-start-color: var(--advertencia-marca);
+  }
+  .confirmacion .fila { display: grid; }
+  .vista-previa button {
+    min-height: var(--alto-tactil);
+    width: 100%;
+  }
+}
