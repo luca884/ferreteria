@@ -1,3 +1,21 @@
+@if (celular) {
+  <!-- movil-sectores T13c: las tarjetas de conteo y el filtro «Tipo» son una sola fila; tocar un conteo filtra. -->
+  <div class="conteos-celular" role="group" aria-label="Tipo de cambio">
+    @for (tipo of conteosVisibles(); track tipo) {
+      <button
+        type="button"
+        class="conteo-celular"
+        [class.con-error]="tipo === 'conError'"
+        [attr.aria-pressed]="tipoFiltrado() === tipo"
+        (click)="tocarConteo(tipo)"
+      >
+        <b>{{ cantidadPorTipo()[tipo] | number }}</b>
+        <span>{{ nombreDeTipo(tipo) }}</span>
+      </button>
+    }
+  </div>
+}
+
 <div class="filtros">
   @if (variasHojas()) {
     <div class="campo">
@@ -10,17 +28,19 @@
       </select>
     </div>
   }
-  <div class="campo">
-    <label for="filtroTipo">Tipo</label>
-    <select id="filtroTipo" (change)="filtrarPorTipo($any($event.target).value)">
-      <option value="" [selected]="tipoFiltrado() === null">Todos los tipos</option>
-      @for (tipo of tipos; track tipo) {
-        <option [value]="tipo" [selected]="tipoFiltrado() === tipo">
-          {{ nombreDeTipo(tipo) }} ({{ cantidadPorTipo()[tipo] | number }})
-        </option>
-      }
-    </select>
-  </div>
+  @if (!celular) {
+    <div class="campo">
+      <label for="filtroTipo">Tipo</label>
+      <select id="filtroTipo" (change)="filtrarPorTipo($any($event.target).value)">
+        <option value="" [selected]="tipoFiltrado() === null">Todos los tipos</option>
+        @for (tipo of tipos; track tipo) {
+          <option [value]="tipo" [selected]="tipoFiltrado() === tipo">
+            {{ nombreDeTipo(tipo) }} ({{ cantidadPorTipo()[tipo] | number }})
+          </option>
+        }
+      </select>
+    </div>
+  }
   <p class="cuenta-elegidas" aria-live="polite">
     {{ elegidas() | number }} de {{ elegibles() | number }} filas elegidas
   </p>
@@ -35,6 +55,121 @@
   }
 </div>
 
+@if (celular) {
+  <!-- movil-sectores T13c: una tarjeta por fila (casilla de 44 px y el cuerpo, que abre la hoja con el detalle). -->
+  <ul class="filas-celular" aria-label="Filas de la vista previa">
+    @for (f of visibles(); track f.clave) {
+      <li
+        class="fila-celular"
+        [class.fuerte]="f.cambio?.variacionFuerte"
+        [class.con-error]="f.tipo === 'conError'"
+        [class.marcada]="esElegible(f) && estaMarcada(f)"
+      >
+        @if (esElegible(f)) {
+          <label class="casilla-celular">
+            <input
+              type="checkbox"
+              [checked]="estaMarcada(f)"
+              [attr.aria-label]="etiquetaDeCasilla(f)"
+              (change)="alternar(f, $any($event.target).checked)"
+            />
+          </label>
+          <button type="button" class="fila-celular-cuerpo" aria-haspopup="dialog" (click)="abrirDetalle(f, $event)">
+            <ng-container *ngTemplateOutlet="cuerpoDeFila; context: { $implicit: f }" />
+          </button>
+        } @else {
+          <span class="casilla-celular" aria-hidden="true"></span>
+          <div class="fila-celular-cuerpo">
+            <ng-container *ngTemplateOutlet="cuerpoDeFila; context: { $implicit: f }" />
+          </div>
+        }
+        @if (f.tipo === 'conError' && f.mensaje) {
+          <p class="fila-celular-error">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 2 20h20L12 3Z" />
+              <path d="M12 10v4M12 17h.01" />
+            </svg>
+            <span>{{ f.mensaje }}</span>
+          </p>
+        }
+      </li>
+    }
+  </ul>
+
+  <ng-template #cuerpoDeFila let-f>
+    <span class="fila-celular-texto">
+      <span class="fila-celular-descripcion">
+        {{ f.descripcion || 'Fila ' + f.fila }}
+        @if (f.cambio && !f.cambio.activo) {
+          <span class="etiqueta">Inactivo</span>
+        }
+      </span>
+      @if (f.codigo) {
+        <span class="fila-celular-codigo">{{ f.codigo }}</span>
+      }
+      <span class="fila-celular-tipo">
+        <span class="etiqueta etiqueta-{{ f.tipo }}">{{ etiqueta(f.tipo) }}</span>
+        @if (f.cambio?.variacionFuerte) {
+          <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
+        }
+      </span>
+    </span>
+    @if (f.tipo !== 'conError') {
+      <span class="fila-celular-plata">
+        <span class="fila-celular-precio">{{ precioNuevo(f) }}</span>
+        @if (f.cambio) {
+          <span class="fila-celular-antes">antes <s>{{ precioAnterior(f) }}</s></span>
+        }
+      </span>
+    }
+  </ng-template>
+
+  @if (filaDelDetalle(); as f) {
+    <app-hoja-inferior [titulo]="f.descripcion || 'Fila ' + f.fila" [subtitulo]="ubicacion(f)" (cerrar)="cerrarDetalle()">
+      <div class="detalle-celular">
+        <p class="detalle-celular-tipo">
+          <span class="etiqueta etiqueta-{{ f.tipo }}">{{ etiqueta(f.tipo) }}</span>
+          @if (f.cambio?.variacionFuerte) {
+            <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
+          }
+          @if (f.cambio && !f.cambio.activo) {
+            <span class="etiqueta">Inactivo</span>
+          }
+        </p>
+        <dl class="detalle-fila-celular">
+          <div>
+            <dt>Costo anterior</dt>
+            <dd>{{ costoAnterior(f) }}</dd>
+          </div>
+          <div>
+            <dt>Costo nuevo</dt>
+            <dd>{{ costoNuevo(f) }}</dd>
+          </div>
+          <div>
+            <dt>Precio anterior</dt>
+            <dd>{{ precioAnterior(f) }}</dd>
+          </div>
+          <div>
+            <dt>Precio nuevo</dt>
+            <dd>{{ precioNuevo(f) }}</dd>
+          </div>
+        </dl>
+        @if (detalle(f).length > 0) {
+          <ul class="detalle-lineas">
+            @for (linea of detalle(f); track $index) {
+              <li>{{ linea }}</li>
+            }
+          </ul>
+        }
+        <label class="incluir-fila">
+          <input type="checkbox" [checked]="estaMarcada(f)" (change)="alternar(f, $any($event.target).checked)" />
+          Incluir esta fila
+        </label>
+        <button type="button" class="accion-hoja" (click)="cerrarDetalle()">Cerrar</button>
+      </div>
+    </app-hoja-inferior>
+  }
+} @else {
 <div class="grilla-contenedor">
   <table class="filas-vista-previa" aria-label="Filas de la vista previa">
     <thead>
@@ -100,6 +235,7 @@
     </tbody>
   </table>
 </div>
+}
 
 @if (filtradas().length === 0) {
   <p class="sin-filas ayuda">No hay filas de ese tipo en esta vista.</p>

@@ -6069,3 +6069,384 @@ app-cuenta-cliente .acciones-cuenta {
     color: var(--texto-deshabilitado);
   }
 }
+
+/*
+ * Importar, paso 3: revisar cambios en el celular (artboard 03 de `design/movil-precios`, T13c, S2, S5, S7). Las tarjetas
+ * de conteo y el filtro «Tipo» son una sola fila de conteos que filtra (`.conteos-celular`); la tabla de 11 columnas es
+ * una lista de tarjetas con la casilla de 44 px, la descripción con su código, el tipo y el precio nuevo con el anterior
+ * tachado (`.filas-celular`); tocar una tarjeta abre la hoja inferior con el detalle y «Incluir esta fila»; y «No están en
+ * la lista» queda plegable, con sus filas como tarjetas (`tabla-tarjetas` + `data-etiqueta`). Todo ese marcado sólo existe
+ * en el DOM del celular (`esCelular()`); lo que queda de siempre (hoja, botones de marcar, paginado) se ajusta acá. Los
+ * estilos de los componentes llevan el atributo de Angular en cada parte del selector, así que se sube la especificidad
+ * con el nombre del componente. Escritorio y tablet no cambian (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  /* Menos aire alrededor: la lista de tarjetas aprovecha el ancho. */
+  app-importaciones:has(> .pasos-celular) .paso.panel.vista-previa {
+    padding: var(--e-3) var(--e-2) var(--e-4);
+  }
+
+  /* La fila de conteos: cinco botones de 56 px de alto que se reparten el ancho; si no entran, se desplaza de costado. */
+  app-vista-previa-tabla .conteos-celular {
+    display: flex;
+    gap: var(--e-1);
+    margin: 0 0 var(--e-3);
+    padding-bottom: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  app-vista-previa-tabla .conteos-celular > button.conteo-celular {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: min-content;
+    min-height: 56px;
+    padding: 6px var(--e-2);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+  }
+  app-vista-previa-tabla .conteo-celular > b {
+    display: block;
+    font-family: var(--fuente-mono);
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+  app-vista-previa-tabla .conteo-celular > span {
+    display: block;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    line-height: 1.25;
+  }
+  app-vista-previa-tabla .conteos-celular > button.conteo-celular[aria-pressed='true'] {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+  }
+  app-vista-previa-tabla .conteo-celular[aria-pressed='true'] > :is(b, span) {
+    color: var(--tono);
+  }
+  app-vista-previa-tabla .conteo-celular.con-error > b {
+    color: var(--error);
+  }
+
+  /* El filtro de hoja, la cuenta de elegidas y los cuatro botones de marcar: renglones de 44 px (clases repetidas para ganarle al CSS del componente). */
+  app-vista-previa-tabla .filtros.filtros {
+    gap: var(--e-2);
+    margin-bottom: var(--e-2);
+  }
+  app-vista-previa-tabla .filtros.filtros > .campo.campo {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  app-vista-previa-tabla .filtros select {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  app-vista-previa-tabla .filtros.filtros > .cuenta-elegidas.cuenta-elegidas {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+  }
+  app-vista-previa-tabla .acciones.acciones {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+    margin-bottom: var(--e-3);
+  }
+  app-vista-previa-tabla .acciones > button.chico {
+    min-height: var(--alto-tactil);
+    white-space: normal;
+  }
+
+  /* La lista: una tarjeta continua con un renglón por fila. */
+  app-vista-previa-tabla ul.filas-celular {
+    margin: 0 0 var(--e-3);
+    padding: 0;
+    list-style: none;
+    overflow: hidden;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-vista-previa-tabla li.fila-celular {
+    display: grid;
+    grid-template-columns: var(--alto-tactil) minmax(0, 1fr);
+    align-items: center;
+    min-height: 76px;
+    border-top: 1px solid var(--borde-suave);
+    background: var(--superficie);
+  }
+  app-vista-previa-tabla li.fila-celular:first-child {
+    border-top: 0;
+  }
+  /* La casilla: el renglón entero de 44 px es el blanco; la que no se elige deja el hueco para alinear. */
+  app-vista-previa-tabla .casilla-celular {
+    display: grid;
+    place-items: center;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+  }
+  app-vista-previa-tabla .casilla-celular > input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--tono);
+  }
+  /* El cuerpo es el botón que abre el detalle: ocupa lo que queda del renglón. */
+  app-vista-previa-tabla .fila-celular-cuerpo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--e-2);
+    min-width: 0;
+    min-height: 76px;
+    padding: 10px var(--e-3) 10px 0;
+    text-align: left;
+  }
+  app-vista-previa-tabla button.fila-celular-cuerpo {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--texto);
+    font-weight: 400;
+    white-space: normal;
+  }
+  app-vista-previa-tabla .fila-celular-texto {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  app-vista-previa-tabla .fila-celular-descripcion {
+    display: -webkit-box;
+    overflow: hidden;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  app-vista-previa-tabla li.fila-celular:not(.marcada, .con-error) .fila-celular-descripcion {
+    color: var(--texto-tenue);
+  }
+  app-vista-previa-tabla .fila-celular-descripcion > .etiqueta {
+    margin-left: var(--e-1);
+  }
+  app-vista-previa-tabla .fila-celular-codigo {
+    color: var(--texto-tenue);
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    overflow-wrap: anywhere;
+  }
+  app-vista-previa-tabla .fila-celular-tipo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--e-1);
+  }
+  app-vista-previa-tabla .fila-celular-plata {
+    display: grid;
+    gap: 2px;
+    text-align: right;
+  }
+  app-vista-previa-tabla .fila-celular-precio {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  app-vista-previa-tabla .fila-celular-antes {
+    color: var(--texto-tenue);
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    white-space: nowrap;
+  }
+  /* El mensaje de una fila con error: en rojo y con ícono, abajo de la tarjeta y alineado con el texto. */
+  app-vista-previa-tabla .fila-celular-error {
+    grid-column: 2;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--e-2);
+    margin: 0;
+    padding: 0 var(--e-3) 10px 0;
+    color: var(--error);
+    font-size: var(--texto-sm);
+    overflow-wrap: anywhere;
+  }
+  app-vista-previa-tabla .fila-celular-error > svg {
+    flex: none;
+    margin-top: 2px;
+  }
+  app-vista-previa-tabla li.fila-celular.con-error .fila-celular-cuerpo {
+    min-height: 0;
+    padding-bottom: 4px;
+  }
+  app-vista-previa-tabla li.fila-celular.con-error {
+    align-items: start;
+    background: var(--superficie);
+  }
+  app-vista-previa-tabla li.fila-celular.con-error > .casilla-celular {
+    height: 0;
+  }
+
+  /* El paginado: el texto arriba y los dos botones de 44 px lado a lado (clases repetidas para ganarle al CSS del componente). */
+  app-vista-previa-tabla .paginado.paginado {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+    margin-bottom: var(--e-3);
+  }
+  app-vista-previa-tabla .paginado.paginado > .paginado-texto {
+    grid-column: 1 / -1;
+    order: -1;
+    text-align: center;
+  }
+  app-vista-previa-tabla .paginado > button.chico,
+  app-importaciones details.no-estan .paginado > button.chico {
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+  }
+
+  /* La hoja del detalle: el costo y el precio en renglones de dos extremos, «Incluir esta fila» de 52 px y «Cerrar». */
+  app-vista-previa-tabla .hoja-inferior-subtitulo {
+    font-family: inherit;
+    font-size: var(--texto-sm);
+    overflow-wrap: anywhere;
+  }
+  app-vista-previa-tabla .detalle-celular-tipo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--e-1);
+    margin: 0 0 var(--e-2);
+  }
+  app-vista-previa-tabla .detalle-fila-celular {
+    margin: 0 0 var(--e-2);
+  }
+  app-vista-previa-tabla .detalle-fila-celular > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--e-3);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-vista-previa-tabla .detalle-fila-celular > div > dd {
+    margin: 0;
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-align: right;
+  }
+  app-vista-previa-tabla ul.detalle-lineas {
+    margin: 0 0 var(--e-2);
+    padding: 0;
+    list-style: none;
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+  }
+  app-vista-previa-tabla ul.detalle-lineas > li {
+    padding: 2px 0;
+    overflow-wrap: anywhere;
+  }
+  app-vista-previa-tabla label.incluir-fila {
+    display: flex;
+    align-items: center;
+    gap: var(--e-3);
+    min-height: 52px;
+    color: var(--texto);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+  app-vista-previa-tabla label.incluir-fila > input[type='checkbox'] {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--tono);
+  }
+  app-vista-previa-tabla .detalle-celular > .accion-hoja {
+    justify-content: center;
+    color: var(--acento-fuerte);
+    font-weight: 600;
+  }
+
+  /* «Hay N filas con error»: la alerta ámbar del artboard. */
+  app-importaciones:has(> .pasos-celular) .vista-previa p.aviso-errores {
+    padding: var(--e-3);
+    border: 1px solid var(--advertencia-borde);
+    border-radius: var(--radio-lg);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+    font-size: var(--texto-sm);
+  }
+
+  /* «No están en la lista (N)»: un renglón plegable de 56 px con la flecha; abierto, sus artículos son tarjetas. */
+  app-importaciones:has(> .pasos-celular) details.no-estan {
+    margin: var(--e-3) 0;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    overflow: hidden;
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-3);
+    min-height: 56px;
+    margin: 0;
+    padding: var(--e-2) var(--e-4);
+    list-style: none;
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan > summary::-webkit-details-marker {
+    display: none;
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan > summary::after {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--texto-tenue);
+    border-bottom: 2px solid var(--texto-tenue);
+    transform: rotate(-45deg);
+    transition: transform var(--transicion);
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan[open] > summary {
+    border-bottom: 1px solid var(--borde);
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan[open] > summary::after {
+    transform: rotate(45deg);
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan > :not(summary) {
+    margin-inline: var(--e-3);
+  }
+  app-importaciones:has(> .pasos-celular) details.no-estan > p.ayuda {
+    margin-block: var(--e-2);
+    font-size: var(--texto-xs);
+  }
+  app-importaciones details.no-estan .grilla-contenedor:has(> table.tabla-tarjetas) {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  app-importaciones details.no-estan table.tabla-tarjetas td.codigo {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  app-importaciones details.no-estan .paginado.paginado {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+    margin-bottom: var(--e-3);
+  }
+  app-importaciones details.no-estan .paginado.paginado > .paginado-texto {
+    grid-column: 1 / -1;
+    order: -1;
+    text-align: center;
+  }
+}

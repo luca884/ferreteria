@@ -418,16 +418,19 @@
         todas marcadas. Las tarjetas cuentan lo elegido.
       </p>
 
-      <div class="tarjetas">
-        @for (t of tarjetasDeLaVistaPrevia(); track t.etiqueta) {
-          <div class="tarjeta">
-            {{ t.etiqueta }} <strong>{{ t.valor | number }}</strong>
-            @if (t.total !== null) {
-              <span class="de-total"> de {{ t.total | number }}</span>
-            }
-          </div>
-        }
-      </div>
+      <!-- movil-sectores T13c: en el celular las tarjetas y el filtro «Tipo» son la fila de conteos de la tabla. -->
+      @if (!celular) {
+        <div class="tarjetas">
+          @for (t of tarjetasDeLaVistaPrevia(); track t.etiqueta) {
+            <div class="tarjeta">
+              {{ t.etiqueta }} <strong>{{ t.valor | number }}</strong>
+              @if (t.total !== null) {
+                <span class="de-total"> de {{ t.total | number }}</span>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (vp.conteos.salteadas > 0) {
         <p class="ayuda salteadas">
@@ -484,7 +487,7 @@
           <p class="ayuda">Artículos activos del proveedor que no figuran en el archivo. No se tocan.</p>
           @if (noEstanAbierto()) {
             <div class="grilla-contenedor">
-              <table>
+              <table [class.tabla-tarjetas]="celular">
                 <thead>
                   <tr>
                     <th>Código interno</th>
@@ -495,9 +498,9 @@
                 <tbody>
                   @for (a of noEstanVisibles(); track a.id) {
                     <tr>
-                      <td class="codigo">{{ a.codigoInterno }}</td>
-                      <td class="codigo">{{ a.codigoProveedor ?? '—' }}</td>
-                      <td>{{ a.descripcion }}</td>
+                      <td class="codigo" [attr.data-etiqueta]="celular ? 'Código interno' : null">{{ a.codigoInterno }}</td>
+                      <td class="codigo" [attr.data-etiqueta]="celular ? 'Código del proveedor' : null">{{ a.codigoProveedor ?? '—' }}</td>
+                      <td [attr.data-etiqueta]="celular ? 'Descripción' : null">{{ a.descripcion }}</td>
                     </tr>
                   }
                 </tbody>

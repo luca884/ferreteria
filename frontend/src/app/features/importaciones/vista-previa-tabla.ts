@@ -1,7 +1,9 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input, output, signal } from '@angular/core';
 import { formatearCosto } from '../../core/formato/monto';
 import { porUnidad } from '../../core/formato/unidad';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { detalleDeFila, etiquetaDeTipo } from './detalle-fila';
 import {
   FilaDeVista,
@@ -34,14 +36,22 @@ const PLURALES: Record<TipoFila, string> = {
 
 const SIN_DATO = '—';
 
+/** Los conteos que la fila del celular muestra siempre; «Cambian de moneda» y «Corrigen» sólo si el archivo tiene de esas filas. */
+const CONTEOS_FIJOS: readonly TipoFila[] = ['suben', 'bajan', 'nuevos', 'sinCambio', 'conError'];
+
 /**
  * Las filas de la vista previa para revisarlas y elegirlas (presentacional): filtros por hoja y por tipo, páginas de
  * 100 y una casilla por fila. Las filas con error no tienen casilla. No guarda la selección: recibe la actual y emite
  * la nueva cada vez que cambia.
+ *
+ * En el celular (movil-sectores T13c, `esCelular()` se lee una vez al crearlo) el filtro «Tipo» y las tarjetas de arriba
+ * son una sola fila de conteos que filtra, y la tabla de 11 columnas es una tarjeta por fila; tocarla abre una hoja
+ * inferior con el detalle y «Incluir esta fila». Todo escribe en el mismo estado y llama a los mismos manejadores que los
+ * controles de siempre. En escritorio y tablet nada de eso entra en el DOM.
  */
 @Component({
   selector: 'app-vista-previa-tabla',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, NgTemplateOutlet, HojaInferior],
   templateUrl: './vista-previa-tabla.html',
   styleUrl: './vista-previa-tabla.css',
 })
@@ -56,6 +66,7 @@ export class VistaPreviaTabla {
   protected readonly tipoFiltrado = signal<TipoFila | null>(null);
   private readonly paginaPedida = signal(0);
 
+  protected readonly celular = esCelular();
   protected readonly tipos = TIPOS;
   protected readonly variasHojas = computed(() => this.hojas().length > 1);
 
@@ -93,6 +104,18 @@ export class VistaPreviaTabla {
     return this.filas().filter((f) => esElegible(f) && seleccion.has(f.clave)).length;
   });
   protected readonly cantidadDelFiltro = computed(() => this.filtradas().filter(esElegible).length);
+
+  /** Los conteos de la fila del celular, en el orden de los tipos del filtro. */
+  protected readonly conteosVisibles = computed(() =>
+    TIPOS.filter((tipo) => CONTEOS_FIJOS.includes(tipo) || this.cantidadPorTipo()[tipo] > 0),
+  );
+
+  /** La fila cuyo detalle está abierto en la hoja del celular (su clave), o null. */
+  private readonly detalleAbierto = signal<string | null>(null);
+  protected readonly filaDelDetalle = computed(() => {
+    const clave = this.detalleAbierto();
+    return clave === null ? null : (this.filas().find((f) => f.clave === clave) ?? null);
+  });
 
   protected nombreDeTipo(tipo: TipoFila): string {
     return PLURALES[tipo];
@@ -145,6 +168,27 @@ export class VistaPreviaTabla {
       return formatearCosto(fila.alta.precioNuevo, 'ARS') + porUnidad(fila.alta.unidad);
     }
     return SIN_DATO;
+  }
+
+  /** Tocar un conteo filtra por ese tipo (el mismo manejador que el select) y tocarlo de nuevo saca el filtro. */
+  protected tocarConteo(tipo: TipoFila): void {
+    this.filtrarPorTipo(this.tipoFiltrado() === tipo ? '' : tipo);
+  }
+
+  /** «Código C-1 · Hoja «Lista», fila 37»: dónde está la fila en el archivo. */
+  protected ubicacion(fila: FilaDeVista): string {
+    const donde = `Hoja «${this.nombreDeHoja(fila.hoja)}», fila ${fila.fila}`;
+    return fila.codigo ? `Código ${fila.codigo} · ${donde}` : donde;
+  }
+
+  /** Abre la hoja de la fila. El foco pasa antes a la tarjeta: así `appTrampaFoco` sabe a quién devolverlo aunque el navegador no enfoque un botón al tocarlo. */
+  protected abrirDetalle(fila: FilaDeVista, evento: Event): void {
+    (evento.currentTarget as HTMLElement).focus();
+    this.detalleAbierto.set(fila.clave);
+  }
+
+  protected cerrarDetalle(): void {
+    this.detalleAbierto.set(null);
   }
 
   protected filtrarPorHoja(valor: string): void {
