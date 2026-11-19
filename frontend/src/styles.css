@@ -6450,3 +6450,256 @@ app-cuenta-cliente .acciones-cuenta {
     text-align: center;
   }
 }
+
+/*
+ * Importar, paso 4: confirmar, resultado y errores en el celular (artboard 04 de `design/movil-precios`, T13d, S2, S5, S7).
+ * Riesgo alto: es la pantalla que confirma una importación. Acá sólo cambia cómo se ve; el botón, la casilla y el motivo son
+ * los mismos controles de siempre (una sola definición en `importaciones.html`), con sus mismas guardas.
+ *  - Revisar termina en un pie fijo con «Continuar con N filas» (`.pie-revisar`); «Confirmar» es otra pantalla
+ *    (`.confirmar-celular`): los conteos de lo elegido, la única decisión como una fila de 44 px o más y el resumen, con el
+ *    pie «Volver» + «Confirmar importación» (`.pie-confirmar`). Mientras se confirma se esconden la revisión y los pasos
+ *    de arriba (siguen en el DOM, con su estado).
+ *  - El resultado (`section.resumen.resumen-celular`) cubre toda la pantalla y su acción queda en un pie fijo.
+ *  - Los errores llevan su salida al lado: el pie del paso 1 pasa a «Elegir otro archivo» y el error de dólares sin moneda
+ *    trae «Ir a Más ajustes» (`.aviso-dolares`).
+ * Todo cuelga de `app-importaciones` y sube la especificidad para ganarle a los estilos del componente. Escritorio y tablet no
+ * cambian (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  /* Confirmando: la pantalla es sólo el paso 4. La revisión y los pasos de arriba quedan escondidos, con su estado. */
+  app-importaciones:has(> .paso.vista-previa.confirmando) > .paso:not(.vista-previa) {
+    display: none;
+  }
+  app-importaciones .paso.vista-previa.confirmando > :not(.confirmar-celular) {
+    display: none;
+  }
+  /* El texto de ayuda de arriba (cómo se arma la importación) es de los pasos anteriores: en el paso 4 sobra. */
+  app-importaciones:has(> .paso.vista-previa.confirmando) > p.ayuda {
+    display: none;
+  }
+  app-importaciones .paso.vista-previa.confirmando {
+    padding: var(--e-3) var(--e-2) var(--e-4);
+    border: 0;
+    background: transparent;
+  }
+  app-importaciones .confirmar-celular {
+    display: grid;
+    gap: var(--e-3);
+  }
+  app-importaciones .confirmar-celular:focus {
+    outline: none;
+  }
+
+  /* Los conteos de lo que se va a aplicar, arriba. */
+  app-importaciones .conteos-confirmar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--e-2);
+  }
+  app-importaciones .conteos-confirmar > .conteo-confirmar {
+    flex: 1 1 84px;
+    min-height: 56px;
+    padding: 6px var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-importaciones .conteos-confirmar > .conteo-confirmar > b {
+    display: block;
+    font-size: var(--texto-lg);
+    font-variant-numeric: tabular-nums;
+  }
+  app-importaciones .conteos-confirmar > .conteo-confirmar > span {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+
+  /* La única decisión: una tarjeta con la casilla en una fila de 52 px (se toca toda la fila) y su aviso debajo. */
+  app-importaciones .decision-confirmar {
+    padding: var(--e-1) var(--e-4) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-importaciones .decision-confirmar > .fila {
+    display: block;
+    margin: 0;
+  }
+  app-importaciones .decision-confirmar > .fila > label.casilla {
+    display: flex;
+    align-items: center;
+    gap: var(--e-3);
+    width: 100%;
+    min-height: 52px;
+  }
+  app-importaciones .decision-confirmar > .fila > label.casilla > input[type='checkbox'] {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+  }
+  app-importaciones .decision-confirmar > p.sin-filas-elegidas {
+    margin: 0 0 var(--e-2);
+  }
+  app-importaciones .decision-confirmar > p.nuevos-sin-crear {
+    margin: 0 0 var(--e-2);
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--advertencia-borde);
+    border-radius: var(--radio-lg);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+    font-size: var(--texto-sm);
+  }
+
+  /* El resumen de qué se confirma: renglones de dos extremos. */
+  app-importaciones .datos-confirmar {
+    margin: 0;
+    padding: var(--e-1) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-importaciones .datos-confirmar > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--e-3);
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-importaciones .datos-confirmar > div:last-child {
+    border-bottom: 0;
+  }
+  app-importaciones .datos-confirmar dt {
+    color: var(--texto-suave);
+  }
+  app-importaciones .datos-confirmar dd {
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  /* El pie de confirmar: «Volver» y la acción lado a lado (la acción, más ancha) y, si está apagada, su motivo arriba. */
+  app-importaciones > .ficha-pie.pie-confirmar > .pie-fila {
+    display: flex;
+    gap: var(--e-2);
+  }
+  app-importaciones > .ficha-pie.pie-confirmar > .pie-fila > button {
+    flex: 1 1 0;
+    min-height: 52px;
+    margin: 0;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-importaciones > .ficha-pie.pie-confirmar > .pie-fila > button.confirmar {
+    flex: 2 1 0;
+  }
+  app-importaciones > .ficha-pie.pie-confirmar > .pie-fila > button:is(:disabled, [aria-disabled='true']) {
+    background: var(--superficie-3);
+    border-color: var(--borde);
+    color: var(--texto-deshabilitado);
+  }
+
+  /* El resultado: una pantalla completa con la barra de título, los conteos y el pie con su acción. */
+  app-importaciones section.resumen.resumen-celular {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-dialogo) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 0;
+    background: var(--superficie);
+  }
+  app-importaciones section.resumen.resumen-celular:focus {
+    outline: none;
+  }
+  app-importaciones section.resumen.resumen-celular > h2 {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-fijo);
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-height: 56px;
+    margin: 0;
+    padding: 0 var(--pantalla-x);
+    border-top: 3px solid var(--tono);
+    border-bottom: 1px solid var(--borde);
+    background: var(--superficie);
+    font-size: var(--texto-lg);
+  }
+  app-importaciones section.resumen.resumen-celular > :not(h2, .ficha-pie) {
+    flex: none;
+    margin-block: 0;
+    margin-inline: var(--pantalla-x);
+  }
+  app-importaciones section.resumen.resumen-celular > p.ayuda {
+    padding: var(--e-3);
+    border: 1px solid var(--exito-borde);
+    border-radius: var(--radio-lg);
+    background: var(--exito-fondo);
+    color: var(--exito);
+    font-size: var(--texto-sm);
+  }
+  app-importaciones section.resumen.resumen-celular > p.nuevos-no-creados {
+    padding: var(--e-3);
+    border: 1px solid var(--advertencia-borde);
+    border-radius: var(--radio-lg);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+    font-size: var(--texto-sm);
+  }
+  app-importaciones section.resumen.resumen-celular > .tarjetas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e-2);
+  }
+  app-importaciones section.resumen.resumen-celular > .tarjetas > .tarjeta {
+    min-height: 64px;
+    padding: var(--e-2) var(--e-3);
+  }
+  app-importaciones section.resumen.resumen-celular > .tarjetas > .tarjeta > strong {
+    font-size: var(--texto-lg);
+  }
+  app-importaciones section.resumen.resumen-celular > .ficha-pie {
+    margin: auto 0 0;
+  }
+  app-importaciones section.resumen.resumen-celular > .ficha-pie > button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+
+  /* El error de dólares sin moneda: la alerta ámbar del artboard con su salida adentro. */
+  app-importaciones .aviso-dolares {
+    display: grid;
+    gap: var(--e-2);
+    margin: 0 0 var(--e-3);
+    padding: var(--e-3);
+    border: 1px solid var(--advertencia-borde);
+    border-radius: var(--radio-lg);
+    background: var(--advertencia-fondo);
+    color: var(--advertencia);
+    font-size: var(--texto-sm);
+  }
+  app-importaciones .aviso-dolares > p {
+    margin: 0;
+  }
+  app-importaciones .aviso-dolares > button {
+    justify-self: start;
+    min-height: var(--alto-tactil);
+  }
+
+  /* La lista cambió: la salida ya existe (`.regenerar`), pegada al aviso, a todo el ancho y de 52 px. */
+  app-importaciones:has(> .pasos-celular) > button.regenerar {
+    width: 100%;
+    min-height: 52px;
+    margin-top: calc(var(--e-1) * -1);
+    border-radius: var(--radio-lg);
+  }
+}

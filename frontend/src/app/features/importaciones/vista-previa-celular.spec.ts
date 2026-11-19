@@ -831,6 +831,12 @@ describe('Revisar cambios en el celular (T13c)', () => {
     }
 
     async function confirmar() {
+      // En el celular «Confirmar importación» es del paso 4: se entra con «Continuar con N filas» (movil-sectores T13d).
+      const continuar = qa<HTMLButtonElement>('button').find((b) => normal(b.textContent).startsWith('Continuar con '));
+      if (continuar) {
+        continuar.click();
+        await refrescar();
+      }
       boton('Confirmar importación')!.click();
       await refrescar();
     }

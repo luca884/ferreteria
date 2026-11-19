@@ -2,7 +2,7 @@
   <h1>Importar lista de precios</h1>
 </app-barra-acciones>
 
-@if (celular && auth.esDueno()) {
+@if (celular && auth.esDueno() && !resumen()) {
   <ol class="pasos-celular" [attr.aria-label]="'Paso ' + pasoActual() + ' de 4'">
     @for (nombre of nombresDePaso; track nombre; let i = $index) {
       <li
@@ -22,6 +22,55 @@
     revisá los cambios antes de confirmar.
   </p>
 }
+
+<!--
+  movil-sectores T13d: lo que cambia de lugar entre escritorio, tablet y celular se define una sola vez, con sus guardas, y se
+  dibuja donde corresponde (el cuerpo, o el pie fijo del celular).
+-->
+<ng-template #decisionConfirmar>
+  <div class="fila">
+    <label class="casilla" for="crearNuevos">
+      <input
+        id="crearNuevos"
+        type="checkbox"
+        [checked]="crearNuevos()"
+        [attr.aria-describedby]="nuevosSinCrear() ? 'nuevos-sin-crear' : null"
+        (change)="cambiarCrearNuevos($any($event.target).checked)"
+      />
+      Crear los artículos nuevos
+    </label>
+  </div>
+  @if (nuevosSinCrear(); as n) {
+    <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">{{ textoNuevosSinCrear(n) }}</p>
+  }
+  <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
+  @if (sinFilasElegidas() && !nuevosSinCrear()) {
+    <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">{{ MOTIVO_SIN_FILAS }}</p>
+  }
+</ng-template>
+
+<ng-template #motivoConfirmar>
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
+</ng-template>
+
+<ng-template #botonConfirmar>
+  <button
+    type="button"
+    class="confirmar primario"
+    [disabled]="aplicando()"
+    [attr.aria-disabled]="ariaDe(motivos().confirmar)"
+    [attr.aria-describedby]="sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null"
+    (click)="confirmar()"
+  >
+    {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
+  </button>
+</ng-template>
+
+<ng-template #botonOtraLista>
+  <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
+</ng-template>
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede importar listas de precios.</p>
@@ -44,7 +93,7 @@
   }
 
   @if (resumen(); as r) {
-    <section #resumenEl class="resumen panel" role="status" tabindex="-1">
+    <section #resumenEl class="resumen panel" [class.resumen-celular]="celular" role="status" tabindex="-1">
       <h2>Importación aplicada</h2>
       <p class="ayuda">
         Archivo {{ r.archivo }}.
@@ -66,7 +115,14 @@
           <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor | number }}</strong></div>
         }
       </div>
-      <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
+      <!-- movil-sectores T13d: en el celular el resultado es una pantalla completa y su única acción queda en un pie fijo. -->
+      @if (celular) {
+        <div class="ficha-pie">
+          <ng-container *ngTemplateOutlet="botonOtraLista" />
+        </div>
+      } @else {
+        <ng-container *ngTemplateOutlet="botonOtraLista" />
+      }
     </section>
   } @else {
   <section class="paso panel" [class.leyendo-celular]="celular && cargandoMuestra()">
@@ -120,7 +176,7 @@
         [attr.aria-describedby]="motivoElegirArchivo() ? 'motivo-elegir-archivo' : null"
         (click)="elegirDesdeElPie()"
       >
-        Elegir archivo…
+        {{ textoElegirArchivo() }}
       </button>
     </div>
   }
@@ -132,6 +188,25 @@
         {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
       </button>
     </div>
+  }
+
+  <!-- movil-sectores T13d: del paso 3 al 4 («Continuar») y el pie del paso 4 con «Volver» y «Confirmar importación». -->
+  @if (celular && vistaPrevia() !== null) {
+    @if (enConfirmar()) {
+      <div class="ficha-pie en-pagina pie-importar pie-confirmar">
+        <ng-container *ngTemplateOutlet="motivoConfirmar" />
+        <div class="pie-fila">
+          <button type="button" class="volver-revisar" [disabled]="aplicando()" (click)="volverARevisar()">Volver</button>
+          <ng-container *ngTemplateOutlet="botonConfirmar" />
+        </div>
+      </div>
+    } @else {
+      <div class="ficha-pie en-pagina pie-importar pie-revisar">
+        <button type="button" class="primario" (click)="continuarAConfirmar()">
+          Continuar con {{ cantidadElegidas() | number }} {{ cantidadElegidas() === 1 ? 'fila' : 'filas' }}
+        </button>
+      </div>
+    }
   }
 
   @if (muestra(); as m) {
@@ -411,7 +486,7 @@
   }
 
   @if (vistaPrevia(); as vp) {
-    <section class="paso panel vista-previa">
+    <section class="paso panel vista-previa" [class.confirmando]="enConfirmar()" [attr.tabindex]="celular ? -1 : null">
       <h2>3. Vista previa</h2>
       <p class="ayuda">
         Todavía no se cambió nada. Revisá lo que va a pasar y elegí qué filas aplicar: al abrir están
@@ -447,6 +522,14 @@
           {{ vp.conteos.conError === 1 ? 'fila con error: no se importa' : 'filas con error: no se importan' }}.
           Filtrá por el tipo «Con error» para {{ vp.conteos.conError === 1 ? 'verla' : 'verlas' }}.
         </p>
+      }
+
+      <!-- movil-sectores T13d: el error de dólares sin moneda lleva su salida a mano; el texto es el del servidor. -->
+      @if (celular && avisoDolaresSinMoneda(); as aviso) {
+        <div class="aviso-dolares">
+          <p>{{ aviso }}</p>
+          <button type="button" class="secundario" (click)="irAMasAjustes()">Ir a Más ajustes</button>
+        </div>
       }
 
       @if (vp.advertencias.length > 0) {
@@ -527,41 +610,30 @@
         </details>
       }
 
-      <h2 class="titulo-confirmar">4. Confirmar</h2>
-      <div class="fila">
-        <label class="casilla" for="crearNuevos">
-          <input
-            id="crearNuevos"
-            type="checkbox"
-            [checked]="crearNuevos()"
-            [attr.aria-describedby]="nuevosSinCrear() ? 'nuevos-sin-crear' : null"
-            (change)="cambiarCrearNuevos($any($event.target).checked)"
-          />
-          Crear los artículos nuevos
-        </label>
-      </div>
-      @if (nuevosSinCrear(); as n) {
-        <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">{{ textoNuevosSinCrear(n) }}</p>
+      @if (!celular) {
+        <h2 class="titulo-confirmar">4. Confirmar</h2>
+        <ng-container *ngTemplateOutlet="decisionConfirmar" />
+        <ng-container *ngTemplateOutlet="motivoConfirmar" />
+        <ng-container *ngTemplateOutlet="botonConfirmar" />
+      } @else if (enConfirmar()) {
+        <!-- movil-sectores T13d: la pantalla de confirmar del celular; el botón y el motivo están en el pie fijo. -->
+        <div class="confirmar-celular" tabindex="-1">
+          <h2 class="titulo-confirmar">4. Confirmar</h2>
+          <div class="conteos-confirmar">
+            @for (c of conteosAplicados(); track c.etiqueta) {
+              <div class="conteo-confirmar"><b>{{ c.valor | number }}</b><span>{{ c.etiqueta }}</span></div>
+            }
+          </div>
+          <div class="decision-confirmar">
+            <ng-container *ngTemplateOutlet="decisionConfirmar" />
+          </div>
+          <dl class="datos-confirmar">
+            <div><dt>Archivo</dt><dd>{{ archivo()?.name }}</dd></div>
+            <div><dt>Proveedor</dt><dd>{{ nombreDelProveedor() }}</dd></div>
+            <div><dt>Filas elegidas</dt><dd>{{ cantidadElegidas() | number }}</dd></div>
+          </dl>
+        </div>
       }
-      <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
-      @if (sinFilasElegidas() && !nuevosSinCrear()) {
-        <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">{{ MOTIVO_SIN_FILAS }}</p>
-      }
-      @if (motivo.visible(); as texto) {
-        <p class="motivo-accion" role="status">{{ texto }}</p>
-      }
-      <button
-        type="button"
-        class="confirmar primario"
-        [disabled]="aplicando()"
-        [attr.aria-disabled]="ariaDe(motivos().confirmar)"
-        [attr.aria-describedby]="
-          sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null
-        "
-        (click)="confirmar()"
-      >
-        {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
-      </button>
     </section>
   }
   }

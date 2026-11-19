@@ -520,7 +520,9 @@ describe('Importar lista de precios en el celular (T13a y T13b)', () => {
 
       expect(servicio.vistaPrevia).toHaveBeenCalledTimes(1);
       expect(pasos().map((p) => p.getAttribute('aria-current'))).toEqual([null, null, 'step', null]);
-      expect(pie()).toBeNull();
+      // El pie del paso 1 ya no está; el del paso 3 (T13d) lleva sólo «Continuar con N filas».
+      expect(q('.pie-columnas')).toBeNull();
+      expect(Array.from(pie()!.querySelectorAll('button')).map((b) => normal(b.textContent))).toEqual(['Continuar con 0 filas']);
     });
   });
 
@@ -1084,13 +1086,14 @@ describe('Importar lista de precios en el celular (T13a y T13b)', () => {
       expect(servicio.vistaPrevia).not.toHaveBeenCalled();
     });
 
-    it('con la vista previa lista el pie se va (el paso 3 es de otra pantalla)', async () => {
+    it('con la vista previa lista el pie de «Ver vista previa» se va (el paso 3 tiene el suyo, de T13d)', async () => {
       await enElPaso2('celular');
 
       pie()!.querySelector<HTMLButtonElement>('button')!.click();
       await refrescar();
 
-      expect(pie()).toBeNull();
+      expect(q('.pie-columnas')).toBeNull();
+      expect(q('.pie-revisar')).not.toBeNull();
     });
 
     it('el Vendedor no ve ni el pie ni el paso', async () => {

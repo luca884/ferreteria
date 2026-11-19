@@ -5,7 +5,9 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
   OnInit,
+  afterNextRender,
   afterRenderEffect,
   computed,
   effect,
@@ -54,6 +56,7 @@ import { SelectorArchivo } from '../../shared/selector-archivo';
 import {
   FilaDeVista,
   Seleccion,
+  TIPOS_ELEGIBLES,
   cantidadDeAplicadas,
   conservarSeleccion,
   conteosConSeleccion,
@@ -87,6 +90,10 @@ const MOTIVO_SIN_FILAS = 'Elegí al menos una fila.';
 const MOTIVO_LEYENDO = 'Esperá a que termine de leerse la lista.';
 /** T13a: los pasos de la barra de arriba del celular. */
 const NOMBRES_DE_PASO = ['Archivo', 'Columnas', 'Revisar', 'Confirmar'];
+/** T13d: lo que dice el pie del paso 1 del celular cuando el aviso de arriba es de un archivo que no sirvió. */
+const TEXTO_ELEGIR_OTRO_ARCHIVO = 'Elegir otro archivo';
+/** T13d: el error de una fila que el celular acompaña con la salida a «Más ajustes» (el texto es el del servidor). */
+const AVISO_DOLARES_SIN_MONEDA = 'El costo está en dólares, pero la lista no dice la moneda.';
 /** T13b: cuántas filas del archivo muestra el celular en lugar del visor con zoom. */
 const FILAS_DE_MUESTRA = 4;
 /** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
@@ -226,11 +233,24 @@ export class Importaciones implements OnInit {
   protected readonly nombresDePaso = NOMBRES_DE_PASO;
   /** El paso de la barra: 1 archivo, 2 columnas, 3 revisar (la vista previa) y 4 confirmar (ya aplicada). */
   protected readonly pasoActual = computed(() =>
-    this.resumen() !== null ? 4 : this.vistaPrevia() !== null ? 3 : this.muestra() !== null ? 2 : 1,
+    this.resumen() !== null || this.enConfirmar() ? 4 : this.vistaPrevia() !== null ? 3 : this.muestra() !== null ? 2 : 1,
   );
   /** Por qué la acción del pie del paso 1 no se puede usar: null cuando se puede (S5). */
   protected readonly motivoElegirArchivo = computed(() => (this.trabajandoConLaLista() ? MOTIVO_LEYENDO : null));
+  /**
+   * T13d: el celular separa «Revisar» (paso 3) de «Confirmar» (paso 4). Es sólo de presentación: quién confirma, con qué
+   * pedido y con qué guardas es lo de siempre. Se entra con «Continuar», se sale con «Volver», y toda vista previa nueva o
+   * sin efecto vuelve a la revisión. Sin vista previa no hay paso 4, y en escritorio y tablet nunca lo hay.
+   */
+  private readonly pasoConfirmarPedido = signal(false);
+  protected readonly enConfirmar = computed(() => this.celular && this.pasoConfirmarPedido() && this.vistaPrevia() !== null);
+  /** T13d: el aviso de arriba es de un archivo que no sirvió (tamaño, tipo, o el servidor no pudo leerlo): el pie ofrece elegir otro. */
+  private readonly errorDeArchivo = signal(false);
+  protected readonly textoElegirArchivo = computed(() =>
+    this.errorDeArchivo() && this.error() !== null ? TEXTO_ELEGIR_OTRO_ARCHIVO : 'Elegir archivo…',
+  );
   private readonly selectorArchivo = viewChild(SelectorArchivo);
+  private readonly injector = inject(Injector);
   /** El backend detectó que la lista cambió desde la vista previa (409) y no se pudo pedir la nueva. */
   protected readonly conflicto = signal(false);
   protected readonly rubros = signal<Rubro[]>([]);
@@ -359,6 +379,22 @@ export class Importaciones implements OnInit {
   /** Las nuevas elegidas que no se van a crear porque la casilla está apagada. */
   protected readonly nuevosSinCrear = computed(() =>
     this.crearNuevos() ? 0 : nuevasElegidas(this.seleccion(), this.filasDeVista()),
+  );
+  /** T13d: cuántas filas viajan en `filasElegidas`: el número que el celular muestra antes de confirmar. */
+  protected readonly cantidadElegidas = computed(() => filasElegidas(this.seleccion(), this.filasDeVista()).length);
+  /** T13d: los conteos de lo elegido que se aplican y tienen filas (los del archivo —no están, errores, salteadas— no se aplican). */
+  protected readonly conteosAplicados = computed(() => {
+    const elegidos = this.conteosElegidos();
+    if (elegidos === null) return [];
+    return TARJETAS.filter((t) => (TIPOS_ELEGIBLES as readonly string[]).includes(t.clave) && elegidos[t.clave] > 0).map((t) => ({
+      etiqueta: t.etiqueta,
+      valor: elegidos[t.clave],
+    }));
+  });
+  protected readonly nombreDelProveedor = computed(() => this.proveedor()?.nombre ?? '');
+  /** T13d: el mensaje del servidor si alguna fila quedó con error por dólares sin moneda: el celular lo acompaña con su salida. */
+  protected readonly avisoDolaresSinMoneda = computed(
+    () => this.vistaPrevia()?.errores.find((e) => e.mensaje.startsWith(AVISO_DOLARES_SIN_MONEDA))?.mensaje ?? null,
   );
   /** Por qué «Confirmar importación» no se puede usar: null cuando hay algo para aplicar (S5). */
   protected readonly motivos = computed<Motivos<Accion>>(() => {
@@ -592,11 +628,13 @@ export class Importaciones implements OnInit {
     if (!EXTENSIONES.some((extension) => archivo.name.toLowerCase().endsWith(extension))) {
       this.archivo.set(null);
       this.error.set('El archivo tiene que ser una planilla de Excel (.xlsx o .xls), un CSV o un PDF.');
+      this.errorDeArchivo.set(true);
       return;
     }
     if (archivo.size > MAX_BYTES) {
       this.archivo.set(null);
       this.error.set('El archivo supera el máximo de 25 MB.');
+      this.errorDeArchivo.set(true);
       return;
     }
     this.archivo.set(archivo);
@@ -672,6 +710,37 @@ export class Importaciones implements OnInit {
     this.pedirVistaPrevia(false);
   }
 
+  /** T13d, celular: pasa de revisar a la pantalla de confirmar. No pide nada: la selección y los datos son los que están. */
+  protected continuarAConfirmar(): void {
+    if (this.vistaPrevia() === null) return;
+    this.pasoConfirmarPedido.set(true);
+    this.llevarA('.confirmar-celular');
+  }
+
+  /** T13d, celular: vuelve de confirmar a revisar, con la selección como estaba. Con el pedido en vuelo no hace nada. */
+  protected volverARevisar(): void {
+    if (this.aplicando()) return;
+    this.pasoConfirmarPedido.set(false);
+    this.llevarA('.vista-previa');
+  }
+
+  /** T13d, celular: «Ir a Más ajustes» del aviso de dólares sin moneda: abre el plegable y enfoca la moneda de todas las filas. */
+  protected irAMasAjustes(): void {
+    this.enfocar('monedaFija');
+  }
+
+  /** Al cambiar de pantalla el foco queda en la nueva (no en un campo) y se la lleva a la vista desde arriba. */
+  private llevarA(selector: string): void {
+    afterNextRender(
+      () => {
+        const el = this.host.querySelector<HTMLElement>(selector);
+        el?.focus({ preventScroll: true });
+        el?.scrollIntoView?.({ block: 'start' });
+      },
+      { injector: this.injector },
+    );
+  }
+
   protected confirmar(): void {
     // S5: sin filas para aplicar el botón avisa el motivo en vez de quedar apagado sin explicación.
     if (this.motivo.mostrar('confirmar')) return;
@@ -731,6 +800,7 @@ export class Importaciones implements OnInit {
         if (version !== this.version) return;
         this.generando.set(false);
         this.conflicto.set(false);
+        this.pasoConfirmarPedido.set(false);
         this.vistaPrevia.set(vistaPrevia);
         const filas = unirFilas(vistaPrevia);
         const previa = this.porConservar;
@@ -761,6 +831,7 @@ export class Importaciones implements OnInit {
   private invalidar(): void {
     this.version++;
     this.generando.set(false);
+    this.pasoConfirmarPedido.set(false);
     this.vistaPrevia.set(null);
     this.seleccion.set(marcarNinguna());
     this.porConservar = null;
@@ -772,6 +843,7 @@ export class Importaciones implements OnInit {
 
   private limpiarMensajes(): void {
     this.error.set(null);
+    this.errorDeArchivo.set(false);
     this.erroresCampos.set([]);
     this.conflicto.set(false);
     this.resumen.set(null);
@@ -889,6 +961,7 @@ export class Importaciones implements OnInit {
         this.cargandoMuestra.set(false);
         this.detenerAvisos();
         this.error.set(mensajeDe(err, 'No se pudo leer la lista.'));
+        this.errorDeArchivo.set(true);
       },
     });
   }
