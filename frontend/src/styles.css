@@ -2773,7 +2773,8 @@ ul.error {
   }
   /* «Quitar renglón» y «Vaciar ticket» en rojo pero con el mismo filete gris que las otras acciones. */
   app-hoja-renglon .accion-hoja.peligro,
-  app-hoja-mas-acciones .accion-hoja.peligro {
+  app-hoja-mas-acciones .accion-hoja.peligro,
+  app-remitos app-hoja-inferior .accion-hoja.peligro {
     border-color: transparent;
     border-top-color: var(--borde-suave);
   }
@@ -5204,5 +5205,279 @@ app-cuenta-cliente .acciones-cuenta {
   :is(app-dialogo-cobranza, app-dialogo-ajuste) .dialogo-cuenta-celular.dialogo-cuenta-celular .imputar-en-orden {
     align-self: stretch;
     min-height: var(--alto-tactil);
+  }
+}
+
+/* ---------- Ventas: presupuestos y remitos en el celular (movil-sectores T12c) ---------- */
+
+/*
+ * Las listas y los detalles de Presupuestos y Remitos en el celular (artboards 02 y 03 de movil-ventas). Sólo cómo se ve
+ * (S1): la página es la misma. Lo que es sólo del celular (el botón «Filtros», los chips del estado, las tarjetas, el ⋯ y la
+ * pantalla completa del detalle) lo dibuja cada componente cuando se abre en el celular; por si la pantalla se ensancha
+ * después, se esconde acá fuera del `@media`. Reusa la hoja inferior y la pantalla completa de T11b
+ * (`app-detalle-pantalla`, que ya tiene su CSS arriba). El CSS vive acá y no en `presupuestos.css` ni `remitos.css`, que
+ * están cerca de su presupuesto.
+ */
+:is(app-presupuestos, app-remitos) :is(.herramientas-doc, .chips-estado, .documentos-celular, .mas-doc) {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /* El botón «Filtros» con la cuenta de los que están escritos, arriba de la lista. */
+  :is(app-presupuestos, app-remitos) .herramientas-doc {
+    display: flex;
+    gap: var(--e-2);
+    margin-bottom: var(--e-2);
+  }
+  :is(app-presupuestos, app-remitos) .filtros-celular {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+  }
+  /* El estado a la vista: chips de 44 px, en una fila que se desliza si no entran. */
+  :is(app-presupuestos, app-remitos) .chips-estado {
+    display: flex;
+    gap: var(--e-2);
+    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-3);
+    padding: 0 var(--pantalla-x) 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :is(app-presupuestos, app-remitos) .chip-estado {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: var(--alto-tactil);
+    padding: 0 14px;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie);
+    color: var(--texto);
+    font-size: var(--texto-sm);
+    font-weight: 500;
+  }
+  :is(app-presupuestos, app-remitos) .chip-estado[aria-pressed='true'] {
+    border-color: var(--tono, var(--acento));
+    background: var(--tono-suave, var(--acento-suave));
+    color: var(--tono, var(--acento-fuerte));
+    font-weight: 600;
+  }
+
+  /* Los filtros dentro de la hoja: Estado y N.º a todo el ancho, Desde y Hasta lado a lado, «Buscar» y «Limpiar» apilados. */
+  :is(app-presupuestos, app-remitos) .hoja-inferior .filtros.filtros {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--e-3);
+    margin: var(--e-2) 0 0;
+  }
+  :is(app-presupuestos, app-remitos) .hoja-inferior .filtros.filtros > :is(label, button) {
+    grid-column: 1 / -1;
+  }
+  :is(app-presupuestos, app-remitos) .hoja-inferior .filtros.filtros > label:has(> input[type='date']) {
+    grid-column: auto;
+  }
+  :is(app-presupuestos, app-remitos) .hoja-inferior .filtros.filtros input[name='numero'] {
+    width: 100%;
+  }
+  :is(app-presupuestos, app-remitos) .hoja-inferior > .error {
+    margin: var(--e-3) 0 0;
+  }
+  :is(app-presupuestos, app-remitos) .hoja-inferior .accion-hoja:disabled {
+    color: var(--texto-deshabilitado);
+  }
+
+  /* La lista: una tarjeta por documento, con «N.º y cliente», la fecha (y el vencimiento), el total y el estado como pastilla. */
+  :is(app-presupuestos, app-remitos) .documentos-celular {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-2);
+    margin: 0 0 var(--e-4);
+    padding: 0;
+    list-style: none;
+  }
+  :is(app-presupuestos, app-remitos) .doc-tarjeta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: var(--e-3);
+    width: 100%;
+    min-height: 64px;
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font: inherit;
+    text-align: left;
+  }
+  :is(app-presupuestos, app-remitos) .doc-tarjeta.elegida {
+    border-color: var(--acento);
+    background: var(--superficie-3);
+  }
+  :is(app-presupuestos, app-remitos) .doc-tarjeta:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+  :is(app-presupuestos, app-remitos) .doc-cuerpo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  /* El cliente largo se corta con puntos suspensivos: el N.º y el cliente son una línea. */
+  :is(app-presupuestos, app-remitos) .doc-linea {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* La fecha y el vencimiento se parten antes de pasar por debajo del estado. */
+  :is(app-presupuestos, app-remitos) .doc-sub {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: normal;
+  }
+  :is(app-presupuestos, app-remitos) .doc-lado {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    max-width: 55vw;
+  }
+  :is(app-presupuestos, app-remitos) .doc-total {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  :is(app-presupuestos, app-remitos) .doc-estado {
+    padding: 1px var(--e-2);
+    font-size: var(--texto-2xs);
+    line-height: 1.5;
+    text-align: right;
+  }
+
+  /* El ⋯ del detalle: 44×44, sólo el ícono, a la derecha de la barra. */
+  :is(app-presupuestos, app-remitos) .mas-doc {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--alto-tactil);
+    min-width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--texto);
+  }
+
+  /* El detalle: lo que se dice del documento, cada cosa en su tarjeta blanca (el estado y «Vencido» van arriba, sueltos). */
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > :is(.datos, .observaciones, .nota-estado, .diferencias, .tabla-scroll, .totales) {
+    align-self: stretch;
+    min-width: 0;
+    margin: 0;
+    padding: var(--e-3) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    overflow-wrap: anywhere;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .diferencias {
+    padding-left: calc(var(--e-4) + var(--e-4));
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .tabla-scroll {
+    overflow: visible;
+  }
+  /* Los renglones: el artículo y su total, y debajo «cantidad × precio · dto.». La cabecera se lee sólo con lector de pantalla. */
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones,
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones tbody {
+    display: block;
+    width: 100%;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones tbody tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'articulo articulo articulo total'
+      'cantidad precio descuento descuento';
+    column-gap: var(--e-1);
+    align-items: baseline;
+    padding: var(--e-2) 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones tbody tr:last-child {
+    border-bottom: 0;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(1) {
+    grid-area: articulo;
+    overflow-wrap: anywhere;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(5) {
+    grid-area: total;
+    padding-left: var(--e-3);
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:is(:nth-child(2), :nth-child(3), :nth-child(4)) {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    text-align: left;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(2) {
+    grid-area: cantidad;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(3) {
+    grid-area: precio;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(3)::before {
+    content: '× ';
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(4) {
+    grid-area: descuento;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo table.renglones td:nth-child(4):not(:empty)::before {
+    content: '· dto. ';
+  }
+  /* Los totales, a todo el ancho de la tarjeta. */
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .totales {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-1);
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .totales .total {
+    font-size: var(--texto-lg);
+  }
+  /* «Cargando…» y el aviso de un error, sin sangría de más. */
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > :is(.ayuda, .error) {
+    margin: 0;
+  }
+  /* La pregunta de reemplazar el ticket: sus dos botones a todo el ancho, de 52 px, uno sobre otro. */
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .reemplazo .acciones {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+  :is(app-presupuestos, app-remitos) .detalle-pantalla-cuerpo > .reemplazo .acciones > button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
   }
 }
