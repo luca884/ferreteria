@@ -1,5 +1,5 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -45,6 +45,7 @@ import {
   armarMapeo,
   camposReconocidos,
   crearFormMapeo,
+  ejemplosPorColumna,
   letraDeColumna,
   mapeoVacio,
   precargarMapeo,
@@ -86,6 +87,8 @@ const MOTIVO_SIN_FILAS = 'Elegí al menos una fila.';
 const MOTIVO_LEYENDO = 'Esperá a que termine de leerse la lista.';
 /** T13a: los pasos de la barra de arriba del celular. */
 const NOMBRES_DE_PASO = ['Archivo', 'Columnas', 'Revisar', 'Confirmar'];
+/** T13b: cuántas filas del archivo muestra el celular en lugar del visor con zoom. */
+const FILAS_DE_MUESTRA = 4;
 /** Las acciones de la pantalla que pueden estar apagadas por una regla de negocio (S5). */
 type Accion = 'confirmar';
 
@@ -163,6 +166,7 @@ function filasConVacias(hoja: HojaDeMuestra): FilaDeMuestra[] {
   imports: [
     ReactiveFormsModule,
     DecimalPipe,
+    NgTemplateOutlet,
     ScrollingModule,
     SelectorArchivo,
     BarraAcciones,
@@ -326,8 +330,18 @@ export class Importaciones implements OnInit {
   /** Las columnas que se pueden elegir: las de la hoja más ancha, rotuladas con su encabezado. */
   protected readonly opciones = computed<OpcionColumna[]>(() => {
     const ancho = Math.max(0, ...(this.muestra()?.hojas.map((h) => h.columnas) ?? []));
-    return rango(ancho).map((indice) => ({ indice, etiqueta: this.etiquetaColumna(indice) }));
+    // Sólo el celular muestra, en la hoja para elegir la columna, el encabezado y unos ejemplos de cada una (T13b).
+    const hoja = this.muestra()?.hojas[this.referenciaEfectiva()];
+    const ejemplos = this.celular && hoja ? ejemplosPorColumna(hoja.filas, this.valoresMapeo().filaDesde, ancho) : null;
+    const encabezados = this.textosDeEncabezado();
+    return rango(ancho).map((indice) => ({
+      indice,
+      etiqueta: this.etiquetaColumna(indice),
+      ...(ejemplos ? { encabezado: (encabezados[indice] ?? '').trim(), ejemplos: ejemplos[indice] } : {}),
+    }));
   });
+  /** Las primeras filas de la hoja que se ve: la muestra fija del celular (T13b). */
+  protected readonly filasDeMuestra = computed(() => this.hojaActual()?.filas.slice(0, FILAS_DE_MUESTRA) ?? []);
 
   protected readonly filasDeVista = computed(() => {
     const vp = this.vistaPrevia();
@@ -777,7 +791,11 @@ export class Importaciones implements OnInit {
   }
 
   private enfocar(id: string): void {
-    this.host.querySelector<HTMLElement>(`#${id}`)?.focus();
+    const campo = this.host.querySelector<HTMLElement>(`#${id}`);
+    // En el celular «Más ajustes» está plegado: si el campo con error está adentro, se abre para que se vea (T13b).
+    const plegado = campo?.closest('details.mas-ajustes');
+    if (plegado instanceof HTMLDetailsElement) plegado.open = true;
+    campo?.focus();
   }
 
   /** El pedido de la vista previa; null (con el aviso en pantalla) si falta o está mal algo. */

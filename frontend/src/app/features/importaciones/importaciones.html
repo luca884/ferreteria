@@ -125,6 +125,15 @@
     </div>
   }
 
+  <!-- movil-sectores T13b: del paso 2 en adelante el pie lleva la acción del paso; el botón del cuerpo se oculta por CSS. -->
+  @if (celular && pasoActual() === 2) {
+    <div class="ficha-pie en-pagina pie-importar pie-columnas">
+      <button type="button" class="primario" [disabled]="generando()" (click)="generarVistaPrevia()">
+        {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
+      </button>
+    </div>
+  }
+
   @if (muestra(); as m) {
     <section class="paso panel">
       <h2>2. Hojas y columnas de la lista</h2>
@@ -135,107 +144,166 @@
       </p>
 
       @if (hojaActual(); as hoja) {
-        <div class="herramientas-visor">
-          @if (m.hojas.length > 1) {
-            <div class="navegacion-hojas">
-              <button
-                type="button"
-                class="chico"
-                aria-label="Hoja anterior"
-                [disabled]="hojaVista() <= 0"
-                (click)="moverHoja(-1)"
-              >
-                ◀
-              </button>
-              <span class="hoja-actual" aria-live="polite">
-                Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
-              </span>
-              <button
-                type="button"
-                class="chico"
-                aria-label="Hoja siguiente"
-                [disabled]="hojaVista() >= m.hojas.length - 1"
-                (click)="moverHoja(1)"
-              >
-                ▶
-              </button>
-              <label for="hojaVista">Ver la hoja</label>
-              <select id="hojaVista" (change)="elegirHojaVista($any($event.target).value)">
-                @for (nombre of nombresDeHojas(); track $index) {
-                  <option [value]="$index" [selected]="$index === hojaVista()">{{ nombre }}</option>
-                }
-              </select>
-            </div>
-          }
-
-          <div class="zoom" role="group" aria-label="Zoom de la lista">
-            <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
-            <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
-              {{ zoom() }} %
-            </button>
-            <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
-          </div>
-        </div>
-
-        <div
-          class="visor"
-          role="table"
-          aria-label="Contenido de la lista"
-          [attr.aria-rowcount]="filasDelVisor().length + 1"
-          [attr.aria-colcount]="columnas().length + 1"
-          [style.--alto-fila]="altoFila() + 'px'"
-          [style.--ancho-columna]="anchoColumna() + 'px'"
-          [style.--ancho-numero]="anchoNumero() + 'px'"
-          [style.--fuente]="fuente() + 'px'"
-          [style.--alto-marco]="altoMarco() + 'px'"
-        >
-          <div #encabezadoVisor class="visor-encabezado" role="row">
-            <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
-              <span class="esquina" role="columnheader">Fila</span>
-              @for (c of columnas(); track c) {
-                <span
-                  class="columna"
-                  role="columnheader"
-                  [class]="claseDeColumna(c)"
-                  [attr.title]="tituloDeColumna(c)"
-                  >{{ letra(c) }}</span
+        @if (celular) {
+          <!-- movil-sectores T13b: el visor con zoom no entra en el celular; una muestra fija de las primeras filas. -->
+          <div class="muestra-celular">
+            <div class="muestra-celular-cabecera">
+              @if (m.hojas.length > 1) {
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja anterior"
+                  [disabled]="hojaVista() <= 0"
+                  (click)="moverHoja(-1)"
                 >
+                  ◀
+                </button>
+                <span class="hoja-actual" aria-live="polite">
+                  Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
+                </span>
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja siguiente"
+                  [disabled]="hojaVista() >= m.hojas.length - 1"
+                  (click)="moverHoja(1)"
+                >
+                  ▶
+                </button>
+              } @else {
+                <span class="hoja-actual">{{ hoja.nombre }}</span>
               }
             </div>
+            <div class="muestra-celular-marco" role="region" aria-label="Primeras filas de la lista" tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Fila</th>
+                    @for (c of columnas(); track c) {
+                      <th scope="col">{{ letra(c) }}</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (fila of filasDeMuestra(); track fila.numero) {
+                    <tr>
+                      <td>{{ fila.numero }}</td>
+                      @for (celda of fila.celdas; track $index) {
+                        <td>{{ celda }}</td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p class="muestra-conteo ayuda">
+              {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
+              {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
+            </p>
           </div>
-          <cdk-virtual-scroll-viewport
-            #cuerpoVisor
-            class="visor-cuerpo"
-            role="rowgroup"
-            tabindex="0"
-            [itemSize]="altoFila()"
-            (scroll)="sincronizarEncabezado($event)"
+        } @else {
+          <div class="herramientas-visor">
+            @if (m.hojas.length > 1) {
+              <div class="navegacion-hojas">
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja anterior"
+                  [disabled]="hojaVista() <= 0"
+                  (click)="moverHoja(-1)"
+                >
+                  ◀
+                </button>
+                <span class="hoja-actual" aria-live="polite">
+                  Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
+                </span>
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja siguiente"
+                  [disabled]="hojaVista() >= m.hojas.length - 1"
+                  (click)="moverHoja(1)"
+                >
+                  ▶
+                </button>
+                <label for="hojaVista">Ver la hoja</label>
+                <select id="hojaVista" (change)="elegirHojaVista($any($event.target).value)">
+                  @for (nombre of nombresDeHojas(); track $index) {
+                    <option [value]="$index" [selected]="$index === hojaVista()">{{ nombre }}</option>
+                  }
+                </select>
+              </div>
+            }
+
+            <div class="zoom" role="group" aria-label="Zoom de la lista">
+              <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
+              <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
+                {{ zoom() }} %
+              </button>
+              <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+            </div>
+          </div>
+
+          <div
+            class="visor"
+            role="table"
+            aria-label="Contenido de la lista"
+            [attr.aria-rowcount]="filasDelVisor().length + 1"
+            [attr.aria-colcount]="columnas().length + 1"
+            [style.--alto-fila]="altoFila() + 'px'"
+            [style.--ancho-columna]="anchoColumna() + 'px'"
+            [style.--ancho-numero]="anchoNumero() + 'px'"
+            [style.--fuente]="fuente() + 'px'"
+            [style.--alto-marco]="altoMarco() + 'px'"
           >
-            <div
-              *cdkVirtualFor="let fila of filasDelVisor(); trackBy: porNumero; let i = index"
-              class="visor-fila"
-              role="row"
-              [class.previa]="esPrevia(fila.numero)"
-              [attr.aria-rowindex]="i + 2"
-              [style.width]="anchoTotal() + 'px'"
-            >
-              <span class="numero" role="rowheader">{{ fila.numero }}</span>
-              @for (celda of fila.celdas; track $index) {
-                <span
-                  role="cell"
-                  class="celda"
-                  [class]="claseDeColumna($index)"
-                  [attr.title]="celda === '' ? null : celda"
-                  >{{ celda }}</span
-                >
-              }
+            <div #encabezadoVisor class="visor-encabezado" role="row">
+              <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
+                <span class="esquina" role="columnheader">Fila</span>
+                @for (c of columnas(); track c) {
+                  <span
+                    class="columna"
+                    role="columnheader"
+                    [class]="claseDeColumna(c)"
+                    [attr.title]="tituloDeColumna(c)"
+                    >{{ letra(c) }}</span
+                  >
+                }
+              </div>
             </div>
-          </cdk-virtual-scroll-viewport>
-        </div>
-        <p class="visor-conteo ayuda">
-          {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
-          {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
-        </p>
+            <cdk-virtual-scroll-viewport
+              #cuerpoVisor
+              class="visor-cuerpo"
+              role="rowgroup"
+              tabindex="0"
+              [itemSize]="altoFila()"
+              (scroll)="sincronizarEncabezado($event)"
+            >
+              <div
+                *cdkVirtualFor="let fila of filasDelVisor(); trackBy: porNumero; let i = index"
+                class="visor-fila"
+                role="row"
+                [class.previa]="esPrevia(fila.numero)"
+                [attr.aria-rowindex]="i + 2"
+                [style.width]="anchoTotal() + 'px'"
+              >
+                <span class="numero" role="rowheader">{{ fila.numero }}</span>
+                @for (celda of fila.celdas; track $index) {
+                  <span
+                    role="cell"
+                    class="celda"
+                    [class]="claseDeColumna($index)"
+                    [attr.title]="celda === '' ? null : celda"
+                    >{{ celda }}</span
+                  >
+                }
+              </div>
+            </cdk-virtual-scroll-viewport>
+          </div>
+          <p class="visor-conteo ayuda">
+            {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
+            {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
+          </p>
+        }
       }
 
       @if (m.hojas.length > 1) {
@@ -250,75 +318,95 @@
         </p>
       }
 
-      <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
-
-      <form class="mapeo" [formGroup]="listaForm" novalidate>
-        <div class="fila incluye-iva">
-          <label class="casilla" for="listaIncluyeIva">
-            <input
-              id="listaIncluyeIva"
-              type="checkbox"
-              formControlName="listaIncluyeIva"
-              [attr.aria-describedby]="
-                avisoIva() ? 'lista-incluye-iva-ayuda lista-incluye-iva-aviso' : 'lista-incluye-iva-ayuda'
-              "
-            />
-            La lista incluye IVA
-          </label>
-          <p id="lista-incluye-iva-ayuda" class="ayuda">Marcala solo si la columna del costo ya trae el IVA adentro.</p>
-          @if (avisoIva(); as aviso) {
-            <p id="lista-incluye-iva-aviso" class="alerta advertencia" role="status">{{ aviso }}</p>
-          }
-        </div>
-
-        <div class="fila">
-          @for (n of [1, 2, 3]; track n) {
-            <div class="campo">
-              <label [for]="'bonificacion' + n">Bonificación {{ n }} (%)</label>
+      <ng-template #formularioLista>
+        <form class="mapeo" [formGroup]="listaForm" novalidate>
+          <div class="fila incluye-iva">
+            <label class="casilla" for="listaIncluyeIva">
               <input
-                [id]="'bonificacion' + n"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                max="100"
-                step="0.01"
-                [formControlName]="'bonificacion' + n"
-                [attr.aria-invalid]="listaForm.get('bonificacion' + n)?.invalid ? 'true' : null"
-                [attr.aria-describedby]="listaForm.get('bonificacion' + n)?.invalid ? 'bonificacion' + n + '-error' : null"
+                id="listaIncluyeIva"
+                type="checkbox"
+                formControlName="listaIncluyeIva"
+                [attr.aria-describedby]="
+                  avisoIva() ? 'lista-incluye-iva-ayuda lista-incluye-iva-aviso' : 'lista-incluye-iva-ayuda'
+                "
               />
-              @if (listaForm.get('bonificacion' + n)?.invalid) {
-                <span [id]="'bonificacion' + n + '-error'" class="campo-error">
-                  La bonificación {{ n }} tiene que estar entre 0 y 100.
-                </span>
-              }
-            </div>
-          }
-        </div>
-        <p class="ayuda ayuda-bonificaciones">
-          Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
-          al confirmar la importación. Dejá vacía la que no corresponda.
-        </p>
-
-        <div class="fila">
-          <div class="campo">
-            <label for="rubro">Rubro de los artículos nuevos</label>
-            <select id="rubro" formControlName="rubroId" aria-describedby="rubro-ayuda">
-              <option [ngValue]="null">Sin rubro (margen por defecto)</option>
-              @for (rubro of rubros(); track rubro.id) {
-                <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
-              }
-            </select>
-            <span id="rubro-ayuda" class="ayuda">
-              Define el margen con el que se calcula el precio de los artículos nuevos en la vista previa. Si
-              lo cambiás, hay que volver a generarla.
-            </span>
+              La lista incluye IVA
+            </label>
+            <p id="lista-incluye-iva-ayuda" class="ayuda">Marcala solo si la columna del costo ya trae el IVA adentro.</p>
+            @if (avisoIva(); as aviso) {
+              <p id="lista-incluye-iva-aviso" class="alerta advertencia" role="status">{{ aviso }}</p>
+            }
           </div>
-        </div>
 
-        <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
-          {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
-        </button>
-      </form>
+          <div class="fila">
+            @for (n of [1, 2, 3]; track n) {
+              <div class="campo">
+                <label [for]="'bonificacion' + n">Bonificación {{ n }} (%)</label>
+                <input
+                  [id]="'bonificacion' + n"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  [formControlName]="'bonificacion' + n"
+                  [attr.aria-invalid]="listaForm.get('bonificacion' + n)?.invalid ? 'true' : null"
+                  [attr.aria-describedby]="listaForm.get('bonificacion' + n)?.invalid ? 'bonificacion' + n + '-error' : null"
+                />
+                @if (listaForm.get('bonificacion' + n)?.invalid) {
+                  <span [id]="'bonificacion' + n + '-error'" class="campo-error">
+                    La bonificación {{ n }} tiene que estar entre 0 y 100.
+                  </span>
+                }
+              </div>
+            }
+          </div>
+          <p class="ayuda ayuda-bonificaciones">
+            Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
+            al confirmar la importación. Dejá vacía la que no corresponda.
+          </p>
+
+          <div class="fila">
+            <div class="campo">
+              <label for="rubro">Rubro de los artículos nuevos</label>
+              <select id="rubro" formControlName="rubroId" aria-describedby="rubro-ayuda">
+                <option [ngValue]="null">Sin rubro (margen por defecto)</option>
+                @for (rubro of rubros(); track rubro.id) {
+                  <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+                }
+              </select>
+              <span id="rubro-ayuda" class="ayuda">
+                Define el margen con el que se calcula el precio de los artículos nuevos en la vista previa. Si
+                lo cambiás, hay que volver a generarla.
+              </span>
+            </div>
+          </div>
+
+          <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
+            {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
+          </button>
+        </form>
+      </ng-template>
+
+      @if (celular) {
+        <!-- movil-sectores T13b: los datos arriba y lo que casi no se toca en «Más ajustes»; el mismo formulario, una sola vez. -->
+        <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" modo="datos" />
+
+        <details class="mas-ajustes">
+          <summary>
+            <span><b>Más ajustes</b><small>IVA, moneda, bonificación, rubro nuevo</small></span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </summary>
+          <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" modo="ajustes" />
+          <ng-container *ngTemplateOutlet="formularioLista" />
+        </details>
+      } @else {
+        <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
+
+        <ng-container *ngTemplateOutlet="formularioLista" />
+      }
     </section>
   }
 

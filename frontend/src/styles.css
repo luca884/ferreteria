@@ -5664,3 +5664,408 @@ app-cuenta-cliente .acciones-cuenta {
     }
   }
 }
+
+/*
+ * Importar, paso 2: el mapeo de columnas en el celular (artboard 02 de `design/movil-precios`, T13b, S2, S5, S7). El
+ * visor con zoom se reemplaza por una muestra fija de las primeras filas; cada dato es una fila que abre una hoja
+ * inferior con las columnas del archivo; IVA, moneda, bonificaciones y rubro van plegados en «Más ajustes»; y el pie fijo
+ * de 13a lleva «Ver vista previa» (el botón del cuerpo se oculta acá, sigue en el DOM). Los estilos de los componentes
+ * (`importaciones.css`, `mapeo-columnas.css`, `hojas-lista`) llevan el atributo de Angular en cada parte del selector, así
+ * que acá se repiten clases (`.x.x`) donde hace falta ganarles. Escritorio y tablet no cambian (S5).
+ */
+@media screen and (max-width: 639.98px) {
+  /* El texto de ayuda del paso habla del zoom y del desplazamiento del visor, que acá no existen: la lista lo dice sola. */
+  app-importaciones:has(> .pasos-celular) .paso:has(> app-mapeo-columnas) > h2 + p.ayuda {
+    display: none;
+  }
+
+  /* Sin el marco del paso: la muestra, los datos y «Más ajustes» son tarjetas sueltas sobre el fondo, como en el artboard. */
+  app-importaciones:has(> .pasos-celular) .paso.panel:has(> app-mapeo-columnas) {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* La muestra: tarjeta con la hoja, las primeras filas en una tabla monoespaciada (se recorre de costado) y el conteo. */
+  app-importaciones .muestra-celular {
+    margin: 0 0 var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    overflow: hidden;
+  }
+  app-importaciones .muestra-celular-cabecera {
+    display: flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: 52px;
+    padding: var(--e-2) var(--e-3) var(--e-2) var(--e-4);
+    border-bottom: 1px solid var(--borde);
+    font-size: var(--texto-sm);
+  }
+  app-importaciones .muestra-celular-cabecera > .hoja-actual {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  app-importaciones .muestra-celular-cabecera > button.chico {
+    flex: none;
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+    padding: 0;
+  }
+  app-importaciones .muestra-celular-marco {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  app-importaciones .muestra-celular-marco > table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+  }
+  app-importaciones .muestra-celular-marco :is(th, td) {
+    padding: 5px 8px;
+    border-bottom: 0;
+    border-top: 1px solid var(--borde-suave);
+    text-align: left;
+    white-space: nowrap;
+  }
+  app-importaciones .muestra-celular-marco th {
+    position: static;
+    border-top: 0;
+    background: var(--superficie-2);
+    color: var(--tono);
+    font-size: var(--texto-xs);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  app-importaciones .muestra-celular-marco td {
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  app-importaciones .muestra-celular-marco tbody tr:hover td {
+    background: transparent;
+  }
+  app-importaciones .muestra-celular > .muestra-conteo.muestra-conteo {
+    margin: 0;
+    padding: var(--e-2) var(--e-4);
+    border-top: 1px solid var(--borde);
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+
+  /* Las hojas que se importan: una tarjeta como las otras, con casillas de un renglón de 44 px y los dos botones de arriba también. */
+  app-importaciones app-hojas-lista fieldset {
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-importaciones app-hojas-lista .acciones > button.chico.chico {
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones app-hojas-lista .hojas > li.hojas-item,
+  app-importaciones app-hojas-lista .hojas > li {
+    position: relative;
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones app-hojas-lista .hojas > li > label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones app-hojas-lista .hojas > li > input[type='checkbox'] {
+    flex: none;
+    width: 22px;
+    height: 22px;
+  }
+
+  /* «Datos a mapear» y los grupos de «Más ajustes»: tarjetas con la leyenda de título y una fila de 64 px por dato. */
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset {
+    margin: 0 0 var(--e-3);
+    padding: 0;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    overflow: hidden;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > legend {
+    float: left;
+    width: 100%;
+    padding: var(--e-3) var(--e-4) var(--e-1);
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > legend + * {
+    clear: both;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila.fila {
+    display: block;
+    margin: 0;
+  }
+  /* La primera fila de datos sigue siendo un campo: etiqueta arriba, el input de 44 px y «Reconocida» al lado. */
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--e-1) var(--e-3);
+    min-width: 0;
+    padding: var(--e-2) var(--e-3) var(--e-3) var(--e-4);
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo > label {
+    grid-column: 1;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo > input,
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo > select {
+    grid-column: 1;
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo > .reconocida {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo > .campo-error {
+    grid-column: 1 / -1;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .ayuda.ayuda,
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > p.campo-error {
+    margin: 0;
+    padding: var(--e-2) var(--e-4) var(--e-3);
+    border-top: 1px solid var(--borde-suave);
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > p.campo-error {
+    color: var(--error);
+  }
+
+  /* La fila de un dato: rótulo chico, columna elegida, ejemplos y, a la derecha, «Reconocida» y la flecha. */
+  app-importaciones app-mapeo-columnas button.fila-mapeo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-content: stretch;
+    gap: 2px var(--e-3);
+    width: 100%;
+    min-height: 64px;
+    padding: var(--e-2) var(--e-3) var(--e-2) var(--e-4);
+    border: 0;
+    border-top: 1px solid var(--borde-suave);
+    border-radius: 0;
+    background: var(--superficie);
+    color: var(--texto);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo[aria-invalid='true'] {
+    background: var(--error-fondo);
+    box-shadow: inset 3px 0 0 var(--error);
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo > :is(.fila-mapeo-rotulo, .fila-mapeo-valor, .fila-mapeo-ejemplos) {
+    grid-column: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo > .fila-mapeo-rotulo {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo > .fila-mapeo-valor {
+    font-weight: 600;
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo > .fila-mapeo-ejemplos {
+    overflow: hidden;
+    color: var(--texto-tenue);
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo > .fila-mapeo-extremo {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    display: flex;
+    align-items: center;
+    gap: var(--e-2);
+    color: var(--texto-tenue);
+  }
+  app-importaciones app-mapeo-columnas button.fila-mapeo .reconocida {
+    margin: 0;
+    padding: 0 var(--e-2);
+    border-radius: 999px;
+    font-size: var(--texto-xs);
+    white-space: nowrap;
+  }
+  /* La moneda fija es un select de siempre: de 44 px y a todo el ancho de la tarjeta. */
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo:has(> #monedaFija) {
+    display: flex;
+    align-items: stretch;
+    padding: var(--e-3) var(--e-4);
+    border-top: 1px solid var(--borde-suave);
+    text-align: left;
+  }
+  app-importaciones:has(> .pasos-celular) app-mapeo-columnas fieldset > .fila > .campo.campo:has(> #monedaFija) > label {
+    text-align: left;
+  }
+
+  /* La hoja para elegir la columna: un radio por columna con la letra, el encabezado y los ejemplos. */
+  app-importaciones app-mapeo-columnas .hoja-inferior .opciones-columna {
+    margin: 0 calc(var(--e-4) * -1);
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior button.opcion-columna {
+    min-height: 64px;
+    padding: var(--e-2) var(--e-4);
+    gap: var(--e-3);
+    white-space: normal;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior button.opcion-columna[aria-checked='true'] {
+    background: var(--tono-suave);
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior .opcion-columna-letra {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radio);
+    background: var(--superficie-3);
+    color: var(--tono);
+    font-weight: 700;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior button.opcion-columna[aria-checked='true'] .opcion-columna-letra {
+    background: var(--tono);
+    color: #fff;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior .opcion-columna-texto {
+    flex: 1;
+    min-width: 0;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior .opcion-columna-texto > b {
+    display: block;
+    font-size: var(--texto-base);
+    overflow-wrap: anywhere;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior .opcion-columna-texto > small {
+    display: block;
+    overflow: hidden;
+    font-family: var(--fuente-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior button.opcion-columna > svg {
+    flex: none;
+    color: var(--tono);
+  }
+  app-importaciones app-mapeo-columnas .hoja-inferior .hoja-inferior-subtitulo {
+    font-family: inherit;
+    font-size: var(--texto-sm);
+  }
+
+  /* «Más ajustes»: una tarjeta plegada con su resumen de 56 px; abierta lleva los grupos y el formulario de la lista. */
+  app-importaciones details.mas-ajustes {
+    margin: 0 0 var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+    overflow: hidden;
+  }
+  app-importaciones details.mas-ajustes > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-3);
+    min-height: 56px;
+    padding: var(--e-2) var(--e-3) var(--e-2) var(--e-4);
+    list-style: none;
+    cursor: pointer;
+  }
+  app-importaciones details.mas-ajustes > summary::-webkit-details-marker {
+    display: none;
+  }
+  app-importaciones details.mas-ajustes > summary b,
+  app-importaciones details.mas-ajustes > summary small {
+    display: block;
+  }
+  app-importaciones details.mas-ajustes > summary small {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-importaciones details.mas-ajustes > summary > svg {
+    flex: none;
+    color: var(--texto-tenue);
+    transition: transform var(--transicion);
+  }
+  app-importaciones details.mas-ajustes[open] > summary {
+    border-bottom: 1px solid var(--borde);
+  }
+  app-importaciones details.mas-ajustes[open] > summary > svg {
+    transform: rotate(90deg);
+  }
+  app-importaciones details.mas-ajustes > app-mapeo-columnas {
+    padding: var(--e-3) var(--e-3) 0;
+  }
+  app-importaciones details.mas-ajustes > form.mapeo {
+    padding: 0 var(--e-3) var(--e-3);
+  }
+  /* El formulario de la lista adentro: un campo por renglón, de 44 px, y la casilla del IVA con su ayuda. */
+  app-importaciones details.mas-ajustes > form.mapeo .fila.fila {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--e-3);
+  }
+  app-importaciones details.mas-ajustes > form.mapeo .fila > .campo.campo {
+    flex: none;
+    min-width: 0;
+  }
+  app-importaciones details.mas-ajustes > form.mapeo :is(input:not([type='checkbox']), select) {
+    width: 100%;
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones details.mas-ajustes > form.mapeo .casilla.casilla {
+    align-self: stretch;
+    min-height: var(--alto-tactil);
+  }
+  app-importaciones details.mas-ajustes > form.mapeo .casilla > input[type='checkbox'] {
+    flex: none;
+    width: 22px;
+    height: 22px;
+  }
+
+  /* Con el pie fijo y la barra de pasos, lo que se enfoca o se lleva a la vista (un campo con error) no queda debajo de ellos. */
+  .contenido:has(app-importaciones > .pie-importar) {
+    scroll-padding-block: 56px 96px;
+  }
+
+  /* El aviso de arriba (falta el proveedor, una columna, una bonificación fuera de rango) acompaña al scroll bajo la barra de pasos: el pie fijo está abajo y el aviso no se vería. */
+  app-importaciones:has(> .pasos-celular) > .error {
+    position: sticky;
+    top: calc(45px + var(--e-1));
+    z-index: calc(var(--z-barra) - 2);
+    box-shadow: 0 4px 12px rgb(15 23 42 / 0.12);
+  }
+
+  /* «Ver vista previa» queda en el pie fijo: el botón del cuerpo no se ve (sigue en el DOM, con el mismo manejador). */
+  app-importaciones:has(> .pie-columnas) button.generar {
+    display: none;
+  }
+  /* El pie del paso 2 apaga el botón con `disabled` (como el del cuerpo): se ve igual de apagado que el del paso 1. */
+  app-importaciones > .ficha-pie.pie-importar > button:disabled {
+    background: var(--superficie-3);
+    border-color: var(--borde);
+    color: var(--texto-deshabilitado);
+  }
+}
