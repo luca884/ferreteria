@@ -2638,6 +2638,21 @@ ul.error {
   }
 }
 
+/* ---------- Mostrador en la tableta: la barra de cobro sobre la barra de destinos ---------- */
+/*
+ * De 640 a 1023.98 px el TOTAL y «Cobrar» siguen como eran (fijos abajo, mismo tamaño), pero la barra de destinos también
+ * está a la vista y los tapaba: se suben su alto. Debajo de 640 px lo resuelve el bloque de más abajo (T8). --alto-destinos
+ * lo pone el shell; el filete de la barra suma 1 px.
+ */
+@media screen and (min-width: 640px) and (max-width: 1023.98px) {
+  app-mostrador .panel-derecho app-totales-ticket {
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+  }
+  app-mostrador app-botonera button.accion-barra.accion-barra.cobrar-fijo.cobrar-fijo {
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* ---------- Mostrador en el celular (movil-sectores T8) ---------- */
 /*
  * 8a: el TOTAL y «Cobrar» fijos arriba de la barra de destinos, el renglón del ticket en dos líneas y la hoja del
