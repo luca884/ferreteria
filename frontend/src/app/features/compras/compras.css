@@ -257,18 +257,3 @@ tr.advertencia td {
 .vista-previa td {
   padding-inline: 6px;
 }
-
-/* Responsive S11 (T9): esta hoja también se usa en Nueva compra. Su encabezado no cambia en T15b. */
-@media screen and (max-width: 639.98px) {
-  .encabezado label {
-    display: flex;
-    flex: 1 1 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    min-width: 0;
-  }
-  .encabezado select {
-    width: 100%;
-  }
-}

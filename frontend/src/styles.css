@@ -7350,3 +7350,125 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
     text-align: right;
   }
 }
+
+/* ---------- Nueva compra en el celular (movil-sectores T16) ---------- */
+
+@media (max-width: 639.98px) {
+  app-nueva-compra:has(> .ficha-pie.en-pagina) {
+    --alto-pie-compra: calc(52px + 2 * var(--e-3) + 1px);
+    padding-bottom: calc(var(--alto-pie-compra) + var(--e-4));
+  }
+  app-nueva-compra > app-barra-acciones .accion-barra {
+    min-height: var(--alto-tactil);
+  }
+  app-nueva-compra > p.ayuda:not(.estado-vacio) {
+    padding: var(--e-3);
+    border: 1px solid var(--acento-borde);
+    border-radius: var(--radio-lg);
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+  }
+
+  app-nueva-compra > .paso.panel {
+    min-width: 0;
+    padding: 0 var(--e-4) var(--e-4);
+    border-radius: var(--radio-xl);
+  }
+  /* (0,3,2) supera a .paso > h2 encapsulado (0,3,1). */
+  app-nueva-compra > .paso.panel > h2.compra-paso-titulo {
+    margin: 0 calc(-1 * var(--e-4)) var(--e-3);
+    padding: 0;
+    border-bottom: 1px solid var(--borde-suave);
+  }
+  app-nueva-compra .compra-paso-titulo > button {
+    display: flex;
+    align-items: center;
+    gap: var(--e-2);
+    width: 100%;
+    min-height: 52px;
+    padding: var(--e-2) var(--e-4);
+    border: 0;
+    border-radius: var(--radio-xl);
+    background: transparent;
+    color: var(--texto);
+    font-size: var(--texto-base);
+    font-weight: 600;
+    text-align: left;
+  }
+  app-nueva-compra .compra-paso-titulo > button > :first-child {
+    flex: 1;
+  }
+  app-nueva-compra .compra-paso-resumen {
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+    font-weight: 400;
+  }
+  app-nueva-compra .compra-paso-flecha {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-inline: 4px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    color: var(--texto-tenue);
+    transform: rotate(45deg);
+  }
+  app-nueva-compra button[aria-expanded='true'] > .compra-paso-flecha {
+    transform: rotate(225deg);
+  }
+  /* Mantiene los campos y el selector montados. Sólo los títulos del celular pueden plegar su contenido. */
+  app-nueva-compra > .paso:has(> .compra-paso-titulo > button[aria-expanded='false']) {
+    padding-bottom: 0;
+  }
+  app-nueva-compra > .paso.panel > h2.compra-paso-titulo:has(> button[aria-expanded='false']) {
+    margin-bottom: 0;
+    border-bottom: 0;
+  }
+  app-nueva-compra > .paso:has(> .compra-paso-titulo > button[aria-expanded='false']) > :not(.compra-paso-titulo) {
+    display: none;
+  }
+  app-nueva-compra > .recargos-costo.panel > h2.compra-paso-titulo {
+    margin-bottom: 0;
+  }
+
+  app-nueva-compra > .paso > .encabezado {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  app-nueva-compra .encabezado > label {
+    display: grid;
+    gap: var(--e-1);
+    min-width: 0;
+  }
+  /* (0,4,2): :is() cuenta input[name], y una etiqueta más desempata con el ancho encapsulado (0,4,1). */
+  app-nueva-compra > .paso.panel > .encabezado :is(select, input[name]) {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--alto-tactil);
+    scroll-margin-bottom: calc(var(--alto-pie-compra) + var(--alto-destinos, 0px) + var(--e-4));
+  }
+  app-nueva-compra .factura-pdf .zona-archivo {
+    flex-direction: column;
+    gap: var(--e-2);
+    padding: var(--e-3);
+  }
+  app-nueva-compra .factura-pdf .elegir-archivo {
+    min-height: 52px;
+    background: var(--tono-compras);
+    color: white;
+  }
+  app-nueva-compra .factura-pdf .nombre-archivo {
+    max-width: 100%;
+  }
+  app-nueva-compra .factura-pdf .pista-teclado {
+    display: none;
+  }
+  /* Las tres clases ganan sobre .acciones y :host > :not(app-barra-acciones) encapsulados. */
+  app-nueva-compra > .acciones.ficha-pie.en-pagina {
+    max-width: none;
+    margin: 0;
+  }
+  app-nueva-compra > .ficha-pie.en-pagina > button {
+    min-height: 52px;
+  }
+}

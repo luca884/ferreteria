@@ -23,7 +23,16 @@
   }
 
   <section class="paso panel">
-    <h2>Comprobante</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button type="button" [attr.aria-expanded]="pasoAbierto('comprobante')" (click)="alternarPaso('comprobante')">
+          <span>Comprobante</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Comprobante</h2>
+    }
     <app-selector-archivo
       class="factura-pdf"
       rotulo="Leer factura en PDF"
@@ -104,7 +113,17 @@
   </section>
 
   <section class="paso panel">
-    <h2>Artículos</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button type="button" [attr.aria-expanded]="pasoAbierto('articulos')" (click)="alternarPaso('articulos')">
+          <span>Artículos</span>
+          <span class="compra-paso-resumen">{{ renglones().length + sinArticulo().length }}</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Artículos</h2>
+    }
     <form class="buscador" (submit)="buscar($event)">
       <label>
         Agregar artículo
@@ -239,7 +258,17 @@
   </section>
 
   <section class="paso panel recargos-costo">
-    <h2>Recargos del costo</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button type="button" [attr.aria-expanded]="pasoAbierto('recargos')" (click)="alternarPaso('recargos')">
+          <span>Recargos del costo</span>
+          <span class="compra-paso-resumen">{{ recargos().length || 'ninguno' }}</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Recargos del costo</h2>
+    }
     <p class="ayuda">
       Se suman al costo de cada artículo de la compra antes del margen (por ejemplo «Embalaje y carga» 4,44 %). Negativo
       descuenta. Hasta {{ maximoRecargos }}.
@@ -300,7 +329,7 @@
     </div>
   }
 
-  <div class="acciones">
+  <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
     <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
   </div>
 

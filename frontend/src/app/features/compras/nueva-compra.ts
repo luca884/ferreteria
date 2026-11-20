@@ -8,6 +8,7 @@ import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { esCelular } from '../../shared/es-celular';
 import { ImporteInput } from '../../shared/importe-input';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { SelectorArchivo } from '../../shared/selector-archivo';
@@ -40,6 +41,8 @@ const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si y
 const MAXIMO_RECARGOS = 5;
 /** S5: lo que se explica al intentar agregar un recargo con la lista llena. */
 const MOTIVO_TOPE_RECARGOS = `Ya cargaste el máximo de recargos (${MAXIMO_RECARGOS}).`;
+
+type PasoDeCompra = 'comprobante' | 'articulos' | 'recargos';
 
 /** Un renglón mientras se carga: la cantidad y el costo son el texto de los campos. */
 interface RenglonEnCarga {
@@ -88,6 +91,7 @@ interface LecturaDeFactura {
   imports: [BarraAcciones, DecimalPipe, CampoMoneda, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
+  host: { '(window:resize)': 'ajustarPresentacion()' },
 })
 export class NuevaCompra implements OnInit {
   protected readonly cantidadConUnidad = cantidadConUnidad;
@@ -97,6 +101,9 @@ export class NuevaCompra implements OnInit {
   private readonly proveedoresApi = inject(ProveedoresService);
   private readonly generarClave = inject(GENERAR_CLAVE);
   protected readonly auth = inject(AuthService);
+
+  protected readonly celular = signal(esCelular());
+  protected readonly pasosAbiertos = signal<ReadonlySet<PasoDeCompra>>(new Set(['comprobante']));
 
   protected readonly tipos = TIPOS_COMPRA;
   protected readonly etiqueta = ETIQUETA_TIPO_COMPRA;
@@ -173,6 +180,24 @@ export class NuevaCompra implements OnInit {
     this.proveedoresApi.listar().subscribe({
       next: (lista) => this.proveedores.set(lista),
       error: () => this.errores.set([MENSAJE_PROVEEDORES]),
+    });
+  }
+
+  protected ajustarPresentacion(): void {
+    this.celular.set(esCelular());
+  }
+
+  /** Abierta por el usuario, o porque su error del servidor sólo se muestra ahí adentro (el de los recargos). */
+  protected pasoAbierto(paso: PasoDeCompra): boolean {
+    return this.pasosAbiertos().has(paso) || (paso === 'recargos' && this.errorRecargos() !== null);
+  }
+
+  protected alternarPaso(paso: PasoDeCompra): void {
+    this.pasosAbiertos.update((abiertos) => {
+      const siguientes = new Set(abiertos);
+      if (siguientes.has(paso)) siguientes.delete(paso);
+      else siguientes.add(paso);
+      return siguientes;
     });
   }
 
