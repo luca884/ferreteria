@@ -7,7 +7,7 @@
 >
 > Tamaño: este índice pesa ~22 KB; los 93 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **90 cerradas · 3 abiertas**
+- **91 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -15,7 +15,6 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
-| [`movil-sectores.md`](movil-sectores.md) | abierta (16✓/1✗) | — | — | — | 100 |
 
 ## Cerradas
 
@@ -113,6 +112,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`cu-13-compras.md`](cu-13-compras.md) | 2026-10-21 | registrar una compra (factura o remito del proveedor) que sume el stock y actualice el costo y el precio de los artículos | 8 |
 | [`cu-14-precio-manual.md`](cu-14-precio-manual.md) | 2026-10-21 | precio manual por artículo, ajustes sin límite sobre el precio final y actualización masiva del precio final | 22 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | 22 |
+| [`movil-sectores.md`](movil-sectores.md) | — | — | 103 |
 
 ## Tareas por caso de uso
 
