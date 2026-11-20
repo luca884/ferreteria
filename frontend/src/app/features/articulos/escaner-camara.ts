@@ -20,20 +20,25 @@ import { CamaraEscaner, CausaFalla, SesionCamara, causaDeFalla } from './camara-
 
 /** Cada cuánto mira el lector un cuadro del video. */
 const CADA_MS = 250;
+const MAX_FALLAS_SEGUIDAS = 5;
 const CONSULTA_CELULAR = '(max-width: 639.98px)';
 
-/** Los textos de cada falla (los artboards no diseñan los estados de permiso). Ninguno recuerda nada: siempre se puede reintentar. */
-const TEXTOS_FALLA: Record<CausaFalla, string> = {
+type FallaEscaner = CausaFalla | 'lectura';
+
+/** Los textos de cada falla (los artboards no diseñan los estados de permiso). */
+const TEXTOS_FALLA: Record<FallaEscaner, string> = {
   denegada:
     'No pudimos usar la cámara. Si la bloqueaste, habilitala desde los permisos del navegador y volvé a intentar.',
   'sin-camara': 'No encontramos una cámara en este dispositivo. Escribí el código a mano.',
+  'sin-lector': 'Este navegador no puede escanear códigos de barras. Escribí el código a mano.',
+  lectura: 'No pudimos leer el código de barras. Probá de nuevo o escribilo a mano.',
   otra: 'No pudimos abrir la cámara. Puede que otra aplicación la esté usando. Probá de nuevo o escribí el código a mano.',
 };
 
 type Estado =
   | { tipo: 'abriendo' }
   | { tipo: 'mirando' }
-  | { tipo: 'falla'; causa: CausaFalla }
+  | { tipo: 'falla'; causa: FallaEscaner }
   | { tipo: 'buscando'; codigo: string }
   | { tipo: 'leido'; codigo: string; articulo: Articulo }
   | { tipo: 'sin-articulo'; codigo: string }
@@ -86,6 +91,7 @@ export class EscanerCamara implements OnDestroy {
   private temporizador: ReturnType<typeof setInterval> | null = null;
   private busqueda: Subscription | null = null;
   private leyendo = false;
+  private fallasSeguidas = 0;
   /** Cada apertura o cierre lo sube: un permiso que llega tarde (ya se cerró o se reintentó) apaga su cámara. */
   private generacion = 0;
   private readonly consultaCelular =
@@ -149,15 +155,21 @@ export class EscanerCamara implements OnDestroy {
   private async leer(sesion: SesionCamara, generacion: number): Promise<void> {
     if (this.leyendo || generacion !== this.generacion) return;
     this.leyendo = true;
-    let codigo: string | null = null;
+    let codigo: string | null;
     try {
       codigo = await sesion.leer(this.video().nativeElement);
     } catch {
-      // Un cuadro que el detector no pudo leer no corta el escaneo: se prueba con el siguiente.
+      if (generacion === this.generacion && ++this.fallasSeguidas >= MAX_FALLAS_SEGUIDAS) {
+        this.apagar();
+        this.poner({ tipo: 'falla', causa: 'lectura' });
+      }
+      return;
     } finally {
-      this.leyendo = false;
+      if (generacion === this.generacion) this.leyendo = false;
     }
-    if (codigo && generacion === this.generacion) this.alLeer(codigo);
+    if (generacion !== this.generacion) return;
+    this.fallasSeguidas = 0; // Un cuadro sin código también es una lectura exitosa.
+    if (codigo) this.alLeer(codigo);
   }
 
   /** La primera lectura: apaga la cámara y busca el código con el servicio de siempre. */
@@ -201,6 +213,7 @@ export class EscanerCamara implements OnDestroy {
     this.busqueda?.unsubscribe();
     this.busqueda = null;
     this.leyendo = false;
+    this.fallasSeguidas = 0;
     this.sesion?.detener();
     this.sesion = null;
     this.linternaEncendida.set(false);

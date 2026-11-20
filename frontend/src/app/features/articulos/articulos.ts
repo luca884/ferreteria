@@ -1,7 +1,9 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
+import { from } from 'rxjs';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -77,7 +79,7 @@ export class Articulos implements OnInit {
   private readonly avisos = inject(Avisos);
   private readonly rubrosService = inject(RubrosService);
   protected readonly auth = inject(AuthService);
-  private readonly camara = inject(CamaraEscaner);
+  private readonly lectorDisponible = toSignal(from(inject(CamaraEscaner).disponible()), { initialValue: false });
   private readonly buscadorMovil = viewChild<ElementRef<HTMLInputElement>>('qMovil');
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
@@ -187,10 +189,10 @@ export class Articulos implements OnInit {
 
   /**
    * movil-sectores T7 (S1): el botón de cámara del buscador existe sólo en el celular y sólo si el navegador trae el
-   * lector nativo de códigos y la cámara; sin eso se escribe a mano. Para el Dueño y para el Vendedor.
+   * lector nativo compatible y la cámara; sin eso se escribe a mano. Para el Dueño y para el Vendedor.
    */
   protected puedeEscanear(): boolean {
-    return esCelular() && this.camara.disponible();
+    return esCelular() && this.lectorDisponible();
   }
 
   /** «Escribir el código a mano» del escáner: lo cierra, completa el buscador con el código leído (si hay) y lo enfoca. */

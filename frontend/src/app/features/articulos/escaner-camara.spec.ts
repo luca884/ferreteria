@@ -363,6 +363,52 @@ describe('EscanerCamara', () => {
       expect(boton('Escribir el código a mano')).toBeDefined();
     });
 
+    it('tras cinco fallas seguidas apaga la cámara, avisa y deja escribir el código a mano', async () => {
+      const sesion = sesionFalsa();
+      sesion.leer.mockRejectedValue(new Error('InvalidStateError'));
+      await crear(async () => sesion);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      fixture.detectChanges();
+      expect(sesion.leer).toHaveBeenCalledTimes(4);
+      expect(texto()).toContain('Apuntá al código de barras');
+
+      await vi.advanceTimersByTimeAsync(250);
+      fixture.detectChanges();
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+        'No pudimos leer el código de barras. Probá de nuevo o escribilo a mano.',
+      );
+      expect(texto()).not.toContain('Apuntá al código de barras');
+      expect(sesion.detener).toHaveBeenCalledTimes(1);
+      expect(buscar).not.toHaveBeenCalled();
+      await ciclo();
+      expect(sesion.leer).toHaveBeenCalledTimes(5);
+
+      await clic('Escribir el código a mano');
+      expect(aMano).toHaveBeenCalledWith(null);
+    });
+
+    it('los cuadros sin código no cuentan como fallas y cortan la racha, sin impedir una lectura normal', async () => {
+      const sesion = sesionFalsa();
+      const error = new Error('InvalidStateError');
+      for (let i = 0; i < 6; i++) sesion.leer.mockResolvedValueOnce(null);
+      for (let i = 0; i < 4; i++) sesion.leer.mockRejectedValueOnce(error);
+      sesion.leer.mockResolvedValueOnce(null);
+      for (let i = 0; i < 4; i++) sesion.leer.mockRejectedValueOnce(error);
+      sesion.leer.mockResolvedValueOnce('7790001000123');
+      await crear(async () => sesion);
+
+      await vi.advanceTimersByTimeAsync(3750);
+      fixture.detectChanges();
+      expect(sesion.leer).toHaveBeenCalledTimes(15);
+      expect(texto()).toContain('Apuntá al código de barras');
+      expect(sesion.detener).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(250);
+      expect(buscar).toHaveBeenCalledExactlyOnceWith('7790001000123', 0, 20, true);
+      expect(sesion.detener).toHaveBeenCalledTimes(1);
+    });
+
     it('una lectura que falla (el detector tira) no corta el escaneo', async () => {
       const sesion = sesionFalsa();
       sesion.leer.mockRejectedValueOnce(new Error('InvalidStateError')).mockResolvedValue('7790001000123');
