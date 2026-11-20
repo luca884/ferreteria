@@ -160,16 +160,33 @@ describe('PaginaConfiguracionVentas', () => {
   }
 
     it('«Guardar» va en un pie fijo de la página y sigue siendo el envío del formulario', async () => {
-      await crear();
+      vi.stubGlobal('matchMedia', () => ({ matches: true }));
+      try {
+        await crear();
 
-      const pie = el().querySelector('form.ventas > .acciones-form')!;
-      expect(pie.classList).toContain('ficha-pie');
-      expect(pie.classList).toContain('en-pagina');
-      const guardarBoton = pie.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-      expect(guardarBoton.textContent!.trim()).toBe('Guardar');
+        const pie = el().querySelector('form.ventas > .acciones-form.ficha-pie.en-pagina')!;
+        const guardarBoton = pie.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        expect(guardarBoton.textContent!.trim()).toBe('Guardar');
 
-      await escribirYGuardar('250000,5');
-      expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 250000.5 });
+        await escribirYGuardar('250000,5');
+        expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 250000.5 });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('conserva el envío de escritorio sin las clases del pie fijo', async () => {
+      vi.stubGlobal('matchMedia', () => ({ matches: false }));
+      try {
+        await crear();
+
+        expect(el().querySelector('.ficha-pie, .en-pagina')).toBeNull();
+        expect(texto('form.ventas > .acciones-form > button[type="submit"]')).toBe('Guardar');
+        await escribirYGuardar('250000,5');
+        expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 250000.5 });
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('el título de la sección y todo lo nuevo del componente son sólo del celular', async () => {
