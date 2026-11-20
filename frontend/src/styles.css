@@ -3109,25 +3109,6 @@ ul.error {
     margin: var(--e-3) var(--pantalla-x) 0;
   }
 
-  /*
-   * «Recibido» y el vuelto van arriba de los medios, justo debajo de la cabecera (el artboard los pone después de la lista):
-   * con más de cuatro formas de pago la lista pasa la pantalla y el campo quedaba abajo, tapado por el pie fijo y, al
-   * escribir, por el teclado. Es sólo el orden en pantalla: el DOM y el orden del Tab son los de siempre. Quitar estas tres
-   * reglas vuelve al orden del artboard.
-   */
-  app-dialogo-cobro .cobro-celular > * {
-    order: 2;
-  }
-  app-dialogo-cobro .cobro-celular > :is(.ficha-barra, .cabecera, .recargo, .descuento-forma, .aviso) {
-    order: 0;
-  }
-  app-dialogo-cobro .cobro-celular > .efectivo {
-    order: 1;
-  }
-  app-dialogo-cobro .cobro-celular > .ficha-pie {
-    order: 3;
-  }
-
   /* Los medios, como la lista de opciones del artboard: filas de 64 px con el nombre y su ajuste a la izquierda y la marca a la derecha. */
   app-dialogo-cobro .cobro-celular .medios {
     display: flex;
@@ -3259,23 +3240,13 @@ ul.error {
 
 /* ---------- Cobro mixto y cuenta corriente en el celular (movil-sectores T9b, S2, S5) ---------- */
 /*
- * Sigue el artboard 06 de movil-mostrador dentro de la pantalla completa de T9a. Es sólo presentación del mismo DOM: las
- * filas del mixto, el resumen, la cuenta corriente y el pie tienen los mismos manejadores, textos y pedido de siempre. La
+ * Sigue el artboard 06 de movil-mostrador dentro de la pantalla completa de T9a. Las filas del mixto, el resumen,
+ * la cuenta corriente y el pie tienen los mismos manejadores, textos y pedido de siempre. La
  * única marca nueva es `cobro-exceso` (la pone el componente sólo en el celular cuando el pie dice «Autorizar exceso…»),
  * para apilar esos botones de texto largo. El escritorio y la tablet no la tienen y no cambian (S5). Todo cuelga de
  * `app-dialogo-cobro` para ganarle a los estilos del componente, y va acá por el tope de 8 kB de `mostrador.css`.
  */
 @media screen and (max-width: 639.98px) {
-  /*
-   * Las filas del mixto, como «Recibido» de T9a, van arriba de la lista de medios: con ocho formas de pago la lista pasa la
-   * pantalla y las filas quedaban abajo, tapadas por el pie y, al escribir, por el teclado. La línea de la cuenta (el exceso,
-   * o saldo y límite) también sube: con «Autorizar exceso…» en el pie, lo que explica el exceso tiene que verse sin
-   * scrollear. Es sólo el orden en pantalla (el DOM y el Tab son los de siempre).
-   */
-  app-dialogo-cobro .cobro-celular > :is(.mixto, .cuenta-corriente) {
-    order: 1;
-  }
-
   /* El mixto es una tarjeta: una fila de 56 px por forma (nombre a la izquierda, importe a la derecha) y, al pie, el resumen. */
   app-dialogo-cobro .cobro-celular > .mixto {
     gap: 0;
