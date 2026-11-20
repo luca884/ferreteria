@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -89,7 +90,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
  */
 @Component({
   selector: 'app-dialogo-cobro',
-  imports: [CampoMoneda, ImporteInput, MontoPipe, RestadoPipe, TrampaFoco],
+  imports: [CampoMoneda, ImporteInput, MontoPipe, RestadoPipe, TrampaFoco, NgTemplateOutlet],
   template: `
     <!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
@@ -157,44 +158,50 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         @if (autorizando()) {
           <p class="aviso" role="status">Autorizando con ARCA…</p>
         }
-        <div class="bloque">
-          <div class="medios" role="radiogroup" aria-label="Medio de pago">
-            @for (o of opciones(); track o.id) {
-              <button
-                #botonMedio
-                type="button"
-                role="radio"
-                class="medio"
-                [attr.aria-checked]="o.id === seleccion()"
-                [attr.aria-disabled]="o.deshabilitada ? 'true' : null"
-                [attr.aria-describedby]="o.deshabilitada ? 'razon-medio-' + o.id : null"
-                [tabindex]="o.id === seleccion() ? 0 : -1"
-                (click)="elegir(o.id)"
-              >
-                {{ o.nombre }}
-                @if (o.recargo) {
-                  <small class="marca-recargo">+{{ o.recargo }}&nbsp;%</small>
-                } @else if (o.descuento) {
-                  <small class="marca-recargo marca-descuento">−{{ o.descuento }}&nbsp;%</small>
-                }
-                @if (celular) {
-                  <!-- movil-sectores T9b: en la lista larga del celular la razón va en la propia fila apagada, a la vista. Es la misma
-                       frase de abajo (que sigue siendo la descripción enlazada y queda sólo para los lectores): acá no se lee dos veces. -->
-                  @if (o.deshabilitada; as razon) {
-                    <small class="razon-en-medio" aria-hidden="true">{{ razon }}</small>
+        <!-- Una sola lista: en el celular, los importes o el saldo se leen antes; en el escritorio, los medios van primero. -->
+        @if (!celular) {
+          <ng-container [ngTemplateOutlet]="listaMedios" />
+        }
+        <ng-template #listaMedios>
+          <div class="bloque">
+            <div class="medios" role="radiogroup" aria-label="Medio de pago">
+              @for (o of opciones(); track o.id) {
+                <button
+                  #botonMedio
+                  type="button"
+                  role="radio"
+                  class="medio"
+                  [attr.aria-checked]="o.id === seleccion()"
+                  [attr.aria-disabled]="o.deshabilitada ? 'true' : null"
+                  [attr.aria-describedby]="o.deshabilitada ? 'razon-medio-' + o.id : null"
+                  [tabindex]="o.id === seleccion() ? 0 : -1"
+                  (click)="elegir(o.id)"
+                >
+                  {{ o.nombre }}
+                  @if (o.recargo) {
+                    <small class="marca-recargo">+{{ o.recargo }}&nbsp;%</small>
+                  } @else if (o.descuento) {
+                    <small class="marca-recargo marca-descuento">−{{ o.descuento }}&nbsp;%</small>
                   }
-                }
-              </button>
+                  @if (celular) {
+                    <!-- movil-sectores T9b: en la lista larga del celular la razón va en la propia fila apagada, a la vista. Es la misma
+                         frase de abajo (que sigue siendo la descripción enlazada y queda sólo para los lectores): acá no se lee dos veces. -->
+                    @if (o.deshabilitada; as razon) {
+                      <small class="razon-en-medio" aria-hidden="true">{{ razon }}</small>
+                    }
+                  }
+                </button>
+              }
+            </div>
+            <!-- La razón de cada opción deshabilitada: visible y enlazada (no se oculta con disabled para que se lea). -->
+            @for (o of opciones(); track o.id) {
+              @if (o.deshabilitada; as razon) {
+                <p class="razon-medio" [id]="'razon-medio-' + o.id">{{ razon }}</p>
+              }
             }
+            <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
           </div>
-          <!-- La razón de cada opción deshabilitada: visible y enlazada (no se oculta con disabled para que se lea). -->
-          @for (o of opciones(); track o.id) {
-            @if (o.deshabilitada; as razon) {
-              <p class="razon-medio" [id]="'razon-medio-' + o.id">{{ razon }}</p>
-            }
-          }
-          <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
-        </div>
+        </ng-template>
         @if (infoCuenta(); as texto) {
           <p class="cuenta-corriente" [class.excede]="exceso() !== null" aria-live="polite">{{ texto }}</p>
         }
@@ -257,6 +264,9 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
               <p id="dialogo-cobro-error" class="error" role="alert">{{ mensaje }}</p>
             }
           </div>
+        }
+        @if (celular) {
+          <ng-container [ngTemplateOutlet]="listaMedios" />
         }
         @if (eligeFactura()) {
           <!-- Bloque 2, S4: facturar o no se elige con un clic; Enter no cobra, para que nadie facture sin querer. -->
@@ -812,7 +822,7 @@ export class DialogoCobro {
   );
 
   /**
-   * Lo que se dice de la cuenta debajo de los medios: el exceso (Dueño), saldo, límite y disponible (Dueño, CU-07.4) o
+   * Lo que se dice de la cuenta: el exceso (Dueño), saldo, límite y disponible (Dueño, CU-07.4) o
    * «Alcanza» (Vendedor, que no ve cifras).
    */
   protected readonly infoCuenta = computed<string | null>(() => {
