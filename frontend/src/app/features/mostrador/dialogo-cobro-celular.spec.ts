@@ -263,6 +263,24 @@ describe('DialogoCobro en el celular (movil-sectores T9a)', () => {
       if (movil) antesDe('.cuenta-corriente', '.medios');
       else antesDe('.medios', '.cuenta-corriente');
     });
+
+    it('no repite ids y dibuja la lista de medios una sola vez en cada modo', async () => {
+      await abrir(consulta);
+      const sinRepetidos = () => {
+        const ids = Array.from(el().querySelectorAll('[id]')).map((e) => e.id);
+        expect(ids.filter((x, i) => ids.indexOf(x) !== i)).toEqual([]);
+        expect(el().querySelectorAll('[role="radiogroup"]').length).toBe(1);
+        expect(el().querySelectorAll('button[role="radio"]').length).toBe(6);
+        expect(el().querySelectorAll('.pista-medios').length).toBe(1);
+      };
+      sinRepetidos();
+      medio('Cuenta corriente').click();
+      await estabilizar();
+      sinRepetidos();
+      medio('Mixto').click();
+      await estabilizar();
+      sinRepetidos();
+    });
   });
 
   /**
