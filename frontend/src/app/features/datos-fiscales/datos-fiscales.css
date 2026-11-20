@@ -3,7 +3,8 @@
   width: 100%;
 }
 /* La barra de acciones va a todo el ancho; el resto, en una columna centrada del mismo ancho. */
-:host > :not(app-barra-acciones) {
+:host > :not(app-barra-acciones),
+.ficha-flujo > :not(.ficha-barra) {
   max-width: var(--ancho-formulario);
   margin-inline: auto;
 }
@@ -46,6 +47,12 @@
   align-items: center;
 }
 
+/* Sólo del celular: el aviso de arriba y la fila que abre la pantalla del local. En el escritorio no se ven. */
+.aviso-incompleto,
+.ir-local {
+  display: none;
+}
+
 /* El CUIT se ve como dato, no como campo: no se puede cambiar. */
 .cuit .etiqueta {
   font-size: var(--texto-sm);
@@ -54,4 +61,84 @@
 }
 .cuit .valor {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * En el celular (S2, T3 de movil-sectores) el formulario es una pantalla: «Guardar» queda fijo abajo, arriba de la barra de
+ * destinos (`.ficha-pie.en-pagina`, styles.css). Va sólo en pantalla y hasta 640 px: el escritorio y la tablet quedan igual.
+ */
+@media screen and (max-width: 639.98px) {
+  /* Dentro de la pantalla completa (`.ficha-flujo`, styles.css) cada bloque va con el margen de la pantalla, sin tope de ancho. */
+  .ficha-flujo > :not(.ficha-barra) {
+    max-width: none;
+    margin-inline: var(--pantalla-x);
+  }
+  /* El formulario llena la pantalla para que el pie quede abajo; las pantallas se ven de a una (Emisor y Local). */
+  .ficha-flujo > .fiscales {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--e-3);
+  }
+  .seccion:not(.activa) {
+    display: none;
+  }
+  .aviso-incompleto {
+    display: block;
+    margin-bottom: 0;
+  }
+  /* La fila del emisor al local: de 64 px, con el domicilio abajo y la flecha a la derecha, como las filas de los hubs. */
+  .ir-local {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-3);
+    width: 100%;
+    min-height: 64px;
+    padding: var(--e-2) var(--e-4);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    box-shadow: var(--sombra-1);
+    color: var(--texto);
+    text-align: left;
+  }
+  .ir-local-texto {
+    display: grid;
+    min-width: 0;
+  }
+  .ir-local-texto b {
+    font-weight: 600;
+  }
+  .ir-local-texto small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+  }
+  .ir-local svg {
+    flex: none;
+    color: var(--texto-tenue);
+  }
+  /* El título de cada bloque es un rótulo chico en mayúsculas, como en el artboard (movil-configuracion/03). */
+  .seccion > legend {
+    font-size: var(--texto-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--texto-tenue);
+  }
+  /* El CUIT se ve como un campo de sólo lectura (gris, de 44 px) y debajo dice por qué no se toca. */
+  .cuit .valor {
+    display: flex;
+    align-items: center;
+    min-height: var(--alto-tactil);
+    padding: 0 var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    background: var(--superficie-3);
+    color: var(--texto-suave);
+  }
 }

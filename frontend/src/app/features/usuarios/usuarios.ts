@@ -22,6 +22,10 @@ import { UsuariosService } from './usuarios.service';
 
 const porNombre = (a: Usuario, b: Usuario) => a.nombre.localeCompare(b.nombre) || a.id - b.id;
 
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const enElCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+
 /** S5: lo que se explica al intentar una acción de la barra sin un usuario elegido. */
 const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un usuario de la lista para editarlo.';
 const MOTIVO_SIN_ELEGIR_ALTERNAR = 'Elegí un usuario de la lista para desactivarlo o reactivarlo.';
@@ -72,6 +76,12 @@ export class Usuarios implements OnInit {
   protected readonly erroresCampos = signal<string[]>([]);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
+  /**
+   * La ficha a pantalla completa del celular (S7 de movil-sectores): `nuevo`, `editar` y tocar una fila la abren; guardar,
+   * cancelar, «Volver» y los cambios de estado o de contraseña la cierran. Sólo la lee el CSS del celular: en el
+   * escritorio el formulario siempre está al costado.
+   */
+  protected readonly fichaAbierta = signal(false);
   /** El usuario que se está por desactivar: espera la confirmación. */
   protected readonly aDesactivar = signal<Usuario | null>(null);
   /** El usuario que se está editando; null mientras se da de alta uno nuevo. */
@@ -195,6 +205,7 @@ export class Usuarios implements OnInit {
         this.guardando.set(false);
         // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
         this.enfocar('#nombre');
+        this.cerrarFicha();
         this.aviso.set(`Se guardó «${guardado.nombre}».`);
         // D9: si el Dueño se editó a sí mismo, el shell tiene que mostrar el nombre nuevo sin esperar al próximo login.
         if (this.esPropio(guardado)) this.auth.refrescarSesion().subscribe({ error: () => undefined });
@@ -220,6 +231,7 @@ export class Usuarios implements OnInit {
     this.reseteando.set(null);
     this.filas.elegidoId.set(usuario.id);
     this.editando.set(usuario);
+    this.fichaAbierta.set(true);
     this.form.controls.password.disable({ emitEvent: false });
     this.ajustarRol(usuario);
     this.form.reset({
@@ -238,11 +250,31 @@ export class Usuarios implements OnInit {
     this.limpiarErroresForm();
   }
 
+  /** En el celular, tocar un usuario de la lista abre su ficha; en el escritorio sólo lo elige (Enter o doble clic editan). */
+  protected abrirFichaEnElCelular(usuario: Usuario): void {
+    if (!enElCelular()) return;
+    this.editar(usuario);
+    this.enfocar('form.alta .ficha-volver');
+  }
+
+  /** «Volver» y «Cancelar» de la ficha del celular: se descarta lo escrito y el foco vuelve al botón «Nuevo». */
+  protected volverDeLaFicha(): void {
+    this.cancelar();
+    this.cerrarFicha();
+  }
+
+  /** Cierra la ficha y, en el celular, devuelve el foco a «Nuevo»; en el escritorio el foco se queda donde estaba. */
+  private cerrarFicha(): void {
+    this.fichaAbierta.set(false);
+    if (enElCelular()) this.enfocar('.boton-flotante');
+  }
+
   /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
   protected nuevo(): void {
     this.aviso.set(null);
     this.reseteando.set(null);
     this.cancelar();
+    this.fichaAbierta.set(true);
     this.enfocar('#nombre');
   }
 
@@ -277,6 +309,8 @@ export class Usuarios implements OnInit {
       next: (cambiado) => {
         this.usuarios.update((lista) => lista.map((u) => (u.id === cambiado.id ? cambiado : u)));
         this.cambiando.set(false);
+        // Desde la ficha del celular, desactivar o reactivar termina la tarea: se vuelve a la lista.
+        this.cerrarFicha();
       },
       error: (err: unknown) => {
         this.cambiando.set(false);
@@ -292,6 +326,7 @@ export class Usuarios implements OnInit {
     this.aviso.set(null);
     this.limpiarErroresDeReset();
     this.reseteando.set(usuario);
+    if (enElCelular()) this.enfocar('section.alta .ficha-volver');
   }
 
   protected cerrarReset(): void {
@@ -317,6 +352,7 @@ export class Usuarios implements OnInit {
       next: () => {
         this.enviandoReset.set(false);
         this.reseteando.set(null);
+        this.cerrarFicha();
         this.aviso.set(`Se cambió la contraseña de ${usuario.nombre}.`);
       },
       error: (err: unknown) => {
@@ -341,7 +377,25 @@ export class Usuarios implements OnInit {
     return control.touched && control.dirty && control.invalid;
   }
 
-  /** Sobre uno mismo el rol no se cambia: el selector queda deshabilitado. */
+  /** El rol elegido con el control segmentado del celular: escribe el mismo control del formulario que el select. */
+  protected elegirRol(rol: RolDeFerreteria): void {
+    const control = this.form.controls.rol;
+    if (control.disabled) return;
+    control.setValue(rol);
+    control.markAsDirty();
+  }
+
+  /** Como un grupo de radios nativo: las flechas eligen el rol anterior o el siguiente (dando la vuelta) y llevan el foco. */
+  protected alTeclearRol(evento: KeyboardEvent, indice: number): void {
+    const paso = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[evento.key];
+    if (paso === undefined || this.form.controls.rol.disabled) return;
+    evento.preventDefault();
+    const destino = (indice + paso + this.roles.length) % this.roles.length;
+    this.elegirRol(this.roles[destino]);
+    (evento.currentTarget as HTMLElement).parentElement?.querySelectorAll('button')[destino]?.focus();
+  }
+
+  /** Sobre uno mismo el rol no se cambia: el selector (y el control segmentado del celular) queda deshabilitado. */
   private ajustarRol(usuario: Usuario | null): void {
     const rol = this.form.controls.rol;
     if (this.esPropio(usuario)) rol.disable({ emitEvent: false });

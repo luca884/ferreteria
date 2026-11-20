@@ -1,7 +1,7 @@
 <app-barra-acciones>
   <h1>Cuenta corriente</h1>
   <a class="btn accion-barra volver" routerLink="/clientes">Volver a Clientes</a>
-  @if (auth.esDueno()) {
+  @if (auth.esDueno() && !celular) {
     <button
       type="button"
       class="accion-barra recargo"
@@ -99,6 +99,27 @@
             }
           </ul>
         </section>
+
+        @if (celular && auth.esDueno()) {
+          <!-- Sólo del celular (T12a): las acciones de la barra, debajo del saldo (artboard 08). Los mismos manejadores y condiciones. -->
+          <div class="acciones-cuenta">
+            <button
+              type="button"
+              class="primario cobrar-f4"
+              aria-keyshortcuts="F4"
+              [disabled]="estado() !== 'listo'"
+              (click)="abrirCobro()"
+            >
+              Cobrar
+            </button>
+            <button type="button" class="secundario recargo" [disabled]="estado() !== 'listo'" (click)="abrirAjuste('RECARGO')">
+              Recargo
+            </button>
+            <button type="button" class="secundario descuento" [disabled]="estado() !== 'listo'" (click)="abrirAjuste('DESCUENTO')">
+              Descuento
+            </button>
+          </div>
+        }
 
         @if (p.comprobantes.length === 0) {
           <p class="ayuda sin-pendientes">No tiene comprobantes con deuda.</p>

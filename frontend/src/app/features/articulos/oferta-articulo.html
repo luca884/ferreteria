@@ -1,93 +1,133 @@
 @if (editable() || oferta()) {
-  <section class="oferta-articulo" aria-labelledby="oferta-titulo">
-    <h2 id="oferta-titulo">Oferta</h2>
-
-    @if (resumen(); as texto) {
-      <p class="resumen-oferta" [class.vigente]="oferta()?.vigente">{{ texto }}</p>
+  <section class="oferta-articulo" [class.oferta-celular]="celular()" aria-labelledby="oferta-titulo">
+    @if (celular()) {
+      <!-- Celular: la cabecera de una tarjeta plegable, como las de la ficha (sus estilos son los de `.seccion-cabecera`). -->
+      <h2 id="oferta-titulo">
+        <button type="button" class="seccion-cabecera" [attr.aria-expanded]="abierta()" (click)="abierta.set(!abierta())">
+          <span class="seccion-titulo">Oferta</span>
+          @if (datoPlegada()) {
+            <span class="seccion-dato">{{ datoPlegada() }}</span>
+          }
+          <svg class="seccion-flecha" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+      </h2>
+    } @else {
+      <h2 id="oferta-titulo">Oferta</h2>
     }
 
-    @if (editable()) {
-      @if (motivo.visible(); as texto) {
-        <p class="motivo-accion" role="status">{{ texto }}</p>
+    @if (!celular() || abierta()) {
+      @if (resumen(); as texto) {
+        <p class="resumen-oferta" [class.vigente]="oferta()?.vigente">{{ texto }}</p>
       }
 
-      <form class="campos-oferta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-        <label for="oferta-tipo">
-          Tipo
-          <select id="oferta-tipo" formControlName="tipo" [attr.aria-describedby]="errores().tipo ? 'oferta-tipo-error' : null">
-            @for (tipo of tipos; track tipo) {
-              <option [value]="tipo">{{ tipoLabels[tipo] }}</option>
-            }
-          </select>
-          @if (errores().tipo; as mensaje) {
-            <span id="oferta-tipo-error" class="error-campo">{{ mensaje }}</span>
-          }
-        </label>
+      @if (editable()) {
+        @if (motivo.visible(); as texto) {
+          <p class="motivo-accion" role="status">{{ texto }}</p>
+        }
 
-        <label for="oferta-valor">
-          {{ form.controls.tipo.value === 'DESCUENTO_PORCENTAJE' ? 'Descuento (%)' : form.controls.tipo.value === 'DESCUENTO_MONTO' ? 'Descuento ($)' : 'Precio de oferta ($)' }}
-          @if (form.controls.tipo.value === 'DESCUENTO_PORCENTAJE') {
-            <input
-              id="oferta-valor"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              min="0.01"
-              formControlName="valor"
-              [attr.aria-invalid]="errores().valor ? true : null"
-              [attr.aria-describedby]="errores().valor ? 'oferta-valor-error' : 'oferta-precio-resultante'"
-            />
+        <form class="campos-oferta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+          @if (celular()) {
+            <div class="campo-tipo">
+              <span id="oferta-tipo-etiqueta" class="etiqueta-tipo">Tipo</span>
+              <div class="tipo-segmentado" role="radiogroup" aria-labelledby="oferta-tipo-etiqueta" [attr.aria-describedby]="errores().tipo ? 'oferta-tipo-error' : null">
+                @for (tipo of tipos; track tipo; let i = $index) {
+                  <button
+                    type="button"
+                    role="radio"
+                    [attr.aria-checked]="form.controls.tipo.value === tipo"
+                    [attr.tabindex]="form.controls.tipo.value === tipo ? 0 : -1"
+                    (click)="elegirTipo(tipo)"
+                    (keydown)="alTeclearTipo($event, i)"
+                  >
+                    {{ tipoLabels[tipo] }}
+                  </button>
+                }
+              </div>
+              @if (errores().tipo; as mensaje) {
+                <span id="oferta-tipo-error" class="error-campo">{{ mensaje }}</span>
+              }
+            </div>
           } @else {
-            <app-campo-moneda>
+            <label for="oferta-tipo">
+              Tipo
+              <select id="oferta-tipo" formControlName="tipo" [attr.aria-describedby]="errores().tipo ? 'oferta-tipo-error' : null">
+                @for (tipo of tipos; track tipo) {
+                  <option [value]="tipo">{{ tipoLabels[tipo] }}</option>
+                }
+              </select>
+              @if (errores().tipo; as mensaje) {
+                <span id="oferta-tipo-error" class="error-campo">{{ mensaje }}</span>
+              }
+            </label>
+          }
+
+          <label for="oferta-valor">
+            {{ form.controls.tipo.value === 'DESCUENTO_PORCENTAJE' ? 'Descuento (%)' : form.controls.tipo.value === 'DESCUENTO_MONTO' ? 'Descuento ($)' : 'Precio de oferta ($)' }}
+            @if (form.controls.tipo.value === 'DESCUENTO_PORCENTAJE') {
               <input
                 id="oferta-valor"
-                appImporte
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0.01"
                 formControlName="valor"
                 [attr.aria-invalid]="errores().valor ? true : null"
                 [attr.aria-describedby]="errores().valor ? 'oferta-valor-error' : 'oferta-precio-resultante'"
               />
-            </app-campo-moneda>
-          }
-          @if (errores().valor; as mensaje) {
-            <span id="oferta-valor-error" class="error-campo">{{ mensaje }}</span>
-          }
-        </label>
+            } @else {
+              <app-campo-moneda>
+                <input
+                  id="oferta-valor"
+                  appImporte
+                  formControlName="valor"
+                  [attr.aria-invalid]="errores().valor ? true : null"
+                  [attr.aria-describedby]="errores().valor ? 'oferta-valor-error' : 'oferta-precio-resultante'"
+                />
+              </app-campo-moneda>
+            }
+            @if (errores().valor; as mensaje) {
+              <span id="oferta-valor-error" class="error-campo">{{ mensaje }}</span>
+            }
+          </label>
 
-        <label for="oferta-hasta">
-          Hasta (opcional)
-          <input
-            id="oferta-hasta"
-            type="date"
-            formControlName="hasta"
-            [attr.aria-invalid]="errores().hasta ? true : null"
-            [attr.aria-describedby]="errores().hasta ? 'oferta-hasta-error' : null"
-          />
-          @if (errores().hasta; as mensaje) {
-            <span id="oferta-hasta-error" class="error-campo">{{ mensaje }}</span>
-          }
-        </label>
+          <label for="oferta-hasta">
+            Hasta (opcional)
+            <input
+              id="oferta-hasta"
+              type="date"
+              formControlName="hasta"
+              [attr.aria-invalid]="errores().hasta ? true : null"
+              [attr.aria-describedby]="errores().hasta ? 'oferta-hasta-error' : null"
+            />
+            @if (errores().hasta; as mensaje) {
+              <span id="oferta-hasta-error" class="error-campo">{{ mensaje }}</span>
+            }
+          </label>
 
-        <p id="oferta-precio-resultante" class="precio-resultante" aria-live="polite">
-          @if (precioResultante(); as precio) {
-            Precio de oferta: <strong>{{ precio | monto }}</strong>
-          } @else if (precioResultante() === null) {
-            Con ese valor el precio no baja.
-          }
-        </p>
+          <p id="oferta-precio-resultante" class="precio-resultante" aria-live="polite">
+            @if (precioResultante(); as precio) {
+              Precio de oferta: <strong>{{ precio | monto }}</strong>
+            } @else if (precioResultante() === null) {
+              Con ese valor el precio no baja.
+            }
+          </p>
 
-        <div class="acciones-oferta">
-          <button type="submit" [attr.aria-disabled]="ariaDe(motivos().guardar)" [disabled]="guardando()">
-            {{ guardando() ? 'Guardando…' : 'Guardar oferta' }}
-          </button>
-          @if (oferta()) {
-            <button type="button" class="secundario" [disabled]="guardando()" (click)="sacar()">Sacar oferta</button>
-          }
-        </div>
-      </form>
-    }
+          <div class="acciones-oferta">
+            <button type="submit" [attr.aria-disabled]="ariaDe(motivos().guardar)" [disabled]="guardando()">
+              {{ guardando() ? 'Guardando…' : 'Guardar oferta' }}
+            </button>
+            @if (oferta()) {
+              <button type="button" class="secundario" [disabled]="guardando()" (click)="sacar()">Sacar oferta</button>
+            }
+          </div>
+        </form>
+      }
 
-    @if (error(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
+      @if (error(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
     }
   </section>
 }

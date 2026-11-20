@@ -93,6 +93,82 @@ describe('MovimientosArticulo', () => {
     expect(celdas(3)).toEqual(['22/10/2026 18:00', 'Venta', 'Venta N.º 12', '-2,5 unidades', '6 unidades', '—', '—']);
   });
 
+  describe('tarjetas del celular (movil-sectores T5, slice 5b)', () => {
+    const tarjetas = () => Array.from(el().querySelectorAll('ul.tarjetas-mov > li'));
+    const parte = (tarjeta: number, clase: string) =>
+      tarjetas()[tarjeta].querySelector(`.${clase}`)?.textContent?.replace(/\s+/g, ' ').trim();
+
+    it('muestran las mismas filas que la tabla, en el mismo orden y con los mismos textos', async () => {
+      await crear();
+
+      expect(tarjetas()).toHaveLength(filas().length);
+      expect(parte(0, 'tipo')).toBe('Ajuste');
+      expect(parte(0, 'cantidad')).toBe('-1 unidad');
+      expect(parte(0, 'detalle')).toBe('23/10/2026 10:15 · — · Ana · «Rotura»');
+      expect(parte(0, 'saldo')).toBe('Saldo 11 unidades');
+      expect(parte(1, 'detalle')).toBe('23/10/2026 09:00 · Factura A 00003-00001234 · Bulonera Sur · Ana');
+      expect(parte(2, 'tipo')).toBe('Anulación de remito');
+      expect(parte(3, 'cantidad')).toBe('-2,5 unidades');
+      expect(parte(3, 'detalle')).toBe('22/10/2026 18:00 · Venta N.º 12 · —');
+    });
+
+    it('marcan la entrada y la salida como la tabla y llevan la unidad del artículo', async () => {
+      const clavo = { ...tornillo, unidad: 'KILO', stockActual: 18.5 } as Articulo;
+      const deKilos: MovimientoStock[] = [
+        { id: 2, fecha: '2026-11-08T12:10:00', tipo: 'VENTA', cantidad: -1.5, saldo: 18.5, comprobante: 'Venta N.º 29', usuario: 'Ana', motivo: null },
+        { id: 1, fecha: '2026-11-08T12:00:00', tipo: 'COMPRA', cantidad: 20, saldo: 20, comprobante: null, usuario: 'Ana', motivo: null },
+      ];
+      await crear(true, vi.fn(() => of(pagina(deKilos))), vi.fn(() => of(clavo)));
+
+      expect(tarjetas()[0].querySelector('.cantidad')!.classList).toContain('salida');
+      expect(tarjetas()[1].querySelector('.cantidad')!.classList).toContain('entrada');
+      expect(parte(0, 'cantidad')).toBe('-1,5 kilos');
+      expect(parte(0, 'saldo')).toBe('Saldo 18,5 kilos');
+      expect(parte(1, 'cantidad')).toBe('+20 kilos');
+    });
+
+    it('sin motivo no dejan las comillas vacías', async () => {
+      await crear();
+
+      expect(parte(1, 'detalle')).not.toContain('«');
+    });
+
+    it('la tabla de siete columnas sigue en el DOM con sus textos, para el escritorio', async () => {
+      await crear();
+
+      const encabezados = Array.from(el().querySelectorAll('table.movimientos thead th')).map((th) => th.textContent?.trim());
+      expect(encabezados).toEqual(['Fecha', 'Tipo', 'Comprobante', 'Cantidad', 'Saldo', 'Usuario', 'Motivo']);
+      expect(filas()).toHaveLength(4);
+      expect(celdas(0)).toEqual(['23/10/2026 10:15', 'Ajuste', '—', '-1 unidad', '11 unidades', 'Ana', 'Rotura']);
+    });
+
+    it('el paginador tiene Anterior y Siguiente como botones: Anterior apagado en la primera página, y siguen pidiendo la página', async () => {
+      const listar = vi.fn().mockImplementation((_id: number, filtro: { page: number }) => of(pagina(movimientos, filtro.page, 3)));
+      await crear(true, listar);
+
+      const [anterior, siguiente] = Array.from(el().querySelectorAll<HTMLButtonElement>('nav.paginas button'));
+      expect(anterior.textContent?.trim()).toBe('Anterior');
+      expect(anterior.disabled).toBe(true);
+      expect(siguiente.textContent?.trim()).toBe('Siguiente');
+      expect(siguiente.disabled).toBe(false);
+
+      siguiente.click();
+      await refrescar();
+      expect(servicio.movimientos).toHaveBeenLastCalledWith(7, { page: 1 });
+      expect(texto('.paginas span')).toBe('Página 2 de 3');
+
+      el().querySelectorAll<HTMLButtonElement>('nav.paginas button')[0].click();
+      await refrescar();
+      expect(servicio.movimientos).toHaveBeenLastCalledWith(7, { page: 0 });
+    });
+
+    it('sin movimientos no hay tarjetas', async () => {
+      await crear(true, vi.fn(() => of(pagina([]))));
+
+      expect(el().querySelector('ul.tarjetas-mov')).toBeNull();
+    });
+  });
+
   it('la cantidad y el saldo llevan la unidad del artículo: «+20 kilos», «18,5 kilos» (#36)', async () => {
     const clavo = { ...tornillo, descripcion: 'Clavo punta París 2"', unidad: 'KILO', stockActual: 18.5 } as Articulo;
     const deKilos: MovimientoStock[] = [

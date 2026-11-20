@@ -25,3 +25,9 @@
 6. **API:** `POST /api/ventas/{id}/anular` con `{ "motivo": "…" }` (el motivo solo vale en la anulación interna). Responde 201 con la NC. El Vendedor recibe 403 y la venta de otra ferretería, 404.
 <!-- fin payload: spec.md:147-168 -->
 
+**Agregado móvil: anulación de venta** (≤639.98 px, solo Dueño).
+En el detalle a pantalla completa, «Anular» se abre desde la hoja del ⋯ cuando corresponde.
+En el diálogo se apilan los botones: «Anular» arriba y «Cancelar» abajo, con el foco inicial en «Cancelar».
+No cambian las reglas de negocio, los roles, el motivo ni los textos de confirmación y error.
+Pendiente (L37): «el orden de Tab y de lectura sigue siendo Cancelar y después Anular».
+

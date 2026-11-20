@@ -1,6 +1,6 @@
 # Sistema de diseño — Ferretería
 
-Sincronizado el 2026-11-14 desde `frontend/src/styles.css` (bloque `:root`, líneas 1-120) y
+Sincronizado el 2026-11-15 desde `frontend/src/styles.css` (bloque `:root`, líneas 1-135, y las reglas `@media` de móvil) y
 `frontend/src/index.html` (carga de la tipografía). Sólo se registran valores que existen en
 esas fuentes: no hay tokens inventados.
 
@@ -48,6 +48,23 @@ Fuente: `frontend/src/styles.css` → `:root`.
 | `--advertencia-insignia` / `--advertencia-marca` | `#fef3c7` / `#d97706` |
 | `--info` / `--info-fondo` / `--info-borde` | derivan de `--acento-fuerte` / `--acento-suave` / `--acento-borde` |
 
+### Tono por sección
+
+Fuente: `frontend/src/styles.css` → `:root` (`--tono-*`) y reglas `[data-seccion=…]`. Tiñe la barra de
+cada pantalla y la opción abierta del menú; cada tono da ≥ 4,5:1 con letra blanca.
+
+| Sección | `--tono-*` | `--tono-*-suave` |
+| --- | --- | --- |
+| Mostrador | `#1d4ed8` | `#eff6ff` |
+| Ventas | `#0e7490` | `#ecfeff` |
+| Artículos | `#b45309` | `#fffbeb` |
+| Compras | `#6d28d9` | `#f5f3ff` |
+| Precios | `#047857` | `#ecfdf5` |
+| Configuración | `#be185d` | `#fdf2f8` |
+
+Foco: `--foco` `0 0 0 3px` del acento al 35 %. Transición: `--transicion` 150ms ease. Capas:
+`--z-fijo` 1, `--z-desplegable` 5, `--z-barra` 20, `--z-dialogo` 50.
+
 ## Tipografía
 
 Fuente: `frontend/src/styles.css` (`--fuente`, `--fuente-mono`, escala `--texto-*`) y
@@ -93,8 +110,33 @@ Fuente: `frontend/src/styles.css`.
 - Densidad: `--alto-control` **36px**, `--celda-y` 10px, `--celda-x` 12px.
 
 **Nota de móvil**: `--alto-control` 36px y las celdas de 10px son densidad de escritorio.
-En pantalla táctil el objetivo es ~44×44 px, así que el móvil necesita su propia densidad
-en vez de heredar estos valores.
+En móvil `--alto-tactil` vale **44px** en `:root`; el objetivo táctil es 44×44 px.
+
+## Móvil (≤ 639.98px)
+
+Fuente: `frontend/src/styles.css` y los componentes de `frontend/src/app/` (`movil-pulgar` y
+`movil-sectores`). Los patrones de abajo están implementados hasta 639.98px. El helper
+`shared/es-celular.ts` usa el mismo corte para elegir el marcado cuando hace falta.
+
+- **Objetivo táctil**: botones y controles `min-height` **44px**; casillas y radios dibujados a
+  20px dentro de una etiqueta de 44px; el número que abre una ficha en una tabla mide 44×44.
+- **Paginador** (`.paginas`): una sola línea, botones de 44px de alto.
+- **Fila apilada** (`tabla-tarjetas` + `data-etiqueta`): cada fila de tabla pasa a tarjeta con la
+  etiqueta de cada dato.
+- **Barra inferior**: 4 destinos para ambos roles — Mostrador, Ventas, Artículos y Más.
+  Ventas abre el hub `/area-ventas` con las opciones del menú filtradas por rol; Más abre
+  el cajón. `/ventas` sigue siendo la consulta de ventas del Dueño.
+- **Alta** (`.boton-flotante`): botón «Nuevo» de 56px de alto, a la derecha, sobre la barra
+  de destinos (por ejemplo, en Artículos, Clientes y Proveedores según el rol).
+- **Pantalla completa**: las altas, fichas y formularios largos que cambian en el celular
+  llevan la acción principal abajo (`.ficha-pie`). En un formulario que sigue dentro de la
+  página, `.ficha-pie.en-pagina` fija la acción sobre la barra de destinos.
+  La ficha y el alta de Artículos cubren la pantalla entera, también la barra de destinos (es el artboard aprobado).
+- **Hoja inferior**: acciones de un renglón o del ticket (⋯); también se usa para filtros
+  de listas como Compras y Ventas. No todos los filtros llevan contador.
+- **Tarjetas plegables**: Nueva compra separa Comprobante, Artículos y Recargos sin
+  desmontar los campos al plegarlos. En la vista previa, el botón de renglón `.acc-b`
+  despliega el detalle de costo, precio y stock; pueden quedar varios abiertos.
 
 ## Componentes observados
 
@@ -109,16 +151,20 @@ Fuente: los templates de `frontend/src/app/` y `frontend/src/styles.css`.
   `exito`, `error`, `advertencia`.
 - **Diálogo** (`shared/dialogo-detalle.*`): overlay con `--velo` y `--sombra-3`, cierra con
   Esc y con ✕, trampa de foco y foco inicial.
-- **Motivo de acción** (`shared/motivo-de-accion.ts`): un botón apagado por regla de
-  negocio lleva `aria-disabled="true"` (no `disabled`) + `aria-describedby` a un texto con
-  `role="status"`; el clic explica el motivo en vez de ejecutar.
+- **Hoja inferior** (`shared/hoja-inferior.ts`): diálogo con velo, asa y título; toma el
+  foco al abrir, lo retiene y cierra con Esc o al tocar el velo.
+- **Detalle a pantalla completa** (`shared/detalle-pantalla.ts`): barra con «Volver», cuerpo
+  con scroll propio y acciones al pie cuando las hay; el foco inicial va a «Volver» y Esc cierra.
+- **Motivo de acción** (`shared/motivo-de-accion.ts`): en los botones que usan este patrón,
+  `aria-disabled="true"` (no `disabled`) permite explicar por qué están apagados en vez de
+  ejecutar la acción. El control se vincula al mensaje con `aria-describedby`.
 - **Botón primario**: fondo `--acento`, texto `--acento-texto`, borde `--acento-fuerte`;
   secundario: fondo `--superficie` con borde `--borde-fuerte`.
 
 ## Huecos conocidos del sistema
 
-- No hay tokens de densidad móvil (alto de control, tamaño de fila, separación táctil).
-- No hay patrón definido de navegación para pantalla angosta: el menú lateral se convierte
-  en un drawer de 320px y la barra de acciones se desliza horizontalmente sin indicación.
-- Las tablas no tienen un patrón móvil: `stock-bajo-minimo` mide 1267px en una pantalla de
-  390px y sólo dos columnas quedan a la vista.
+- La barra de acciones que se conserva en algunas pantallas se desliza horizontalmente
+  sin indicación en pantalla angosta.
+- El mínimo táctil y el motivo de apagado son el objetivo del patrón, no una garantía de
+  toda la app: quedan controles heredados por debajo del mínimo y botones de acciones
+  de la cuenta corriente que se apagan sin motivo visible.

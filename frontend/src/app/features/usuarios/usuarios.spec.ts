@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
-import { vi } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 import { Sesion } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { EdicionUsuarioRequest, Usuario, UsuarioRequest } from './usuario.models';
@@ -871,14 +871,16 @@ describe('Usuarios', () => {
         expect(regla.consulta).toContain('max-width: 639.98px');
       }
 
-      // El nombre ocupa el ancho de la tarjeta y no repite el nombre de la columna; el email va entero abajo.
-      const titulo = reglasDe('td.nombre');
-      expect(titulo.length).toBeGreaterThan(0);
-      expect(titulo.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
-      expect(titulo.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
-      const email = reglasDe('td.email');
-      expect(email.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
-      expect(email.some((regla) => regla.estilo.getPropertyValue('grid-column') === '1 / -1')).toBe(true);
+      // Como en el artboard (movil-configuracion/06): nombre y email a la izquierda, uno abajo del otro, sin repetir la
+      // columna; el rol y el tope a la derecha.
+      const areas = (selector: string) => reglasDe(selector).map((regla) => regla.estilo.getPropertyValue('grid-area'));
+      for (const selector of ['td.nombre', 'td.email', 'td.rol', 'td.tope']) {
+        expect(reglasDe(selector).every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+      }
+      expect(areas('td.nombre')).toContain('nombre');
+      expect(areas('td.email')).toContain('email');
+      expect(areas('td.rol')).toContain('rol');
+      expect(areas('td.tope')).toContain('tope');
       const sinEtiqueta = reglasDe('td.nombre::before');
       expect(sinEtiqueta).toHaveLength(1);
       expect(sinEtiqueta[0].estilo.getPropertyValue('content')).toBe('none');
@@ -897,6 +899,358 @@ describe('Usuarios', () => {
       expect(desactivar.hasAttribute('disabled')).toBe(false);
       const motivo = el().querySelector(`#${desactivar.getAttribute('aria-describedby')}`)!;
       expect(motivo.textContent!.trim()).toBe('No podés desactivarte ni cambiarte el rol a vos mismo.');
+    });
+  });
+
+  /*
+   * movil-sectores T3 (S2, S7): en el celular el usuario se edita en una ficha a pantalla completa, con «Nuevo» flotante
+   * y Desactivar / Resetear contraseña dentro de la ficha. Vitest no evalúa media queries: se prueba el comportamiento y
+   * la estructura que el CSS necesita; las medidas se hacen en el navegador a 390 px.
+   */
+  describe('ficha en pantalla completa (celular)', () => {
+    const ficha = () => el().querySelector<HTMLElement>('form.alta, section.alta')!;
+    const flotante = () => el().querySelector<HTMLButtonElement>('button.boton-flotante');
+    const dePie = (selector: string) => el().querySelector<HTMLButtonElement>(`.ficha-pie ${selector}`)!;
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('el botón flotante «Nuevo» abre la ficha de alta, con Cancelar y Agregar en el pie', async () => {
+      await crear([dueno, vendedor]);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+
+      flotante()!.click();
+      await refrescar();
+
+      expect(flotante()!.textContent!.trim()).toBe('Nuevo');
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(el().querySelector('form.alta h2')!.textContent!.trim()).toBe('Nuevo usuario');
+      expect(Array.from(el().querySelectorAll('.ficha-pie button')).map((b) => b.textContent!.trim())).toEqual(['Agregar', 'Cancelar']);
+      expect(el().querySelector('.desactivar-ficha')).toBeNull();
+      expect(el().querySelector('.resetear-ficha')).toBeNull();
+    });
+
+    it('tocar una fila en el celular abre su ficha; en el escritorio sólo la elige', async () => {
+      await crear([dueno, vendedor]);
+
+      await elegir(1);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+
+      enElCelular();
+      await elegir(1);
+
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(el().querySelector('form.alta h2')!.textContent!.trim()).toBe('Editar usuario');
+      expect(input('nombre').value).toBe('Vendedor Uno');
+      expect(document.activeElement).toBe(el().querySelector('form.alta .ficha-volver'));
+    });
+
+    it('«Volver» descarta la edición, cierra la ficha y devuelve el foco al botón flotante', async () => {
+      await crear([dueno, vendedor]);
+      enElCelular();
+      await elegir(1);
+
+      const volver = el().querySelector<HTMLButtonElement>('form.alta button.ficha-volver')!;
+      expect(volver.getAttribute('aria-label')).toBe('Volver');
+      volver.click();
+      await refrescar();
+
+      expect(ficha().classList).not.toContain('ficha-abierta');
+      expect(el().querySelector('form.alta h2')!.textContent!.trim()).toBe('Nuevo usuario');
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(flotante());
+    });
+
+    it('guardar cierra la ficha y la lista muestra el aviso; con un error la deja abierta', async () => {
+      await crear([dueno]);
+      flotante()!.click();
+      await refrescar();
+      await altaCompleta();
+      servicio.crear.mockReturnValueOnce(throwError(() => errorHttp(409, 'Ya existe un usuario con ese email.')));
+
+      await enviar();
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(el().querySelector('form.alta .error')!.textContent).toContain('Ya existe un usuario con ese email.');
+
+      await enviar();
+      expect(ficha().classList).not.toContain('ficha-abierta');
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se guardó «Lucía Pérez».');
+    });
+
+    it('editando, el pie lleva Desactivar (en rojo) y Guardar cambios; desactivar pide confirmación y cierra la ficha', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+
+      const desactivar = dePie('button.desactivar-ficha');
+      expect(desactivar.textContent!.trim()).toBe('Desactivar');
+      expect(desactivar.classList).toContain('peligro');
+      expect(dePie('button[type="submit"]').textContent!.trim()).toBe('Guardar cambios');
+
+      desactivar.click();
+      await refrescar();
+      expect(el().querySelector('app-confirmacion')!.textContent).toContain('¿Desactivar a Vendedor Uno?');
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
+
+      expect(servicio.cambiarActivo).toHaveBeenCalledWith(2, false);
+      expect(ficha().classList).not.toContain('ficha-abierta');
+    });
+
+    it('un desactivado se reactiva desde la ficha, sin confirmar', async () => {
+      await crear([dueno, exVendedor]);
+      el().querySelector<HTMLInputElement>('#incluir-inactivos')!.click();
+      await refrescar();
+      await editarFila(0); // ordenados por nombre: «Ana Baja» va primero
+
+      const reactivar = dePie('button.desactivar-ficha');
+      expect(reactivar.textContent!.trim()).toBe('Reactivar');
+      expect(reactivar.classList).not.toContain('peligro');
+      reactivar.click();
+      await refrescar();
+
+      expect(servicio.cambiarActivo).toHaveBeenCalledWith(3, true);
+    });
+
+    it('sobre uno mismo el Desactivar de la ficha está apagado y dice por qué', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(0);
+
+      const desactivar = dePie('button.desactivar-ficha');
+      expect(desactivar.getAttribute('aria-disabled')).toBe('true');
+      expect(desactivar.hasAttribute('disabled')).toBe(false);
+      const motivo = el().querySelector(`#${desactivar.getAttribute('aria-describedby')}`)!;
+      expect(motivo.closest('form.alta')).not.toBeNull();
+      expect(motivo.textContent!.trim()).toBe('No podés desactivarte ni cambiarte el rol a vos mismo.');
+
+      desactivar.click();
+      await refrescar();
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+    });
+
+    it('Resetear contraseña es de la ficha: abre la pantalla de la contraseña y «Volver» regresa a la ficha', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+
+      el().querySelector<HTMLButtonElement>('form.alta button.resetear-ficha')!.click();
+      await refrescar();
+
+      expect(el().querySelector('app-contrasena-form')).not.toBeNull();
+      expect(ficha().tagName).toBe('SECTION');
+      expect(ficha().classList).toContain('ficha-abierta');
+      expect(el().querySelector('section.alta .ficha-barra h2')!.textContent).toContain('Resetear contraseña de Vendedor Uno');
+
+      el().querySelector<HTMLButtonElement>('section.alta button.ficha-volver')!.click();
+      await refrescar();
+
+      expect(el().querySelector('app-contrasena-form')).toBeNull();
+      expect(ficha().tagName).toBe('FORM');
+      expect(ficha().classList).toContain('ficha-abierta');
+    });
+
+    it('al cambiar la contraseña se vuelve a la lista con el aviso', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+      el().querySelector<HTMLButtonElement>('form.alta button.resetear-ficha')!.click();
+      await refrescar();
+      await escribir('nueva', 'nueva1234');
+      await escribir('confirmacion', 'nueva1234');
+      el().querySelector('app-contrasena-form form')!.dispatchEvent(new Event('submit'));
+      await refrescar();
+
+      expect(el().querySelector('form.alta')!.classList).not.toContain('ficha-abierta');
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se cambió la contraseña de Vendedor Uno.');
+    });
+
+    it('la fila lleva lo que la tarjeta necesita: el rol y el tope con su clase y el Dueño marcado', async () => {
+      await crear([dueno, vendedor]);
+
+      const [fDueno, fVendedor] = filas();
+      expect(fDueno.querySelector('td.rol')!.classList).toContain('dueno');
+      expect(fVendedor.querySelector('td.rol')!.classList).not.toContain('dueno');
+      expect(fVendedor.querySelector('td.rol')!.textContent!.trim()).toBe('Vendedor');
+      expect(fVendedor.querySelector('td.tope')).not.toBeNull();
+    });
+
+    it('el Vendedor, sin permiso, no ve el botón flotante', async () => {
+      await crear([], vi.fn(() => throwError(() => errorHttp(403, 'Prohibido'))));
+
+      expect(flotante()).toBeNull();
+    });
+
+    it('todo lo nuevo del componente vive dentro de la pantalla del celular: el escritorio no se mueve', async () => {
+      await crear([dueno]);
+      const reglas: { consulta: string; selector: string }[] = [];
+      const recorrer = (lista: CSSRuleList, consulta: string) =>
+        Array.from(lista).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          if (media && (regla as CSSMediaRule).cssRules) {
+            recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+          } else if ((regla as CSSStyleRule).selectorText) {
+            reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText });
+          }
+        });
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          /* una hoja ilegible no es la del componente */
+        }
+      });
+
+      const nuevas = reglas.filter((r) => /ficha-|\.rol|\.tope|\.dueno|app-barra-acciones|\.chip/.test(r.selector));
+      expect(nuevas.length).toBeGreaterThan(0);
+      for (const regla of nuevas) expect(regla.consulta).toContain('max-width: 639.98px');
+    });
+  });
+
+  /*
+   * movil-sectores T3 (reabierta, L8): en el celular el Rol es el control segmentado del artboard (un radiogroup de dos
+   * botones de 44 px) que escribe el MISMO control del formulario que el select del escritorio. Los dos están en el DOM y
+   * el CSS deja uno según el ancho; Vitest no evalúa media queries, las medidas se hacen en el navegador.
+   */
+  describe('Rol como control segmentado (celular)', () => {
+    const grupo = () => el().querySelector<HTMLElement>('[role="radiogroup"]')!;
+    const radios = () => Array.from(grupo().querySelectorAll<HTMLButtonElement>('button[role="radio"]'));
+    const marcados = () => radios().map((r) => r.getAttribute('aria-checked'));
+    const apretar = async (indice: number, key: string) => {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      radios()[indice].dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    };
+
+    it('es un radiogroup con la etiqueta «Rol» y un botón por rol, y el select del escritorio sigue en el DOM', async () => {
+      await crear([dueno]);
+
+      expect(grupo().getAttribute('aria-labelledby')).toBeTruthy();
+      expect(el().querySelector(`#${grupo().getAttribute('aria-labelledby')}`)!.textContent!.trim()).toBe('Rol');
+      expect(radios().map((r) => r.textContent!.trim())).toEqual(['Dueño', 'Vendedor']);
+      expect(radios().every((r) => r.type === 'button')).toBe(true);
+      expect(marcados()).toEqual(['false', 'true']);
+      expect(select('rol').value).toBe('VENDEDOR');
+      expect(el().querySelector('label[for="rol"]')!.textContent!.trim()).toBe('Rol');
+    });
+
+    it('tocar un rol escribe el mismo control del formulario: el select, el tope y el pedido lo siguen', async () => {
+      await crear([dueno]);
+      await escribir('nombre', 'Lucía Pérez');
+      await escribir('email', 'lucia@tornillo.demo');
+      await escribir('password', 'clave1234');
+      expect(input('topeDescuento')).not.toBeNull();
+
+      radios()[0].click();
+      await refrescar();
+
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+      expect(el().querySelector('#topeDescuento')).toBeNull();
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ rol: 'DUENO', topeDescuento: null }));
+    });
+
+    it('si el rol cambia por el select, el segmentado lo refleja', async () => {
+      await crear([dueno]);
+
+      await elegirRol('DUENO');
+
+      expect(marcados()).toEqual(['true', 'false']);
+    });
+
+    it('editar precarga el rol del usuario en el segmentado', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+      expect(marcados()).toEqual(['false', 'true']);
+    });
+
+    it('como un radio nativo: un solo tab stop (el elegido) y las flechas eligen y mueven el foco, dando la vuelta', async () => {
+      await crear([dueno]);
+      // Vitest corre a un ancho de escritorio y el CSS esconde el segmentado: se muestra para poder enfocarlo.
+      const estilo = document.createElement('style');
+      estilo.textContent = '.alternativa-celular { display: block !important; }';
+      document.head.appendChild(estilo);
+      onTestFinished(() => estilo.remove());
+      expect(radios().map((r) => r.getAttribute('tabindex'))).toEqual(['-1', '0']);
+
+      const izquierda = await apretar(1, 'ArrowLeft');
+      expect(izquierda.defaultPrevented).toBe(true);
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+      expect(document.activeElement).toBe(radios()[0]);
+      expect(radios().map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1']);
+
+      await apretar(0, 'ArrowRight');
+      expect(marcados()).toEqual(['false', 'true']);
+      expect(document.activeElement).toBe(radios()[1]);
+
+      await apretar(1, 'ArrowDown'); // da la vuelta al principio
+      expect(marcados()).toEqual(['true', 'false']);
+      await apretar(0, 'ArrowUp'); // y al final
+      expect(marcados()).toEqual(['false', 'true']);
+
+      const otra = await apretar(1, 'a');
+      expect(otra.defaultPrevented).toBe(false);
+      expect(marcados()).toEqual(['false', 'true']);
+    });
+
+    it('sobre uno mismo el rol no se cambia: los botones quedan apagados, enlazados a la razón, y no cambian nada', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(0);
+
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(radios().every((r) => r.disabled)).toBe(true);
+      expect(grupo().getAttribute('aria-disabled')).toBe('true');
+      const razon = el().querySelector(`#${grupo().getAttribute('aria-describedby')}`)!;
+      expect(razon.textContent!.trim()).toBe('No podés desactivarte ni cambiarte el rol a vos mismo.');
+
+      radios()[1].click();
+      await apretar(0, 'ArrowRight');
+      expect(marcados()).toEqual(['true', 'false']);
+      expect(select('rol').value).toBe('DUENO');
+    });
+
+    it('en otro usuario los botones están prendidos y no hay aria-disabled', async () => {
+      await crear([dueno, vendedor]);
+      await editarFila(1);
+
+      expect(radios().some((r) => r.disabled)).toBe(false);
+      expect(grupo().hasAttribute('aria-disabled')).toBe(false);
+    });
+
+    it('el segmentado es sólo del celular y el select sólo del escritorio, cada uno con su regla de CSS', async () => {
+      await crear([dueno]);
+      const reglas: { consulta: string; selector: string; display: string }[] = [];
+      const recorrer = (lista: CSSRuleList, consulta: string) =>
+        Array.from(lista).forEach((regla) => {
+          const media = (regla as CSSMediaRule).media;
+          if (media && (regla as CSSMediaRule).cssRules) {
+            recorrer((regla as CSSMediaRule).cssRules, [consulta, media.mediaText].filter(Boolean).join(' '));
+          } else if ((regla as CSSStyleRule).selectorText) {
+            reglas.push({ consulta, selector: (regla as CSSStyleRule).selectorText, display: (regla as CSSStyleRule).style.display });
+          }
+        });
+      Array.from(document.styleSheets).forEach((hoja) => {
+        try {
+          recorrer(hoja.cssRules, '');
+        } catch {
+          /* una hoja ilegible no es la del componente */
+        }
+      });
+
+      const celular = reglas.filter((r) => /alternativa-celular/.test(r.selector));
+      const escritorio = reglas.filter((r) => /alternativa-escritorio/.test(r.selector));
+      // Afuera de la media query el segmentado se esconde (el escritorio y la tablet no cambian)...
+      expect(celular.some((r) => r.consulta === '' && r.display === 'none')).toBe(true);
+      // ...y adentro se muestra y el select se esconde.
+      expect(celular.some((r) => r.consulta.includes('max-width: 639.98px') && r.display !== '' && r.display !== 'none')).toBe(true);
+      expect(escritorio.length).toBeGreaterThan(0);
+      for (const regla of escritorio) {
+        expect(regla.consulta).toContain('max-width: 639.98px');
+        expect(regla.display).toBe('none');
+      }
     });
   });
 });

@@ -21,3 +21,9 @@
    - El saldo se corrige a mano solo con un **ajuste** con motivo (Recargo o Descuento, CU-12 punto 8): el libro (ver Modelo de datos) recibe movimientos de las ventas, de las cobranzas, de las anulaciones de cobranzas, de los ajustes y de las notas de crédito. **Pantalla de la cuenta:** el Dueño entra con el botón «Cuenta corriente» de la barra de Clientes (se habilita con un cliente elegido; el Vendedor no lo ve) y ahí cobra, mira el extracto de movimientos y anula cobranzas (CU-12). Ahí también carga Recargos y Descuentos (CU-12 punto 8, tramo 3b-2); la nota de crédito no se carga ahí: entra sola al anular una venta a cuenta corriente (CU-08).
 <!-- fin payload: spec.md:192-209 -->
 
+**Agregado móvil: Clientes** (≤639.98 px, Vendedor y Dueño).
+Desde el hub Ventas, la lista muestra tarjetas y «Nuevo» flotante; la ficha abre a pantalla completa con la acción de guardado al pie.
+Al editar, el Dueño tiene en el ⋯ Desactivar/Reactivar y en la ficha el atajo a Cuenta corriente.
+No cambian las reglas de negocio ni los textos de validación; el Vendedor sigue sin acceso a saldo, límite o cuenta.
+Pendientes (L39): las secciones de la ficha «no se pliegan ni son tarjetas» y el buscador «no filtra mientras se escribe».
+

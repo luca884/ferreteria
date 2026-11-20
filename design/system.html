@@ -165,7 +165,7 @@
       <input id="demo-nombre" value="EXPRIM-O BLANCO (01-00510-01)" />
       <label for="demo-rubro" style="margin-top: var(--e-3)">Rubro</label>
       <select id="demo-rubro"><option>Bazar</option><option>Ferretería</option></select>
-      <p class="nota">Alto de control actual: 36px. Es densidad de escritorio; en pantalla táctil el objetivo es 44px.</p>
+      <p class="nota">Alto de control: 36px en escritorio; en móvil (≤ 640px) 44px.</p>
     </div>
     <div class="caja">
       <table>
@@ -193,6 +193,39 @@
     <button class="primario" style="background: var(--acento); border-color: var(--acento)">Cobrar</button>
   </div>
   <p class="nota">El TOTAL va sobre <code>--acento-profundo</code> con los importes en mono tabular: es la única superficie oscura del sistema.</p>
+</section>
+
+<section>
+  <h2>Tono por sección</h2>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:var(--e-3)">
+    <div class="caja" style="border-top:4px solid #1d4ed8;background:#eff6ff"><b>Mostrador</b><br><code>#1d4ed8</code></div>
+    <div class="caja" style="border-top:4px solid #0e7490;background:#ecfeff"><b>Ventas</b><br><code>#0e7490</code></div>
+    <div class="caja" style="border-top:4px solid #b45309;background:#fffbeb"><b>Artículos</b><br><code>#b45309</code></div>
+    <div class="caja" style="border-top:4px solid #6d28d9;background:#f5f3ff"><b>Compras</b><br><code>#6d28d9</code></div>
+    <div class="caja" style="border-top:4px solid #047857;background:#ecfdf5"><b>Precios</b><br><code>#047857</code></div>
+    <div class="caja" style="border-top:4px solid #be185d;background:#fdf2f8"><b>Configuración</b><br><code>#be185d</code></div>
+  </div>
+  <p class="nota">Tiñe la barra de cada pantalla y la opción abierta del menú (<code>[data-seccion]</code> → <code>--tono</code>).</p>
+</section>
+
+<section>
+  <h2>Móvil (≤ 640px)</h2>
+  <div class="dos">
+    <div class="caja">
+      <div style="display:flex;gap:var(--e-2);flex-wrap:wrap">
+        <button class="primario" style="min-height:44px">Cobrar</button>
+        <button class="secundario" style="min-height:44px">Filtros</button>
+      </div>
+      <p class="nota">Objetivo táctil: 44px de alto en botones y controles; casillas de 20px dentro de una etiqueta de 44px; paginador de una línea.</p>
+    </div>
+    <div class="caja">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:var(--e-3);align-items:center;min-height:56px">
+        <div><div style="font-weight:500">Bulón 3/8 x 3”</div><div style="font-family:var(--fuente-mono);font-size:11px;color:var(--texto-tenue)">BUL-002 · Ferretería</div></div>
+        <div style="text-align:right;font-family:var(--fuente-mono);font-weight:600">1.240,00</div>
+      </div>
+      <p class="nota">Fila de lista móvil (propuesta de la dirección A): 56-64px, importe a la derecha en mono tabular.</p>
+    </div>
+  </div>
 </section>
 </body>
 </html>

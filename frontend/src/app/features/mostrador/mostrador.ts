@@ -17,6 +17,8 @@ import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
+import { HojaMasAcciones } from './hoja-mas-acciones';
+import { HojaRenglon } from './hoja-renglon';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla, atajosDeBotonera } from './mostrador.atajos';
@@ -26,6 +28,7 @@ import { AVISO_ESCANEO_CON_DIALOGO, GuardaLector } from './guarda-lector';
 import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { esCelular } from '../../shared/es-celular';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { DocumentoNoFiscal } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
@@ -106,6 +109,10 @@ type Dialogo =
   | { tipo: 'quitar'; indice: number }
   | { tipo: 'vaciar' }
   | { tipo: 'descuento'; indice: number }
+  /** movil-sectores T8a: la hoja del renglón del celular, que elige entre cantidad, descuento y quitar. */
+  | { tipo: 'renglon'; indice: number }
+  /** movil-sectores T8b: la hoja «Más acciones» del celular, con las acciones de todo el ticket. */
+  | { tipo: 'masAcciones' }
   | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' }
   | { tipo: 'presupuesto' }
@@ -123,6 +130,28 @@ interface FacturaCobrada {
   venta: VentaFacturada;
   vueltoCentavos: number | null;
 }
+
+/**
+ * Los diálogos que en el celular son una hoja o una pantalla completa (movil-sectores T8): al cerrarlos el foco no va al
+ * buscador del mostrador, porque subiría el teclado. La cantidad es la hoja que abre la del renglón (8c); el cliente es el
+ * selector a pantalla completa (8c). El descuento y «Quitar» del renglón los abre esa hoja (T9a, L24 punto 10); el cobro es
+ * la pantalla completa de T9a: sólo la venta cobrada vuelve al buscador (ver `alCobrar`). El presupuesto y el remito son las
+ * pantallas completas de T10 (el documento guardado abre su hoja de siempre, o sin hoja vuelve al buscador: ver
+ * `abrirHoja`); el descuento total y «Vaciar» son los diálogos que abre «Más acciones».
+ */
+const CIERRAN_SIN_ENFOCAR_EN_CELULAR: ReadonlySet<Dialogo['tipo']> = new Set([
+  'renglon',
+  'masAcciones',
+  'cantidad',
+  'cliente',
+  'descuento',
+  'quitar',
+  'cobro',
+  'presupuesto',
+  'remito',
+  'descuentoTotal',
+  'vaciar',
+]);
 
 /** La marca del ambiente en el rótulo del cobro: en producción no hay. */
 const MARCA_AMBIENTE: Record<string, string> = { SIMULADOR: 'SIMULADO', HOMOLOGACION: 'HOMOLOGACIÓN' };
@@ -170,6 +199,8 @@ interface Escaneo {
     DialogoRemito,
     ListaResultados,
     FichaArticulo,
+    HojaMasAcciones,
+    HojaRenglon,
     TicketLista,
     PrimerosPasos,
     TotalesTicket,
@@ -400,12 +431,22 @@ export class Mostrador {
    * cobrar, además, con la caja abierta).
    */
   protected readonly motivos = computed<Partial<Record<AccionBotonera, string>>>(() => {
-    const motivos: Partial<Record<AccionBotonera, string>> = {};
     if (this.dialogo() !== null) {
       // Con un diálogo abierto no se hace nada desde la botonera ni con las teclas: la razón es la misma para todas.
+      const motivos: Partial<Record<AccionBotonera, string>> = {};
       for (const { accion } of atajosDeBotonera()) motivos[accion as AccionBotonera] = MOTIVO_DIALOGO;
       return motivos;
     }
+    return this.motivosDeLasAcciones();
+  });
+
+  /**
+   * Los motivos de cada acción por lo que hay en el ticket y en la caja, sin mirar si hay un diálogo abierto. La hoja «Más
+   * acciones» del celular es ella misma un diálogo abierto: lee esta tabla, no `motivos`, que con ella abierta diría
+   * «Cerrá el diálogo» en todas las filas.
+   */
+  protected readonly motivosDeLasAcciones = computed<Partial<Record<AccionBotonera, string>>>(() => {
+    const motivos: Partial<Record<AccionBotonera, string>> = {};
     // Sin renglones no hay nada sobre lo que actuar. El presupuesto y el remito no tocan la caja: siguen sin ella.
     const conRenglones = this.ticket.ticket().renglones.length > 0;
     if (!conRenglones) for (const accion of NECESITAN_RENGLONES) motivos[accion] = MOTIVO_SIN_RENGLONES;
@@ -569,11 +610,64 @@ export class Mostrador {
     this.enfocarSinDialogo();
   }
 
-  /** Clic en un renglón del ticket: queda elegido y el foco vuelve al buscador, así el lector sigue andando. */
+  /**
+   * Clic en un renglón del ticket: queda elegido y el foco vuelve al buscador, así el lector sigue andando. En el celular
+   * (movil-sectores T8a) abre además la hoja del renglón, con sus tres acciones.
+   */
   protected elegirRenglon(indice: number): void {
     if (this.dialogo()) return;
     this.ticket.elegir(indice);
+    if (esCelular() && this.renglonDe(indice)) {
+      this.avisar(null);
+      // El buscador casi siempre tiene el foco (el lector): si lo conservara, `appTrampaFoco` se lo devolvería al cerrar la
+      // hoja (o la de la cantidad, que la reemplaza) y subiría el teclado. Se suelta antes de abrir; el buscador no lo
+      // recupera porque ya hay un diálogo (`sinDialogo`).
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      this.dialogo.set({ tipo: 'renglon', indice });
+      return;
+    }
     this.enfocarSinDialogo();
+  }
+
+  /** Una acción de la hoja del renglón: abre el mismo diálogo que la tecla (F3, F7 o F10) sobre ese renglón. */
+  protected accionDeRenglon(accion: 'cantidad' | 'descuento' | 'quitar', indice: number): void {
+    this.avisar(null);
+    this.dialogo.set({ tipo: accion, indice });
+  }
+
+  /**
+   * El ⋯ de la barra de cobro del celular (movil-sectores T8b): abre la hoja con las acciones de todo el ticket. Le da el
+   * foco al botón antes de abrir (Safari del iPhone no se lo da al tocarlo): así, al cerrar la hoja, el foco vuelve al ⋯ y
+   * no cae en el buscador, que subiría el teclado.
+   */
+  protected abrirMasAcciones(evento: Event): void {
+    if (this.dialogo()) return;
+    if (evento.currentTarget instanceof HTMLElement) evento.currentTarget.focus();
+    this.avisar(null);
+    this.callarMotivo();
+    this.dialogo.set({ tipo: 'masAcciones' });
+  }
+
+  /**
+   * «Cambiar» de la barra de cliente del celular (movil-sectores T8c): abre el mismo selector que F9, el botón Cliente de la
+   * botonera y la fila Cliente de «Más acciones» (`ejecutar` es el único lugar donde cada acción sabe qué abrir). Le da el
+   * foco al botón antes de abrir, por lo mismo que el ⋯: al cerrar el selector el foco vuelve acá y no al buscador.
+   */
+  protected abrirCliente(evento: Event): void {
+    if (this.dialogo()) return;
+    if (evento.currentTarget instanceof HTMLElement) evento.currentTarget.focus();
+    this.callarMotivo();
+    this.ejecutar('cliente');
+  }
+
+  /**
+   * Una fila de «Más acciones»: hace lo mismo que el botón de la botonera (`ejecutar` es el único lugar donde cada acción
+   * sabe qué abrir). Una acción que hoy no se puede usar no hace nada: la fila ya dice el motivo.
+   */
+  protected accionDeLaHoja(accion: AccionBotonera): void {
+    if (this.motivosDeLasAcciones()[accion] !== undefined) return;
+    this.avisar(null);
+    this.ejecutar(accion);
   }
 
   /** Con un diálogo abierto el buscador no le roba el foco (R-039). */
@@ -640,15 +734,19 @@ export class Mostrador {
         this.leerFormas();
         this.avisoLimite.set(null);
         this.leerCuenta();
+        // El cobro enfoca su propio campo al abrir.
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'cobro' });
         return;
       }
       case 'presupuesto':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'presupuesto' });
         return;
       case 'remito':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'remito' });
         return;
       case 'cliente':
@@ -657,10 +755,12 @@ export class Mostrador {
         return;
       case 'vaciar':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'vaciar' });
         return;
       case 'descuentoTotal':
         this.avisar(null);
+        this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'descuentoTotal' });
         return;
       case 'cantidad':
@@ -669,19 +769,34 @@ export class Mostrador {
         // Sin renglón elegido, el último agregado.
         const indice = this.ticket.ticket().elegido ?? renglones.length - 1;
         if (!renglones[indice]) return;
-        this.avisar(null);
-        this.dialogo.set({ tipo: accion, indice });
+        this.accionDeRenglon(accion, indice);
         return;
       }
     }
   }
 
-  protected cerrarDialogo(): void {
+  /**
+   * En el celular el buscador casi siempre tiene el foco (el lector): si lo conservara, `appTrampaFoco` se lo devolvería al
+   * cerrar la pantalla completa y subiría el teclado. Se suelta antes de abrir, como con la hoja del renglón (T8a), el cobro
+   * (T9a), el presupuesto, el remito, el descuento total y «Vaciar» (T10). En el escritorio y la tablet no se toca.
+   */
+  private soltarFocoEnCelular(): void {
+    if (esCelular() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }
+
+  protected cerrarDialogo(enfocarBuscador = false): void {
     // No se cierra el cobro mientras viaja la venta: se perdería el resultado.
     if (this.enVuelo()) return;
+    const tipo = this.dialogo()?.tipo;
+    const sinTeclado = tipo !== undefined && CIERRAN_SIN_ENFOCAR_EN_CELULAR.has(tipo);
     this.dialogo.set(null);
     this.avisoCobro.set(null);
     this.soltarCuenta();
+    // En el celular, cerrar una hoja o una pantalla completa no enfoca el buscador: subiría el teclado. El foco vuelve a lo
+    // que la abrió (`appTrampaFoco`). En el escritorio y la tablet sigue yendo al buscador: el lector y las teclas F dependen
+    // de eso. `enfocarBuscador` es la venta recién cobrada: ahí el foco vuelve al buscador también en el celular, como
+    // siempre. La factura no está en la lista: todavía es el diálogo de siempre.
+    if (sinTeclado && !enfocarBuscador && esCelular()) return;
     this.caja().enfocar();
   }
 
@@ -826,7 +941,7 @@ export class Mostrador {
     // El vuelto, el sin stock y la factura se necesitan después del plazo habitual: quedan hasta el próximo renglón.
     this.avisar(aviso, aviso.tipo === 'persistente' ? undefined : AVISO_COBRADA_MS);
     if (factura) this.abrirFactura(factura);
-    else this.cerrarDialogo();
+    else this.cerrarDialogo(true);
   }
 
   /**
@@ -928,7 +1043,8 @@ export class Mostrador {
           this.enVuelo.set(false);
           const sinHoja = `No se pudo abrir la hoja para imprimirlo: abrilo con «${aviso.documento?.texto}» e imprimilo desde ahí.`;
           this.avisar({ ...aviso, advertencia: aviso.advertencia ? `${aviso.advertencia} ${sinHoja}` : sinHoja });
-          this.cerrarDialogo();
+          // El documento quedó guardado: es una acción completada y el foco vuelve al buscador también en el celular, como hoy.
+          this.cerrarDialogo(true);
         },
       });
   }

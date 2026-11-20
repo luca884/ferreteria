@@ -27,6 +27,9 @@ const DESCUENTO_MAXIMO = 99.99;
 const MOTIVO_SIN_ELEGIR = 'Elegí una forma de pago de la lista para editarla.';
 /** S5: lo que se explica al intentar Activar o Desactivar sin una fila elegida. */
 const MOTIVO_SIN_ELEGIR_ALTERNAR = 'Elegí una forma de pago de la lista para activarla o desactivarla.';
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const enElCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
 const porOrden = (a: FormaPago, b: FormaPago) => a.orden - b.orden || a.nombre.localeCompare(b.nombre);
 const porcentaje = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
@@ -64,6 +67,12 @@ export class FormasPago implements OnInit {
   protected readonly guardando = signal(false);
   /** La forma que se está editando; null mientras se da de alta una nueva. */
   protected readonly editando = signal<FormaPago | null>(null);
+  /**
+   * La ficha a pantalla completa del celular (S7 de movil-sectores): `nuevo`, `editar` y tocar una fila la abren;
+   * guardar, cancelar y «Volver» la cierran. Sólo la lee el CSS del celular: en el escritorio el formulario siempre
+   * está al costado.
+   */
+  protected readonly fichaAbierta = signal(false);
   /** Activar o desactivar desde la barra, en curso. */
   protected readonly cambiando = signal(false);
   /** La forma que se está por desactivar: espera la confirmación. */
@@ -165,6 +174,7 @@ export class FormasPago implements OnInit {
         this.guardando.set(false);
         // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
         this.enfocar('#nombre');
+        this.cerrarFicha();
         this.aviso.set(`Se guardó «${guardada.nombre}».`);
       },
       error: (err: unknown) => {
@@ -188,6 +198,7 @@ export class FormasPago implements OnInit {
     this.aviso.set(null);
     this.filas.elegidoId.set(forma.id);
     this.editando.set(forma);
+    this.fichaAbierta.set(true);
     this.form.reset({
       nombre: forma.nombre,
       medio: forma.medio,
@@ -202,10 +213,30 @@ export class FormasPago implements OnInit {
     this.limpiarErrores();
   }
 
+  /** En el celular, tocar una forma de la lista abre su ficha; en el escritorio sólo la elige (Enter o doble clic editan). */
+  protected abrirFichaEnElCelular(forma: FormaPago): void {
+    if (!enElCelular()) return;
+    this.editar(forma);
+    this.enfocar('form.alta .ficha-volver');
+  }
+
+  /** «Volver» y «Cancelar» de la ficha del celular: se descarta lo escrito y el foco vuelve al botón «Nuevo». */
+  protected volverDeLaFicha(): void {
+    this.cancelar();
+    this.cerrarFicha();
+  }
+
+  /** Cierra la ficha y, en el celular, devuelve el foco a «Nuevo»; en el escritorio el foco se queda donde estaba. */
+  private cerrarFicha(): void {
+    this.fichaAbierta.set(false);
+    if (enElCelular()) this.enfocar('.boton-flotante');
+  }
+
   /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
   protected nuevo(): void {
     this.aviso.set(null);
     this.cancelar();
+    this.fichaAbierta.set(true);
     this.enfocar('#nombre');
   }
 
@@ -241,6 +272,8 @@ export class FormasPago implements OnInit {
         // Si es la que está en el formulario, guardar la edición no le vuelve a cambiar el estado.
         if (this.editando()?.id === cambiada.id) this.editando.set(cambiada);
         this.cambiando.set(false);
+        // Desde la ficha del celular, activar o desactivar termina la tarea: se vuelve a la lista.
+        this.cerrarFicha();
       },
       error: (err: unknown) => {
         this.cambiando.set(false);

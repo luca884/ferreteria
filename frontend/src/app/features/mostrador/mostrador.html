@@ -10,7 +10,7 @@
 <div class="zona-busqueda">
   <!-- S4: por qué la acción que se acaba de intentar no se puede usar. Va debajo de la barra y no roba el foco. -->
   @if (motivoVisible(); as motivo) {
-    <p [id]="avisoBotoneraId" class="motivo-botonera" role="status">{{ motivo.texto }}</p>
+    <p [id]="avisoBotoneraId" class="motivo-botonera" role="status" [attr.data-accion]="motivo.accion">{{ motivo.texto }}</p>
   }
 
   <div class="fila-codigo">
@@ -25,6 +25,16 @@
       (mover)="alMover($event)"
     />
     <span class="pista-codigo" aria-hidden="true">Enter agrega · ↑↓ elige</span>
+  </div>
+
+  <!--
+    movil-sectores T8c: la barra de cliente del celular, debajo del buscador, como el artboard 01: siempre dice a quién se le
+    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba y, en el celular, esconde
+    el renglón «Cliente: … Quitar» de abajo, que dice lo mismo). «Quitar» está en el selector.
+  -->
+  <div class="sub-cliente">
+    <span class="sub-cliente-nombre">Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong></span>
+    <button type="button" class="sub-cliente-cambiar" (click)="abrirCliente($event)">Cambiar</button>
   </div>
 
   <!--
@@ -171,10 +181,39 @@
     </div>
   }
   <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
+  <!-- movil-sectores T8b: sólo del celular (styles.css lo esconde de 640 px para arriba). Abre «Más acciones». -->
+  <button type="button" class="mas-acciones-ticket" aria-label="Más acciones del ticket" aria-haspopup="dialog" (click)="abrirMasAcciones($event)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  </button>
 </aside>
 
 @if (dialogo(); as abierto) {
   @switch (abierto.tipo) {
+    @case ('renglon') {
+      @if (renglonDe(abierto.indice); as r) {
+        <app-hoja-renglon
+          [renglon]="r"
+          (cantidad)="accionDeRenglon('cantidad', abierto.indice)"
+          (descuento)="accionDeRenglon('descuento', abierto.indice)"
+          (quitar)="accionDeRenglon('quitar', abierto.indice)"
+          (cerrar)="cerrarDialogo()"
+        />
+      }
+    }
+    @case ('masAcciones') {
+      <app-hoja-mas-acciones
+        [renglones]="ticket.ticket().renglones.length"
+        [totalCentavos]="ticket.total()"
+        [cliente]="ticket.ticket().clienteNombre ?? null"
+        [motivos]="motivosDeLasAcciones()"
+        (accion)="accionDeLaHoja($event)"
+        (cerrar)="cerrarDialogo()"
+      />
+    }
     @case ('cantidad') {
       @if (renglonDe(abierto.indice); as r) {
         <app-dialogo-cantidad

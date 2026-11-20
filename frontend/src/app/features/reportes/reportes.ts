@@ -6,6 +6,8 @@ import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { emitidoEl } from '../../shared/emitido';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { TIPOS_MOVIMIENTO, TIPO_MOVIMIENTO_LABELS, TipoMovimientoCaja, fechaHoraLocal } from '../caja/caja.models';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import {
@@ -46,10 +48,14 @@ type Resultado =
  * elige el reporte y el rango «Desde / Hasta» (hoy al entrar). Los totales salen del servidor; la ganancia no incluye
  * las ventas sin costo registrado, que se avisan. El de la caja se imprime: al imprimir solo sale `.caja-imprimible`
  * (reglas `@media print` en styles.css), con el rango y el tipo del resultado y no los del formulario.
+ *
+ * En el celular (movil-sectores T11c) lo único que cambia de estructura es dónde se elige el reporte: un botón que abre
+ * una hoja inferior con los mismos ocho tipos, en vez del `<select>`; mismo `tipo`, mismo «Ver», mismos pedidos. Las
+ * tablas y el resumen pasan a tarjetas sólo con CSS (styles.css, «Ventas: reportes y anulaciones en el celular»).
  */
 @Component({
   selector: 'app-reportes',
-  imports: [BarraAcciones, MontoPipe],
+  imports: [BarraAcciones, HojaInferior, MontoPipe],
   templateUrl: './reportes.html',
   styleUrl: './reportes.css',
 })
@@ -59,6 +65,11 @@ export class Reportes implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly opciones = REPORTES;
+  /** Se lee una sola vez al abrir: no sigue la rotación (igual que Ventas). */
+  protected readonly celular = esCelular();
+  /** La hoja inferior donde el celular elige el reporte. */
+  protected readonly hojaAbierta = signal(false);
+  protected readonly nombreDelReporte = computed(() => REPORTES.find((r) => r.tipo === this.tipo())?.nombre ?? '');
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly tipo = signal<TipoReporte>('resumen');
   protected readonly desde = signal(hoyEnBuenosAires());
@@ -123,6 +134,12 @@ export class Reportes implements OnInit {
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
+  }
+
+  /** Una opción de la hoja del celular: elige el reporte y cierra; no consulta (eso es «Ver»). */
+  protected elegirDeLaHoja(tipo: TipoReporte): void {
+    this.tipo.set(tipo);
+    this.hojaAbierta.set(false);
   }
 
   /** «Emitido el» es la hora de imprimir, no la de ver el reporte: se renueva antes de abrir el diálogo. */

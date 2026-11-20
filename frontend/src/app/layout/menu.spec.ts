@@ -12,6 +12,7 @@ describe('menu (mejoras-ferreteros-bloque-2, S1)', () => {
       ['/caja', 'ventas'],
       ['/caja/historial', 'ventas'],
       ['/ventas', 'ventas'],
+      ['/area-ventas', 'ventas'],
       ['/reportes', 'ventas'],
       ['/articulos', 'articulos'],
       ['/articulos/nuevo', 'articulos'],

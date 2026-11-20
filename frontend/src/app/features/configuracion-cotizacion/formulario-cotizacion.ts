@@ -35,7 +35,9 @@ function horaConDosDigitos(hora: string): string {
 export class FormularioCotizacion {
   readonly configuracion = input.required<ConfiguracionCotizacion>();
   readonly guardando = input(false);
+  readonly celular = input(false);
   readonly guardar = output<ConfiguracionCotizacionRequest>();
+  readonly cancelar = output<void>();
   /** true cuando el formulario difiere de lo guardado; false cuando vuelve a coincidir (llegó lo guardado). */
   readonly cambios = output<boolean>();
 

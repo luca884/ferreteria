@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -20,7 +21,9 @@ import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
 import { contiene } from '../../core/formato/texto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { esCelular } from '../../shared/es-celular';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { MotivoDeAccion, ariaDe } from '../../shared/motivo-de-accion';
 import { resumenDeLista } from './lista-del-proveedor';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
@@ -36,7 +39,7 @@ const MOTIVO_SIN_ELEGIR_BAJA = 'Elegí un proveedor de la lista para darlo de ba
 
 @Component({
   selector: 'app-proveedores',
-  imports: [ReactiveFormsModule, RouterLink, Confirmacion, BarraAcciones],
+  imports: [ReactiveFormsModule, RouterLink, NgTemplateOutlet, Confirmacion, BarraAcciones, HojaInferior],
   templateUrl: './proveedores.html',
   styleUrl: './proveedores.css',
 })
@@ -47,6 +50,11 @@ export class Proveedores implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
+
+  // Como en Clientes, el modo se lee al entrar y no sigue la rotación.
+  protected readonly celular = esCelular();
+  protected readonly fichaAbierta = signal(false);
+  protected readonly menuAbierto = signal(false);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
   /** Lo escrito en «Buscar proveedor» (o el `?q=` del buscador del menú, bloque 2 S3): filtra por nombre o contacto. */
@@ -69,10 +77,10 @@ export class Proveedores implements OnInit {
   protected readonly guardando = signal(false);
   /** Id del proveedor que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editandoId = signal<number | null>(null);
+  protected readonly editado = computed(() => this.proveedores().find((p) => p.id === this.editandoId()));
   /** Los datos de la lista del proveedor que se edita (#44); undefined en el alta. */
   protected readonly listaDelEditado = computed(() => {
-    const id = this.editandoId();
-    const proveedor = id === null ? undefined : this.proveedores().find((p) => p.id === id);
+    const proveedor = this.editado();
     return proveedor ? resumenDeLista(proveedor) : undefined;
   });
   protected readonly incluirInactivos = signal(false);
@@ -149,13 +157,16 @@ export class Proveedores implements OnInit {
         this.vaciarFormulario();
         this.guardando.set(false);
         // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
-        this.enfocar('#nombre');
+        if (this.celular) this.cerrarFicha();
+        else this.enfocar('#nombre');
       },
       error: (err: unknown) => {
         this.guardando.set(false);
         this.erroresCampos.set(erroresDeCampos(err));
         this.error.set(mensajeDe(err, 'No se pudo guardar el proveedor.'));
+        this.alInicioDeLaFicha();
         if (id === null && err instanceof HttpErrorResponse && err.status === 409) {
+          if (this.celular && this.fichaAbierta()) this.enfocar('#nombre');
           this.buscarReactivable(request.nombre);
         }
       },
@@ -182,6 +193,33 @@ export class Proveedores implements OnInit {
       whatsapp: proveedor.whatsapp ?? '',
       email: proveedor.email ?? '',
     });
+    if (this.celular) {
+      this.fichaAbierta.set(true);
+      this.alInicioDeLaFicha();
+      this.enfocar('.ficha-volver');
+    }
+  }
+
+  protected abrirFichaEnElCelular(proveedor: Proveedor): void {
+    if (this.celular && this.auth.esDueno()) this.editar(proveedor);
+  }
+
+  protected volverDeLaFicha(): void {
+    this.cancelar();
+    this.cerrarFicha();
+  }
+
+  protected alTeclearLaFicha(evento: KeyboardEvent): void {
+    if (!this.celular || !this.fichaAbierta() || evento.key !== 'Escape' || evento.defaultPrevented) return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    this.volverDeLaFicha();
+  }
+
+  protected alternarDesdeLaHoja(proveedor: Proveedor): void {
+    this.menuAbierto.set(false);
+    if (proveedor.activo) this.pedirBaja(proveedor);
+    else this.reactivar(proveedor);
   }
 
   protected cancelar(): void {
@@ -192,11 +230,12 @@ export class Proveedores implements OnInit {
   /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
   protected nuevo(): void {
     this.cancelar();
+    if (this.celular) this.fichaAbierta.set(true);
+    this.alInicioDeLaFicha();
     this.enfocar('#nombre');
   }
 
-  protected pedirBaja(): void {
-    const proveedor = this.filas.elegido();
+  protected pedirBaja(proveedor: Proveedor | null = this.filas.elegido()): void {
     // S5: sin fila elegida el botón avisa el motivo en vez de quedar apagado sin explicación.
     if (!proveedor) {
       this.motivo.mostrar('baja');
@@ -212,11 +251,18 @@ export class Proveedores implements OnInit {
     return control.touched && control.dirty && control.invalid;
   }
 
+  protected cancelarBaja(): void {
+    this.aDarDeBaja.set(null);
+    // La acción que abrió el diálogo estaba en la hoja y ya no está en el DOM.
+    if (this.celular && this.fichaAbierta()) this.enfocar('.mas-ficha');
+  }
+
   protected desactivar(): void {
     const proveedor = this.aDarDeBaja();
     this.aDarDeBaja.set(null);
     if (!proveedor) return;
     this.limpiarMensajes();
+    if (this.celular && this.fichaAbierta()) this.cerrarFicha();
     this.service.desactivar(proveedor.id).subscribe({
       next: () => {
         if (this.incluirInactivos()) this.ponerEnLista({ ...proveedor, activo: false });
@@ -237,9 +283,18 @@ export class Proveedores implements OnInit {
         this.ponerEnLista(reactivado);
         this.vaciarFormulario();
         this.aviso.set(`Se reactivó «${reactivado.nombre}».`);
+        if (this.celular) {
+          if (this.fichaAbierta()) this.cerrarFicha();
+          // El aviso en línea queda debajo de la barra de búsqueda fija al volver al tope.
+          afterNextRender(() => {
+            const contenido = this.host.nativeElement.closest<HTMLElement>('main.contenido');
+            if (contenido) contenido.scrollTop = 0;
+          }, { injector: this.injector });
+        }
       },
       error: (err: unknown) => {
         this.error.set(mensajeDe(err, 'No se pudo reactivar el proveedor.'));
+        this.alInicioDeLaFicha();
       },
     });
   }
@@ -252,6 +307,20 @@ export class Proveedores implements OnInit {
       },
       error: () => this.reactivable.set(null),
     });
+  }
+
+  private cerrarFicha(): void {
+    this.menuAbierto.set(false);
+    this.fichaAbierta.set(false);
+    this.enfocar('.boton-flotante');
+  }
+
+  private alInicioDeLaFicha(): void {
+    if (!this.celular || !this.fichaAbierta()) return;
+    afterNextRender(() => {
+      const ficha = this.host.nativeElement.querySelector('form.alta');
+      if (ficha) ficha.scrollTop = 0;
+    }, { injector: this.injector });
   }
 
   /** Después de pintar, enfoca el primer elemento que coincida. */

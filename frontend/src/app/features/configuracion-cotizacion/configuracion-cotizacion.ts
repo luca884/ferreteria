@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { RecalculoCotizacion, VistaPreviaRecalculo } from '../../core/cotizacion/cotizacion.models';
@@ -6,6 +7,7 @@ import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { formatearCotizacion } from '../../core/formato/monto';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { esCelular } from '../../shared/es-celular';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import {
   ConfiguracionCotizacion,
@@ -30,6 +32,8 @@ export class PaginaConfiguracionCotizacion implements OnInit {
   private readonly configuraciones = inject(ConfiguracionCotizacionService);
   private readonly cotizaciones = inject(CotizacionService);
   protected readonly auth = inject(AuthService);
+  protected readonly celular = esCelular();
+  private readonly router = this.celular ? inject(Router) : null;
 
   protected readonly configuracion = signal<ConfiguracionCotizacion | null>(null);
   protected readonly cargando = signal(true);
@@ -60,6 +64,11 @@ export class PaginaConfiguracionCotizacion implements OnInit {
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
+  }
+
+  // Igual que Margen y redondeo: salir descarta la edición y vuelve a Artículos, sin guardar.
+  protected salir(): void {
+    if (!this.guardando()) void this.router?.navigateByUrl('/articulos');
   }
 
   protected cargar(): void {

@@ -579,4 +579,216 @@ describe('DialogoCliente (F9)', () => {
       expect(campo()).not.toBeNull();
     });
   });
+
+  /**
+   * movil-sectores T8c: en el celular el selector es una pantalla completa (la barra «Volver» arriba, el buscador, la lista y
+   * el pie fijo con «Quitar cliente» y «Nuevo cliente»). Es el mismo componente con el mismo estado y los mismos manejadores:
+   * cambia dónde y cómo se ve. Vitest no lee `styles.css`; el layout se mide en el navegador.
+   */
+  describe('en el celular: pantalla completa (movil-sectores T8c)', () => {
+    const comoCelular = (consulta = '639.98px') =>
+      vi.stubGlobal('matchMedia', (c: string) => ({ matches: c.includes(consulta), media: c }));
+    afterEach(() => vi.unstubAllGlobals());
+    const barra = () => el().querySelector<HTMLElement>('.ficha-barra');
+    const volver = () => el().querySelector<HTMLButtonElement>('.ficha-barra .ficha-volver');
+    const pie = () => el().querySelector<HTMLElement>('.dialogo.cliente-celular > .dialogo-acciones.ficha-pie');
+    const botonesDelPie = () => Array.from(pie()!.querySelectorAll('button')).map((b) => b.textContent!.trim());
+
+    it('se dibuja como pantalla completa: la barra con «Volver» y el título, el buscador y el pie fijo', async () => {
+      comoCelular();
+      await abrir();
+
+      expect(el().querySelector('[role="dialog"]')!.classList).toContain('cliente-celular');
+      expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-modal')).toBe('true');
+      expect(texto('.ficha-barra h2')).toBe('Cliente');
+      expect(volver()!.getAttribute('aria-label')).toBe('Volver');
+      expect(volver()!.getAttribute('type')).toBe('button');
+      expect(barra()!.nextElementSibling).toBe(campo());
+      expect(pie()).not.toBeNull();
+      // El mismo buscador de siempre: con el foco y los primeros clientes.
+      expect(document.activeElement).toBe(campo());
+      expect(opciones()).toHaveLength(2);
+    });
+
+    it('sin cliente el pie tiene sólo «Nuevo cliente», como acción principal; con cliente suma «Quitar cliente»', async () => {
+      comoCelular();
+      await abrir();
+      expect(botonesDelPie()).toEqual(['Nuevo cliente']);
+      expect(boton('Nuevo cliente')!.classList).toContain('primario');
+
+      TestBed.resetTestingModule();
+      comoCelular();
+      await abrir([ana, norte], 'Ana Gómez');
+
+      expect(botonesDelPie()).toEqual(['Quitar cliente', 'Nuevo cliente']);
+      expect(texto('.actual')).toBe('Cliente actual: Ana Gómez');
+    });
+
+    it('la flecha «Volver» cancela (como Cancelar y Esc) sin elegir ni quitar a nadie, y no hay un «Cancelar» aparte', async () => {
+      comoCelular();
+      await abrir([ana, norte], 'Ana Gómez');
+      expect(boton('Cancelar')).toBeUndefined();
+
+      volver()!.click();
+      await estabilizar();
+
+      expect(cancelados).toBe(1);
+      expect(elegidos).toEqual([]);
+      expect(quitados).toBe(0);
+    });
+
+    it('Esc también cancela', async () => {
+      comoCelular();
+      await abrir();
+
+      tecla('Escape');
+
+      expect(cancelados).toBe(1);
+    });
+
+    it('un toque en un cliente lo elige y «Quitar cliente» lo quita, igual que en el escritorio', async () => {
+      comoCelular();
+      await abrir([ana, norte], 'Ana Gómez');
+
+      opciones()[1].click();
+      boton('Quitar cliente')!.click();
+
+      expect(elegidos.map((c) => c.id)).toEqual([2]);
+      expect(quitados).toBe(1);
+    });
+
+    it('apretar una fila no le saca el foco al buscador (así el foco vuelve a lo que abrió el selector)', async () => {
+      comoCelular();
+      await abrir();
+
+      const evento = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      opciones()[0].dispatchEvent(evento);
+
+      expect(evento.defaultPrevented).toBe(true);
+    });
+
+    it('dice cuántos clientes hay, derivado de la misma respuesta de la búsqueda', async () => {
+      comoCelular();
+      await abrir();
+      expect(texto('.conteo-clientes')).toBe('2 clientes');
+
+      await escribir('ana');
+      servicio.buscar.mockReturnValue(of(pagina([ana])));
+      vi.advanceTimersByTime(250);
+      await estabilizar();
+
+      expect(texto('.conteo-clientes')).toBe('1 cliente');
+    });
+
+    it('si hay más de los que se ven no repite la cuenta: queda el aviso «Se ven 8 de 13 clientes…» de siempre', async () => {
+      comoCelular();
+      const ocho = Array.from({ length: 8 }, (_, i): Cliente => ({ ...ana, id: 100 + i, razonSocial: `Cliente ${i + 1}` }));
+      await abrir(ocho, null, 13);
+
+      expect(el().querySelector('.conteo-clientes')).toBeNull();
+      expect(texto('.hay-mas')).toBe('Se ven 8 de 13 clientes. Escribí el nombre, CUIT o DNI para buscar los demás.');
+    });
+
+    it('sin resultados no dice «0 clientes»: queda el aviso de siempre', async () => {
+      comoCelular();
+      await abrir([]);
+
+      expect(el().querySelector('.conteo-clientes')).toBeNull();
+      expect(texto('.sin-resultados')).toBe('No hay clientes con esa búsqueda.');
+    });
+
+    describe('alta rápida', () => {
+      const abrirAlta = async () => {
+        boton('Nuevo cliente')!.click();
+        await estabilizar();
+      };
+
+      it('«Nuevo cliente» es otra pantalla completa con ese título; «Volver» y «Volver a buscar» regresan a la búsqueda', async () => {
+        comoCelular();
+        await abrir();
+
+        await abrirAlta();
+
+        expect(texto('.ficha-barra h2')).toBe('Nuevo cliente');
+        expect(el().querySelector('form.alta-rapida')).not.toBeNull();
+        expect(el().querySelector('form.alta-rapida .dialogo-acciones.ficha-pie')).not.toBeNull();
+        expect(document.activeElement).toBe(el().querySelector('#nuevo-razon-social'));
+
+        volver()!.click();
+        await estabilizar();
+
+        expect(cancelados).toBe(0);
+        expect(el().querySelector('form.alta-rapida')).toBeNull();
+        expect(texto('.ficha-barra h2')).toBe('Cliente');
+        expect(document.activeElement).toBe(campo());
+
+        await abrirAlta();
+        boton('Volver a buscar')!.click();
+        await estabilizar();
+        expect(el().querySelector('form.alta-rapida')).toBeNull();
+      });
+
+      it('«Guardar y elegir» valida con los mismos textos y crea con la misma petición', async () => {
+        comoCelular();
+        await abrir();
+        await abrirAlta();
+
+        el().querySelector('form.alta-rapida')!.dispatchEvent(new Event('submit'));
+        await estabilizar();
+        expect(texto('#nuevo-razon-social-error')).toBe('La razón social es obligatoria.');
+        expect(servicio.crear).not.toHaveBeenCalled();
+
+        const razon = el().querySelector<HTMLInputElement>('#nuevo-razon-social')!;
+        razon.value = ' Juan Pérez ';
+        razon.dispatchEvent(new Event('input'));
+        el().querySelector('form.alta-rapida')!.dispatchEvent(new Event('submit'));
+        await estabilizar();
+
+        expect(servicio.crear).toHaveBeenCalledWith({ razonSocial: 'Juan Pérez', condicionIva: 'CONSUMIDOR_FINAL' });
+        expect(elegidos.map((c) => c.razonSocial)).toEqual(['Juan Pérez']);
+      });
+
+      it('Esc en el alta cancela todo el selector, como hoy', async () => {
+        comoCelular();
+        await abrir();
+        await abrirAlta();
+
+        tecla('Escape');
+
+        expect(cancelados).toBe(1);
+      });
+    });
+
+    describe('fuera del celular el selector no cambia', () => {
+      it.each([['escritorio', '__ninguna__'], ['tablet (hasta 1023 px)', '1023.98px']])(
+        'en %s sigue siendo el diálogo centrado, con «Cancelar» y sin barra, conteo ni pie fijo',
+        async (_nombre, consulta) => {
+          comoCelular(consulta);
+          await abrir([ana, norte], 'Ana Gómez');
+
+          expect(el().querySelector('.cliente-celular, .ficha-barra, .ficha-volver, .ficha-pie, .conteo-clientes')).toBeNull();
+          expect(texto('h2')).toBe('Cliente');
+          expect(boton('Cancelar')).toBeDefined();
+          expect(boton('Nuevo cliente')!.classList).toContain('secundario');
+          boton('Cancelar')!.click();
+          expect(cancelados).toBe(1);
+        },
+      );
+
+      it('en el escritorio apretar una fila no se frena: el mousedown sigue su camino', async () => {
+        await abrir();
+
+        const evento = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        opciones()[0].dispatchEvent(evento);
+
+        expect(evento.defaultPrevented).toBe(false);
+      });
+
+      it('sin matchMedia (pruebas, impresión) tampoco', async () => {
+        await abrir();
+
+        expect(el().querySelector('.cliente-celular, .ficha-barra')).toBeNull();
+      });
+    });
+  });
 });

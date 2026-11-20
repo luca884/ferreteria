@@ -18,3 +18,9 @@
    - **API.** `GET /api/reportes/caja/movimientos` con `desde`, `hasta` (ISO; sin fechas, hoy; falta una, se usa la otra) y `tipo` (`INGRESO`, `GASTO` o `RETIRO`; sin `tipo`, todos). Responde `{ desde, hasta, filas: [{ id, fecha, tipo, motivo, usuario, importe }], totales: { INGRESO, GASTO, RETIRO } }`; los totales suman las filas devueltas y valen 0 en los tipos sin filas. El Vendedor recibe 403. «Hasta» antes de «Desde» es 400 «La fecha «Hasta» no puede ser anterior a «Desde».», más de 366 días es 400 «El reporte admite hasta 366 días.» y un `tipo` que no existe es 400. Otra ferretería no ve ni suma estos movimientos.
 <!-- fin payload: spec.md:176-190 -->
 
+**Agregado móvil: Caja** (≤639.98 px, Vendedor y Dueño).
+Desde el hub Ventas, la caja abierta y sus movimientos se ven en tarjetas; «Cargar» o «Abrir caja» quedan fijos al pie.
+«Cerrar la caja» abre una pantalla completa con la acción de cierre al pie; el Dueño llega a «Historial de cajas» por la hoja del ⋯.
+No cambian las reglas de negocio, los roles ni los mensajes de arqueo y confirmación.
+Pendientes (L33): falta «Último cierre» en la apertura; «Falta efectivo» sigue como aviso de la página y el resumen tras cerrar queda debajo de «Abrir la caja», sin pantalla con «Listo».
+

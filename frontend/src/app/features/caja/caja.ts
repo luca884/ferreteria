@@ -1,6 +1,7 @@
-import { Component, ElementRef, OnInit, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { centavosDeImporte, textoDePlata } from '../../core/formato/importe';
@@ -8,7 +9,9 @@ import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { ImporteInput } from '../../shared/importe-input';
+import { esCelular } from '../../shared/es-celular';
 import {
   CajaVigente,
   DetalleCaja,
@@ -42,14 +45,27 @@ function leerImporteEnPesos(texto: string): number {
  */
 @Component({
   selector: 'app-caja',
-  imports: [BarraAcciones, Confirmacion, CampoMoneda, ImporteInput, MontoPipe, ResumenCaja, RouterLink],
+  imports: [BarraAcciones, Confirmacion, CampoMoneda, HojaInferior, ImporteInput, MontoPipe, NgTemplateOutlet, ResumenCaja, RouterLink],
   templateUrl: './caja.html',
   styleUrl: './caja.css',
 })
 export class Caja implements OnInit {
   private readonly cajas = inject(CajaService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
+
+  /**
+   * En el celular (movil-sectores T11a) la caja se ve distinta: «Cargar», «Abrir caja» y «Cerrar caja» van en un pie fijo,
+   * «Historial de cajas» pasa al ⋯ y el cierre es una pantalla completa. Se lee al crearse: no sigue la rotación. Es sólo
+   * cómo se ve: el estado, la validación y los pedidos son los mismos.
+   */
+  protected readonly celular = esCelular();
+  /** La pantalla completa del cierre (sólo celular): se abre con la fila «Cerrar la caja», se cierra con «Volver» o Esc. */
+  protected readonly cierreAbierto = signal(false);
+  /** La hoja del ⋯ de la barra (sólo celular, sólo Dueño). */
+  protected readonly menuAbierto = signal(false);
 
   /** Los movimientos que carga el usuario: el Vendedor no hace retiros (CU-10 punto 4), así que su texto no los nombra. */
   protected readonly movimientosQueCarga = computed(() =>
@@ -127,6 +143,8 @@ export class Caja implements OnInit {
 
   private aplicar(vigente: CajaVigente): void {
     this.vigente.set(vigente);
+    // Sin caja no hay nada que cerrar: la pantalla del cierre no puede quedar abierta para la caja que se abra después.
+    if (!vigente.caja) this.cierreAbierto.set(false);
     this.efectivoInicial.set(textoDePlata(vigente.efectivoPropuesto));
     this.cargarEnVivo();
   }
@@ -164,6 +182,7 @@ export class Caja implements OnInit {
         this.trabajando.set(false);
         this.cierre.set(null);
         this.mensaje.set('Abriste la caja.');
+        this.cierreAbierto.set(false);
         this.vigente.set({
           estado: 'ABIERTA',
           caja: abierta,
@@ -250,6 +269,38 @@ export class Caja implements OnInit {
     this.confirmandoCierre.set(contado);
   }
 
+  /** La fila «Cerrar la caja» del celular: abre la pantalla del cierre, con el foco en «Volver» (en el campo subiría el teclado). */
+  protected abrirCierre(): void {
+    this.cierreAbierto.set(true);
+    this.enfocar('form.cierre .ficha-volver');
+  }
+
+  /** «Volver» o Esc en la pantalla del cierre: se descarta lo contado, no se manda nada y el foco vuelve a la fila. */
+  protected volverDelCierre(): void {
+    this.cierreAbierto.set(false);
+    this.contado.set('');
+    this.errorContado.set(null);
+    this.enfocar('.fila-cerrar-caja');
+  }
+
+  protected alTeclearElCierre(evento: KeyboardEvent): void {
+    if (evento.key !== 'Escape' || evento.defaultPrevented || !this.celular || !this.cierreAbierto()) return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    this.volverDelCierre();
+  }
+
+  /** La fila «Historial de cajas» del ⋯: cierra la hoja y va, como el enlace de la barra del escritorio. */
+  protected irAlHistorial(): void {
+    this.menuAbierto.set(false);
+    void this.router.navigate(['/caja/historial']);
+  }
+
+  /** Después de pintar, enfoca el primer elemento que coincida. */
+  private enfocar(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), { injector: this.injector });
+  }
+
   protected cancelarCierre(): void {
     this.confirmandoCierre.set(null);
   }
@@ -266,6 +317,7 @@ export class Caja implements OnInit {
         this.cierre.set(detalle);
         this.enVivo.set(null);
         this.contado.set('');
+        this.cierreAbierto.set(false);
         this.mensaje.set('Cerraste la caja.');
         this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado, hayCierreAnterior: true });
         this.efectivoInicial.set(textoDePlata(contado));
@@ -276,6 +328,8 @@ export class Caja implements OnInit {
       error: (err: unknown) => {
         this.trabajando.set(false);
         this.confirmandoCierre.set(null);
+        // El error se muestra arriba de la página: en el celular la pantalla del cierre lo taparía. Lo contado queda.
+        this.cierreAbierto.set(false);
         this.error.set(this.textoDeError(err, 'No se pudo cerrar la caja.'));
         this.releer();
       },

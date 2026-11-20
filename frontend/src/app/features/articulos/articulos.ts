@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { mensajeDe } from '../../core/api/api-error';
@@ -13,12 +13,35 @@ import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
+import { claveDeEtiquetas, sumarEtiquetas } from '../etiquetas/etiquetas.storage';
+import { RubrosService } from '../rubros/rubros.service';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
+import { CamaraEscaner } from './camara-escaner';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
+import { EscanerCamara } from './escaner-camara';
 
 const TAMANO_PAGINA = 20;
+
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const esCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+
+/** movil-sectores T6: cuánto hay que mantener apretada una fila para entrar a la selección, y cuánto puede moverse el dedo. */
+const PULSACION_LARGA_MS = 500;
+const MOVIMIENTO_MAXIMO_PX = 10;
+/** La pista de la selección se muestra hasta que se usa una vez (por dispositivo). */
+const CLAVE_PISTA_SELECCION = 'ferreteria.pista-seleccion-articulos';
+
+function pistaUsada(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_PISTA_SELECCION) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** S5: lo que se explica al intentar una acción de la barra sin un artículo elegido. */
 const MOTIVO_SIN_ELEGIR_EDITAR = 'Elegí un artículo de la lista para editarlo.';
@@ -41,6 +64,8 @@ type Accion = 'ficha' | 'ajuste' | 'movimientos' | 'clientes' | 'baja';
     Confirmacion,
     DialogoAjusteStock,
     BarraAcciones,
+    HojaInferior,
+    EscanerCamara,
   ],
   templateUrl: './articulos.html',
   styleUrl: './articulos.css',
@@ -50,7 +75,10 @@ export class Articulos implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly avisos = inject(Avisos);
+  private readonly rubrosService = inject(RubrosService);
   protected readonly auth = inject(AuthService);
+  private readonly camara = inject(CamaraEscaner);
+  private readonly buscadorMovil = viewChild<ElementRef<HTMLInputElement>>('qMovil');
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
@@ -69,14 +97,27 @@ export class Articulos implements OnInit {
   /** Ofertas (S3): solo los que hoy tienen una oferta que baja el precio. */
   protected readonly soloEnOferta = signal(false);
   /**
-   * móvil-pulgar, T2: en el celular los dos filtros de la barra se pliegan detrás de un botón con el contador de los
-   * que están puestos. En escritorio el panel no se dibuja: los dos tildes siguen en la barra, como siempre.
+   * movil-sectores T5 (5a): el celular muestra los dos filtros como chips de 44 px (mismo estado que los tildes de la
+   * barra de escritorio) y las acciones que no son de un artículo detrás del ⋯ de la barra, en una hoja inferior.
    */
-  protected readonly filtrosAbiertos = signal(false);
-  /** Cuántos de esos filtros están puestos: cero, uno o los dos. */
-  protected readonly filtrosActivos = computed(
-    () => [this.incluirInactivos(), this.soloEnOferta()].filter(Boolean).length,
-  );
+  protected readonly menuAbierto = signal(false);
+  /**
+   * movil-sectores T6: selección múltiple, sólo del Dueño en el celular. Mantener apretada una fila entra al modo; ahí
+   * un toque suma o saca, y la única acción es «Agregar N a Etiquetas» (CU-03). Cambiar de página sale del modo.
+   */
+  protected readonly seleccionando = signal(false);
+  protected readonly elegidos = signal<ReadonlySet<number>>(new Set());
+  /** Cuántos artículos tiene la lista de Etiquetas tras agregar: muestra el atajo «Ir a Etiquetas». */
+  protected readonly enListaDeEtiquetas = signal<number | null>(null);
+  /** La pista «Mantené apretado…» se descarta sola la primera vez que se usa la selección. */
+  protected readonly pistaVista = signal(!pistaUsada());
+  private pulsacion: { temporizador: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+  /** La pulsación larga ya entró al modo: el toque que el navegador manda al soltar no tiene que contar. */
+  private pulsacionLarga = false;
+  /** movil-sectores T7: el escáner de cámara a pantalla completa está abierto (sólo en el celular). */
+  protected readonly escanerAbierto = signal(false);
+  /** Nombre de cada rubro por id, para la línea de detalle de la fila del celular; vacío si no se pudo leer. */
+  private readonly rubros = signal<ReadonlyMap<number, string>>(new Map());
   /** El CSV se está bajando: Exportar queda deshabilitado. */
   protected readonly exportando = signal(false);
   /**
@@ -129,6 +170,61 @@ export class Articulos implements OnInit {
       this.enfocarElegidaAlCargar = true;
     }
     this.cargar(Number.isInteger(pagina) && pagina > 1 ? pagina - 1 : 0);
+    // El listado trae sólo el id del rubro: el nombre sale de la lista de rubros, y sólo hace falta para la línea de
+    // detalle del celular (el escritorio no pide nada de más). Si no llega, la línea no lo muestra.
+    if (esCelular()) {
+      this.rubrosService.listar().subscribe({
+        next: (lista) => this.rubros.set(new Map(lista.map((rubro) => [rubro.id, rubro.nombre]))),
+        error: () => undefined,
+      });
+    }
+  }
+
+  /** El rubro de la fila para la línea de detalle del celular; null si no tiene o todavía no se leyó. */
+  protected rubroDe(articulo: Articulo): string | null {
+    return articulo.rubroId === null ? null : (this.rubros().get(articulo.rubroId) ?? null);
+  }
+
+  /**
+   * movil-sectores T7 (S1): el botón de cámara del buscador existe sólo en el celular y sólo si el navegador trae el
+   * lector nativo de códigos y la cámara; sin eso se escribe a mano. Para el Dueño y para el Vendedor.
+   */
+  protected puedeEscanear(): boolean {
+    return esCelular() && this.camara.disponible();
+  }
+
+  /** «Escribir el código a mano» del escáner: lo cierra, completa el buscador con el código leído (si hay) y lo enfoca. */
+  protected escribirAMano(codigo: string | null): void {
+    // Primero el foco: así el cierre del escáner no se lo lleva de vuelta al botón de cámara.
+    this.buscadorMovil()?.nativeElement.focus();
+    this.escanerAbierto.set(false);
+    if (codigo === null) return;
+    this.form.setValue({ q: codigo });
+    this.buscar();
+  }
+
+  /** «Abrir ficha» del escáner: lo cierra y abre la ficha igual que un toque en la fila. */
+  protected abrirFichaEscaneada(articulo: Articulo): void {
+    this.escanerAbierto.set(false);
+    this.abrirFicha(articulo);
+  }
+
+  /** «Nuevo artículo»: lo mismo que el enlace «Nuevo» de la barra, para el botón flotante del celular. */
+  protected nuevo(): void {
+    void this.router.navigate(['/articulos/nuevo'], { queryParamsHandling: 'preserve' });
+  }
+
+  /** Una acción del ⋯ que lleva a otra pantalla: cierra la hoja y va. */
+  protected irA(ruta: string): void {
+    this.menuAbierto.set(false);
+    void this.router.navigate([ruta]);
+  }
+
+  /** «Exportar a CSV» del ⋯: cierra la hoja y baja lo mismo que el botón de la barra. */
+  protected exportarDesdeMenu(): void {
+    if (this.exportando()) return;
+    this.menuAbierto.set(false);
+    this.exportar();
   }
 
   /** Enter en el buscador: aplica el texto y vuelve a la primera página. */
@@ -145,11 +241,6 @@ export class Articulos implements OnInit {
   protected cambiarInactivos(incluir: boolean): void {
     this.incluirInactivos.set(incluir);
     this.cargar(0);
-  }
-
-  /** Abre o cierra el panel de filtros del celular (T2). */
-  protected alternarFiltros(): void {
-    this.filtrosAbiertos.update((abierto) => !abierto);
   }
 
   protected cambiarSoloEnOferta(solo: boolean): void {
@@ -182,6 +273,124 @@ export class Articulos implements OnInit {
     void this.router.navigate(['/articulos', articulo.id], {
       queryParams: { elegido: articulo.id },
       queryParamsHandling: 'merge',
+    });
+  }
+
+  /**
+   * movil-sectores T5 (5c), «Tocá la fila»: en el celular un toque en la fila abre su ficha, que ahora lleva las
+   * acciones del artículo. En el escritorio un clic sólo elige la fila (el doble clic y Enter abren la ficha).
+   */
+  protected abrirFichaEnElCelular(articulo: Articulo): void {
+    if (esCelular()) this.abrirFicha(articulo);
+  }
+
+  /** La selección sólo existe para quien tiene Etiquetas (el Dueño) y en la pantalla del celular. */
+  protected puedeSeleccionar(): boolean {
+    return this.auth.esDueno() && esCelular();
+  }
+
+  /** Un toque en la fila: en el modo selección suma o saca; fuera de él, lo de siempre. */
+  protected alTocar(articulo: Articulo): void {
+    if (this.pulsacionLarga) {
+      this.pulsacionLarga = false;
+      return;
+    }
+    if (this.seleccionando()) {
+      this.alternar(articulo);
+      return;
+    }
+    this.filas.elegir(articulo);
+    this.abrirFichaEnElCelular(articulo);
+  }
+
+  protected alDobleToque(articulo: Articulo): void {
+    if (!this.seleccionando()) this.abrirFicha(articulo);
+  }
+
+  /** Arranca la cuenta de la pulsación larga; un artículo dado de baja no se puede agregar, así que no cuenta. */
+  protected alPulsar(evento: PointerEvent, articulo: Articulo): void {
+    this.cancelarPulsacion();
+    this.pulsacionLarga = false;
+    if (!evento.isPrimary || this.seleccionando() || !articulo.activo || !this.puedeSeleccionar()) return;
+    this.pulsacion = {
+      x: evento.clientX,
+      y: evento.clientY,
+      temporizador: setTimeout(() => {
+        this.pulsacion = null;
+        this.pulsacionLarga = true;
+        this.entrarASeleccion(articulo);
+      }, PULSACION_LARGA_MS),
+    };
+  }
+
+  /** Si el dedo se mueve es un scroll: la pulsación se cancela. */
+  protected alMoverElDedo(evento: PointerEvent): void {
+    const inicio = this.pulsacion;
+    if (!inicio) return;
+    if (Math.hypot(evento.clientX - inicio.x, evento.clientY - inicio.y) > MOVIMIENTO_MAXIMO_PX) {
+      this.cancelarPulsacion();
+    }
+  }
+
+  protected cancelarPulsacion(): void {
+    if (this.pulsacion) clearTimeout(this.pulsacion.temporizador);
+    this.pulsacion = null;
+  }
+
+  /** El menú del navegador al mantener apretado (copiar, compartir) taparía el modo selección. */
+  protected alMenuContextual(evento: Event): void {
+    if (this.puedeSeleccionar()) evento.preventDefault();
+  }
+
+  protected salirDeSeleccion(): void {
+    this.cancelarPulsacion();
+    this.seleccionando.set(false);
+    this.elegidos.set(new Set());
+  }
+
+  protected elegirTodos(): void {
+    const activos = (this.pagina()?.items ?? []).filter((a) => a.activo).map((a) => a.id);
+    this.elegidos.set(new Set(activos));
+  }
+
+  /** «Agregar N a Etiquetas»: suma a la lista guardada de Etiquetas (una copia cada uno) y vuelve a la lista. */
+  protected agregarAEtiquetas(): void {
+    if (this.elegidos().size === 0) return;
+    const clave = claveDeEtiquetas(this.auth.sesion());
+    if (clave === null) {
+      this.error.set('No se pudo guardar la lista de etiquetas.');
+      return;
+    }
+    const ids = (this.pagina()?.items ?? []).filter((a) => this.elegidos().has(a.id)).map((a) => a.id);
+    const total = sumarEtiquetas(clave, ids);
+    this.salirDeSeleccion();
+    this.limpiarMensajes();
+    this.aviso.set(
+      ids.length === 1
+        ? 'Se agregó 1 artículo a la lista de etiquetas.'
+        : `Se agregaron ${ids.length} artículos a la lista de etiquetas.`,
+    );
+    this.enListaDeEtiquetas.set(total);
+  }
+
+  private entrarASeleccion(articulo: Articulo): void {
+    this.limpiarMensajes();
+    this.seleccionando.set(true);
+    this.elegidos.set(new Set([articulo.id]));
+    this.pistaVista.set(false);
+    try {
+      localStorage.setItem(CLAVE_PISTA_SELECCION, '1');
+    } catch {
+      /* sin persistencia: la pista vuelve en la próxima visita */
+    }
+  }
+
+  private alternar(articulo: Articulo): void {
+    if (!articulo.activo) return;
+    this.elegidos.update((actuales) => {
+      const siguientes = new Set(actuales);
+      if (!siguientes.delete(articulo.id)) siguientes.add(articulo.id);
+      return siguientes;
     });
   }
 
@@ -287,6 +496,7 @@ export class Articulos implements OnInit {
   private limpiarMensajes(): void {
     this.error.set(null);
     this.aviso.set(null);
+    this.enListaDeEtiquetas.set(null);
   }
 
   /** Lo que se explica al intentar abrir la ficha sin una fila elegida: el Dueño edita y el Vendedor la ve. */
@@ -301,6 +511,7 @@ export class Articulos implements OnInit {
 
   /** Con `retrocederSiVacia`, si la página quedó sin artículos (por una baja) trae la anterior. */
   private cargar(page: number, retrocederSiVacia = false): void {
+    this.salirDeSeleccion();
     this.cargando.set(true);
     this.error.set(null);
     this.service

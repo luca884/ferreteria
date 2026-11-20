@@ -1,48 +1,117 @@
-<app-barra-acciones>
-  <h1 class="titulo">
-    @if (!auth.esDueno()) {
-      Artículo
-    } @else if (esEdicion) {
-      Editar artículo
-    } @else {
-      Nuevo artículo
-    }
-    @if (articulo(); as actual) {
-      @if (!actual.activo) {
-        <span class="etiqueta de-baja">De baja</span>
+<!--
+  Celular (movil-sectores T5, 5c y 5d): la ficha de un artículo, existente o nuevo, es una pantalla completa. La barra
+  «Volver» (con el ⋯ de Dar de baja / Reactivar en una hoja inferior, sólo en un artículo existente) reemplaza a la
+  barra de acciones del escritorio; el DOM del escritorio no cambia.
+-->
+@if (fichaCelular()) {
+  <div class="ficha-barra">
+    <button type="button" class="ficha-volver" aria-label="Volver" (click)="cancelar($event)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m15 6-6 6 6 6" />
+      </svg>
+    </button>
+    <h1 class="titulo">
+      {{ !auth.esDueno() ? 'Artículo' : esEdicion ? 'Editar artículo' : 'Nuevo artículo' }}
+      @if (articulo(); as actual) {
+        @if (!actual.activo) {
+          <span class="etiqueta de-baja">De baja</span>
+        }
       }
-    }
-  </h1>
-  @if (articulo(); as actual) {
-    @if (!actual.activo && auth.esDueno()) {
-      <button type="button" class="accion-barra reactivar" (click)="reactivar()">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" />
+    </h1>
+    @if (auth.esDueno() && articulo()) {
+      <button
+        type="button"
+        class="ficha-mas"
+        aria-label="Más opciones del artículo"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="menuAbierto()"
+        (click)="menuAbierto.set(true)"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" />
         </svg>
-        Reactivar
       </button>
     }
-  }
-</app-barra-acciones>
+  </div>
+} @else {
+  <app-barra-acciones>
+    <h1 class="titulo">
+      @if (!auth.esDueno()) {
+        Artículo
+      } @else if (esEdicion) {
+        Editar artículo
+      } @else {
+        Nuevo artículo
+      }
+      @if (articulo(); as actual) {
+        @if (!actual.activo) {
+          <span class="etiqueta de-baja">De baja</span>
+        }
+      }
+    </h1>
+    @if (articulo(); as actual) {
+      @if (!actual.activo && auth.esDueno()) {
+        <button type="button" class="accion-barra reactivar" (click)="reactivar()">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" />
+          </svg>
+          Reactivar
+        </button>
+      }
+    }
+  </app-barra-acciones>
+}
+
+<!-- La cabecera de una tarjeta plegable del celular: un botón real con aria-expanded, el título y su dato clave. -->
+<ng-template #cabecera let-seccion="seccion" let-titulo="titulo" let-dato="dato">
+  <button type="button" class="seccion-cabecera" [attr.aria-expanded]="estaAbierta(seccion)" (click)="alternar(seccion)">
+    <span class="seccion-titulo">{{ titulo }}</span>
+    @if (dato) {
+      <span class="seccion-dato">{{ dato }}</span>
+    }
+    <svg class="seccion-flecha" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  </button>
+</ng-template>
 
 @if (motivo.visible(); as texto) {
   <p class="motivo-accion" role="status">{{ texto }}</p>
 }
 
-<p class="ayuda">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
+<p class="ayuda" [class.ayuda-alta]="fichaCelular() && !esEdicion">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
 
 @if (aviso(); as mensaje) {
   <p class="alerta exito" role="status" tabindex="-1" data-foco-ajustes>{{ mensaje }}</p>
 }
-@if (erroresCampos().length > 0) {
-  <div class="error errores-campos" role="alert">
+@if (fichaCelular() && resumenErrores().length > 0) {
+  <!-- Celular: el resumen de lo inválido; cada renglón abre la tarjeta del campo y lo enfoca. -->
+  <div class="error errores-campos resumen-errores" role="alert">
     <strong>Revisá estos datos:</strong>
     <ul>
-      @for (mensaje of erroresCampos(); track $index) {
-        <li>{{ mensaje }}</li>
+      @for (entrada of resumenErrores(); track entrada.clave) {
+        <li>
+          @if (entrada.selector) {
+            <button type="button" class="enlace-error" (click)="irAlCampo(entrada)">{{ entrada.mensaje }}</button>
+          } @else {
+            {{ entrada.mensaje }}
+          }
+        </li>
       }
     </ul>
   </div>
+}
+@if (erroresCampos().length > 0) {
+  @if (!fichaCelular()) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresCampos(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  }
 } @else if (error(); as mensaje) {
   <div class="error-con-accion">
     <p class="error" role="alert" tabindex="-1" data-foco-ajustes>{{ mensaje }}</p>
@@ -58,6 +127,49 @@
   <a class="btn secundario cancelar" href="/articulos" (click)="cancelar($event)">Volver al listado</a>
 } @else {
   @if (articulo(); as actual) {
+    @if (fichaCelular()) {
+      <section class="resumen-celular" aria-label="Resumen del artículo">
+        <p class="resumen-rotulo">Stock actual</p>
+        <p class="resumen-stock" [class.negativo]="actual.stockActual < 0">{{ cantidadConUnidad(actual.stockActual, actual.unidad) }}</p>
+        <p class="resumen-precio">
+          Precio final guardado <strong>{{ actual.precioFinal | monto }}{{ porUnidad(actual.unidad) }}</strong>
+        </p>
+        @if (auth.esDueno()) {
+          <div class="resumen-botones">
+            <button
+              type="button"
+              class="secundario ajustar-stock"
+              [attr.aria-disabled]="ariaDe(motivos().ajustarStock)"
+              [attr.aria-describedby]="actual.activo ? null : 'motivo-sin-ajuste'"
+              (click)="ajustarStock()"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-5 9 5v8l-9 5-9-5V8Z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>
+              Ajustar stock
+            </button>
+            <a class="btn secundario ver-movimientos" [routerLink]="['/articulos', actual.id, 'movimientos']">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
+              Movimientos
+            </a>
+            <a class="btn secundario ver-clientes" [routerLink]="['/articulos', actual.id, 'clientes']">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.5c2 .8 3.5 2.6 3.5 5.5" /></svg>
+              Clientes
+            </a>
+          </div>
+          @if (!actual.activo) {
+            <p id="motivo-sin-ajuste" class="pista motivo-sin-ajuste">
+              «{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.
+            </p>
+          }
+          @if (ultimaCompra(); as compra) {
+            <p class="ultima-compra">
+              Última compra:
+              <a [routerLink]="['/compras', compra.compraId]" [state]="estadoDelLinkACompra">{{ compra.comprobante }}</a>
+              del {{ fechaUltimaCompra() }}
+            </p>
+          }
+        }
+      </section>
+    } @else {
     <dl class="solo-lectura">
       <div class="dato stock-actual">
         <dt>Stock actual</dt>
@@ -87,11 +199,12 @@
         <dd>{{ actual.precioFinal | monto }}{{ porUnidad(actual.unidad) }}</dd>
       </div>
     </dl>
+    }
   }
 
   <form class="articulo" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-    <fieldset class="seccion identificacion">
-      <legend>Identificación</legend>
+    <fieldset class="seccion identificacion" [class.cerrada]="cerrada('identificacion')">
+      <legend>@if (fichaCelular()) {<ng-container [ngTemplateOutlet]="cabecera" [ngTemplateOutletContext]="{ seccion: 'identificacion', titulo: 'Identificación', dato: resumenIdentificacion() }" />} @else {Identificación}</legend>
       <div class="campo">
         <label for="codigoInterno">Código interno</label>
         <input
@@ -114,11 +227,7 @@
         }
         @if (errorLocal('codigoInterno')) {
           <span id="codigoInterno-error" class="campo-error">
-            {{
-              form.controls.codigoInterno.errors?.['maxlength']
-                ? 'El código interno no puede superar 30 caracteres.'
-                : 'El código interno es obligatorio.'
-            }}
+            {{ mensajeLocal('codigoInterno') }}
           </span>
         }
         @if (errorServidor('codigoInterno'); as mensaje) {
@@ -159,11 +268,7 @@
         />
         @if (errorLocal('descripcion')) {
           <span id="descripcion-error" class="campo-error">
-            {{
-              form.controls.descripcion.errors?.['maxlength']
-                ? 'La descripción no puede superar 200 caracteres.'
-                : 'La descripción es obligatoria.'
-            }}
+            {{ mensajeLocal('descripcion') }}
           </span>
         }
         @if (errorServidor('descripcion'); as mensaje) {
@@ -172,8 +277,8 @@
       </div>
     </fieldset>
 
-    <fieldset class="seccion precio">
-      <legend>Precio</legend>
+    <fieldset class="seccion precio" [class.cerrada]="cerrada('precio')">
+      <legend>@if (fichaCelular()) {<ng-container [ngTemplateOutlet]="cabecera" [ngTemplateOutletContext]="{ seccion: 'precio', titulo: 'Precio', dato: resumenPrecio() }" />} @else {Precio}</legend>
       <!-- H07: el Vendedor no ve moneda, costo ni margen. -->
       @if (auth.esDueno()) {
         <div class="campo">
@@ -214,11 +319,7 @@
           </app-campo-moneda>
           @if (errorLocal('costo')) {
             <span id="costo-error" class="campo-error">
-              {{
-                form.controls.costo.errors?.['min']
-                  ? 'El costo tiene que ser mayor que cero.'
-                  : 'El costo es obligatorio.'
-              }}
+              {{ mensajeLocal('costo') }}
             </span>
           }
           @if (errorServidor('costo'); as mensaje) {
@@ -245,7 +346,7 @@
             <span id="margen-herencia" class="pista herencia">{{ texto }}</span>
           }
           @if (errorLocal('margenPorcentaje')) {
-            <span id="margenPorcentaje-error" class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
+            <span id="margenPorcentaje-error" class="campo-error">{{ mensajeDeMargen }}</span>
           }
           @if (errorServidor('margenPorcentaje'); as mensaje) {
             <span id="margenPorcentaje-error-servidor" class="campo-error" data-error-de="margenPorcentaje">{{ mensaje }}</span>
@@ -501,8 +602,8 @@
       }
     </fieldset>
 
-    <fieldset class="seccion clasificacion">
-      <legend>Clasificación y códigos</legend>
+    <fieldset class="seccion clasificacion" [class.cerrada]="cerrada('clasificacion')">
+      <legend>@if (fichaCelular()) {<ng-container [ngTemplateOutlet]="cabecera" [ngTemplateOutletContext]="{ seccion: 'clasificacion', titulo: 'Clasificación y códigos', dato: '' }" />} @else {Clasificación y códigos}</legend>
       <div class="campo">
         <label for="rubro">Rubro</label>
         <select
@@ -584,8 +685,8 @@
       </div>
     </fieldset>
 
-    <fieldset class="seccion stock">
-      <legend>Stock</legend>
+    <fieldset class="seccion stock" [class.cerrada]="cerrada('stock')">
+      <legend>@if (fichaCelular()) {<ng-container [ngTemplateOutlet]="cabecera" [ngTemplateOutletContext]="{ seccion: 'stock', titulo: 'Stock', dato: resumenStock() }" />} @else {Stock}</legend>
       <div class="campo">
         <label for="stockMinimo">Stock mínimo</label>
         <input
@@ -601,7 +702,7 @@
           (input)="limpiarErrorDe('stockMinimo')"
         />
         @if (errorLocal('stockMinimo')) {
-          <span id="stockMinimo-error" class="campo-error">El stock mínimo no puede ser negativo.</span>
+          <span id="stockMinimo-error" class="campo-error">{{ mensajeDeStockMinimo }}</span>
         }
         @if (errorServidor('stockMinimo'); as mensaje) {
           <span id="stockMinimo-error-servidor" class="campo-error" data-error-de="stockMinimo">{{ mensaje }}</span>
@@ -626,7 +727,7 @@
       </div>
     </fieldset>
 
-    <div class="acciones-form">
+    <div class="acciones-form" [class.ficha-pie]="fichaCelular()">
       @if (auth.esDueno()) {
         <button type="submit" [disabled]="guardando()">Guardar</button>
       }
@@ -640,13 +741,18 @@
     <app-oferta-articulo
       [articulo]="actual"
       [editable]="auth.esDueno() && actual.activo"
+      [celular]="fichaCelular()"
       (cambiado)="ofertaCambiada($event)"
     />
   }
 
   @if (desglose(); as d) {
+    @if (fichaCelular()) {
+      <ng-container [ngTemplateOutlet]="cabecera" [ngTemplateOutletContext]="{ seccion: 'desglose', titulo: 'De dónde sale el precio', dato: '' }" />
+    }
     <app-desglose-precio
       class="desglose"
+      [class.cerrada]="cerrada('desglose')"
       [desglose]="d"
       [ajustes]="ajustes"
       [esDueno]="auth.esDueno()"
@@ -672,7 +778,7 @@
     </app-desglose-precio>
   }
 
-  @if (auth.esDueno() && ultimaCompra(); as compra) {
+  @if (auth.esDueno() && !fichaCelular() && ultimaCompra(); as compra) {
     <p class="ultima-compra">
       Última compra:
       <a [routerLink]="['/compras', compra.compraId]" [state]="estadoDelLinkACompra">{{ compra.comprobante }}</a>
@@ -717,6 +823,41 @@
       }"
       (ajustado)="stockAjustado($event)"
       (cancelar)="ajustandoStock.set(false)"
+    />
+  }
+}
+
+@if (menuAbierto()) {
+  <app-hoja-inferior
+    [titulo]="articulo()?.descripcion ?? 'Artículo'"
+    [subtitulo]="articulo()?.codigoInterno ?? ''"
+    (cerrar)="menuAbierto.set(false)"
+  >
+    @if (articulo(); as actual) {
+      @if (actual.activo) {
+        <button type="button" class="accion-hoja peligro dar-de-baja" (click)="pedirBaja()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+          <span>Dar de baja</span>
+        </button>
+      } @else {
+        <button type="button" class="accion-hoja reactivar-hoja" (click)="reactivarDesdeElMenu()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" /></svg>
+          <span>Reactivar</span>
+        </button>
+      }
+    }
+  </app-hoja-inferior>
+}
+
+@if (confirmandoBaja()) {
+  @if (articulo(); as actual) {
+    <app-confirmacion
+      [titulo]="'¿Dar de baja ' + actual.descripcion + '?'"
+      mensaje="Deja de aparecer en el listado. En el mostrador sale marcado como dado de baja y no se puede vender. Conserva su historial de precios y lo podés reactivar cuando quieras."
+      textoConfirmar="Dar de baja"
+      [peligro]="true"
+      (confirmar)="darDeBaja()"
+      (cancelar)="confirmandoBaja.set(false)"
     />
   }
 }

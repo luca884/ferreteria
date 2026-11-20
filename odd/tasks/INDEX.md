@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-14 desde los 92 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-20 desde los 93 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 92 documentos suman 1,5 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~22 KB; los 93 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **90 cerradas · 2 abiertas**
+- **91 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -112,6 +112,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`cu-13-compras.md`](cu-13-compras.md) | 2026-10-21 | registrar una compra (factura o remito del proveedor) que sume el stock y actualice el costo y el precio de los artículos | 8 |
 | [`cu-14-precio-manual.md`](cu-14-precio-manual.md) | 2026-10-21 | precio manual por artículo, ajustes sin límite sobre el precio final y actualización masiva del precio final | 22 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | 22 |
+| [`movil-sectores.md`](movil-sectores.md) | — | — | 103 |
 
 ## Tareas por caso de uso
 

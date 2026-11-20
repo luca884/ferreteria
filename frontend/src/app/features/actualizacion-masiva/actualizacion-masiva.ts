@@ -22,7 +22,10 @@ import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { DetallePantalla } from '../../shared/detalle-pantalla';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { ImporteInput } from '../../shared/importe-input';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { Proveedor } from '../proveedores/proveedor.models';
@@ -63,9 +66,19 @@ const RECALCULA_CON_EL_MARGEN =
 const PISTA_RUBRO_DESTINO =
   'El precio se recalcula con el margen del rubro destino. Los de margen propio o precio manual cambian de rubro, pero no de precio.';
 
+const OPERACIONES = [
+  { modo: 'COSTO_PORCENTAJE', nombre: 'Cambiar el costo en %', detalle: 'Sube o baja el costo; el precio se recalcula.' },
+  { modo: 'MARGEN', nombre: 'Fijar el margen', detalle: 'Margen propio igual para todos.' },
+  { modo: 'COSTO_MONTO', nombre: 'Sumar o restar un monto al costo', detalle: 'Un importe fijo en la moneda de cada artículo.' },
+  { modo: 'PRECIO_PORCENTAJE', nombre: 'Cambiar el precio final en %', detalle: 'Los artículos quedan con precio manual.' },
+  { modo: 'PRECIO_MONTO', nombre: 'Sumar o restar un monto al precio final', detalle: 'Siempre en pesos. Los artículos quedan con precio manual.' },
+  { modo: 'CAMBIAR_RUBRO', nombre: 'Cambiar el rubro', detalle: 'Pasa los artículos a otro rubro.' },
+] as const;
+
 @Component({
   selector: 'app-actualizacion-masiva',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, CampoMoneda, ImporteInput, DialogoDetalle],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, CampoMoneda, ImporteInput,
+    DialogoDetalle, DetallePantalla, HojaInferior],
   templateUrl: './actualizacion-masiva.html',
   styleUrl: './actualizacion-masiva.css',
 })
@@ -75,6 +88,9 @@ export class ActualizacionMasiva implements OnInit {
   private readonly rubrosService = inject(RubrosService);
   private readonly importacionesService = inject(ImportacionesService);
   protected readonly auth = inject(AuthService);
+  protected readonly celular = esCelular();
+  protected readonly operaciones = OPERACIONES;
+  protected readonly hojaOperacion = signal(false);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly rubros = signal<Rubro[]>([]);
@@ -118,6 +134,21 @@ export class ActualizacionMasiva implements OnInit {
    * `emitEvent: false` no pasa por `valueChanges` y los `computed` quedarían con el valor viejo.
    */
   private readonly formulario = signal(this.form.getRawValue());
+  protected readonly modoActual = computed(() => this.formulario().modo);
+  protected readonly nombreOperacion = computed(() =>
+    OPERACIONES.find(({ modo }) => modo === this.modoActual())?.nombre ?? 'Elegí qué querés hacer',
+  );
+
+  protected abrirOperaciones(boton: HTMLButtonElement): void {
+    boton.focus();
+    this.hojaOperacion.set(true);
+  }
+
+  protected elegirOperacion(modo: ModoMasivo): void {
+    const control = this.form.controls.modo;
+    if (control.value !== modo) control.setValue(modo);
+    this.hojaOperacion.set(false);
+  }
 
   private sincronizarFormulario(): void {
     this.formulario.set(this.form.getRawValue());

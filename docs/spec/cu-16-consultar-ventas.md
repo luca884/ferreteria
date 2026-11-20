@@ -25,3 +25,11 @@
 8. **Avisos en el mostrador del Dueño** (rama 7). Al abrir el mostrador y cada minuto: cuántas ventas hay rechazadas, pendientes de CAE desde hace más de 30 minutos y en revisión, y si la facturación está bloqueada por ARCA, con un enlace a «Ventas». Solo se muestra lo que no es cero (`GET /api/facturacion/avisos-mostrador`).
 <!-- fin payload: spec.md:322-343 -->
 
+**Agregado móvil: consulta y detalle de ventas** (≤639.98 px, solo Dueño).
+El hub Ventas muestra los destinos de cada rol: Caja, Presupuestos, Remitos y Clientes; el Dueño suma consulta de ventas y Reportes.
+En la consulta, las ventas se ven en tarjetas y «Filtros» y el chip fiscal abren una hoja inferior.
+El detalle ocupa la pantalla completa: «Reintentar» y «Dejar sin factura», o «Imprimir», quedan fijos al pie según el estado;
+«Anular» está en la hoja del ⋯ y «Imprimir» pasa ahí cuando el pie lo ocupa la bandeja de ARCA.
+No cambian las reglas de negocio, los roles, las rutas de consulta o detalle ni los textos de ARCA.
+Pendientes (L35): «Facturas» sigue siendo un selector, «Reimprimir factura» sigue también en la lista y «Anular» se apaga durante una acción «sin texto de motivo».
+

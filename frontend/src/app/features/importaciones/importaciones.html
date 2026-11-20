@@ -2,12 +2,75 @@
   <h1>Importar lista de precios</h1>
 </app-barra-acciones>
 
+@if (celular && auth.esDueno() && !resumen()) {
+  <ol class="pasos-celular" [attr.aria-label]="'Paso ' + pasoActual() + ' de 4'">
+    @for (nombre of nombresDePaso; track nombre; let i = $index) {
+      <li
+        [class.activo]="i + 1 === pasoActual()"
+        [class.hecho]="i + 1 < pasoActual()"
+        [attr.aria-current]="i + 1 === pasoActual() ? 'step' : null"
+      >
+        {{ i + 1 }} {{ nombre }}
+      </li>
+    }
+  </ol>
+}
+
 @if (auth.esDueno()) {
   <p class="ayuda">
     Subí la lista del proveedor (Excel, CSV o PDF), indicá en qué columnas están el código y el costo, y
     revisá los cambios antes de confirmar.
   </p>
 }
+
+<!--
+  movil-sectores T13d: lo que cambia de lugar entre escritorio, tablet y celular se define una sola vez, con sus guardas, y se
+  dibuja donde corresponde (el cuerpo, o el pie fijo del celular).
+-->
+<ng-template #decisionConfirmar>
+  <div class="fila">
+    <label class="casilla" for="crearNuevos">
+      <input
+        id="crearNuevos"
+        type="checkbox"
+        [checked]="crearNuevos()"
+        [attr.aria-describedby]="nuevosSinCrear() ? 'nuevos-sin-crear' : null"
+        (change)="cambiarCrearNuevos($any($event.target).checked)"
+      />
+      Crear los artículos nuevos
+    </label>
+  </div>
+  @if (nuevosSinCrear(); as n) {
+    <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">{{ textoNuevosSinCrear(n) }}</p>
+  }
+  <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
+  @if (sinFilasElegidas() && !nuevosSinCrear()) {
+    <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">{{ MOTIVO_SIN_FILAS }}</p>
+  }
+</ng-template>
+
+<ng-template #motivoConfirmar>
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
+</ng-template>
+
+<ng-template #botonConfirmar>
+  <button
+    type="button"
+    class="confirmar primario"
+    [disabled]="aplicando()"
+    [attr.aria-disabled]="ariaDe(motivos().confirmar)"
+    [attr.aria-describedby]="sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null"
+    (click)="confirmar()"
+  >
+    {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
+  </button>
+</ng-template>
+
+<ng-template #botonOtraLista>
+  <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
+</ng-template>
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede importar listas de precios.</p>
@@ -30,7 +93,7 @@
   }
 
   @if (resumen(); as r) {
-    <section #resumenEl class="resumen panel" role="status" tabindex="-1">
+    <section #resumenEl class="resumen panel" [class.resumen-celular]="celular" role="status" tabindex="-1">
       <h2>Importación aplicada</h2>
       <p class="ayuda">
         Archivo {{ r.archivo }}.
@@ -52,10 +115,17 @@
           <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor | number }}</strong></div>
         }
       </div>
-      <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
+      <!-- movil-sectores T13d: en el celular el resultado es una pantalla completa y su única acción queda en un pie fijo. -->
+      @if (celular) {
+        <div class="ficha-pie">
+          <ng-container *ngTemplateOutlet="botonOtraLista" />
+        </div>
+      } @else {
+        <ng-container *ngTemplateOutlet="botonOtraLista" />
+      }
     </section>
   } @else {
-  <section class="paso panel">
+  <section class="paso panel" [class.leyendo-celular]="celular && cargandoMuestra()">
     <h2>1. Proveedor y archivo</h2>
     <div class="fila">
       <div class="campo">
@@ -78,7 +148,65 @@
   </section>
 
   @if (cargandoMuestra()) {
-    <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+    @if (celular) {
+      <section class="leyendo-tarjeta">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" />
+          <path d="M14 3v5h5M9 13h6M9 17h6" />
+        </svg>
+        <b class="leyendo-archivo">{{ archivo()?.name }}</b>
+        <div class="barra-progreso" role="progressbar" aria-label="Leyendo la lista"><i></i></div>
+        <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+      </section>
+    } @else {
+      <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
+    }
+  }
+
+  <!-- movil-sectores T13a: en el celular la acción del paso 1 queda fija abajo, sobre la barra de destinos. -->
+  @if (celular && pasoActual() === 1) {
+    <div class="ficha-pie en-pagina pie-importar">
+      @if (motivoElegirArchivo(); as motivoPie) {
+        <p id="motivo-elegir-archivo" class="motivo-accion" role="status">{{ motivoPie }}</p>
+      }
+      <button
+        type="button"
+        class="primario"
+        [attr.aria-disabled]="ariaDe(motivoElegirArchivo())"
+        [attr.aria-describedby]="motivoElegirArchivo() ? 'motivo-elegir-archivo' : null"
+        (click)="elegirDesdeElPie()"
+      >
+        {{ textoElegirArchivo() }}
+      </button>
+    </div>
+  }
+
+  <!-- movil-sectores T13b: del paso 2 en adelante el pie lleva la acción del paso; el botón del cuerpo se oculta por CSS. -->
+  @if (celular && pasoActual() === 2) {
+    <div class="ficha-pie en-pagina pie-importar pie-columnas">
+      <button type="button" class="primario" [disabled]="generando()" (click)="generarVistaPrevia()">
+        {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
+      </button>
+    </div>
+  }
+
+  <!-- movil-sectores T13d: del paso 3 al 4 («Continuar») y el pie del paso 4 con «Volver» y «Confirmar importación». -->
+  @if (celular && vistaPrevia() !== null) {
+    @if (enConfirmar()) {
+      <div class="ficha-pie en-pagina pie-importar pie-confirmar">
+        <ng-container *ngTemplateOutlet="motivoConfirmar" />
+        <div class="pie-fila">
+          <button type="button" class="volver-revisar" [disabled]="aplicando()" (click)="volverARevisar()">Volver</button>
+          <ng-container *ngTemplateOutlet="botonConfirmar" />
+        </div>
+      </div>
+    } @else {
+      <div class="ficha-pie en-pagina pie-importar pie-revisar">
+        <button type="button" class="primario" (click)="continuarAConfirmar()">
+          Continuar con {{ cantidadElegidas() | number }} {{ cantidadElegidas() === 1 ? 'fila' : 'filas' }}
+        </button>
+      </div>
+    }
   }
 
   @if (muestra(); as m) {
@@ -91,107 +219,166 @@
       </p>
 
       @if (hojaActual(); as hoja) {
-        <div class="herramientas-visor">
-          @if (m.hojas.length > 1) {
-            <div class="navegacion-hojas">
-              <button
-                type="button"
-                class="chico"
-                aria-label="Hoja anterior"
-                [disabled]="hojaVista() <= 0"
-                (click)="moverHoja(-1)"
-              >
-                ◀
-              </button>
-              <span class="hoja-actual" aria-live="polite">
-                Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
-              </span>
-              <button
-                type="button"
-                class="chico"
-                aria-label="Hoja siguiente"
-                [disabled]="hojaVista() >= m.hojas.length - 1"
-                (click)="moverHoja(1)"
-              >
-                ▶
-              </button>
-              <label for="hojaVista">Ver la hoja</label>
-              <select id="hojaVista" (change)="elegirHojaVista($any($event.target).value)">
-                @for (nombre of nombresDeHojas(); track $index) {
-                  <option [value]="$index" [selected]="$index === hojaVista()">{{ nombre }}</option>
-                }
-              </select>
-            </div>
-          }
-
-          <div class="zoom" role="group" aria-label="Zoom de la lista">
-            <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
-            <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
-              {{ zoom() }} %
-            </button>
-            <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
-          </div>
-        </div>
-
-        <div
-          class="visor"
-          role="table"
-          aria-label="Contenido de la lista"
-          [attr.aria-rowcount]="filasDelVisor().length + 1"
-          [attr.aria-colcount]="columnas().length + 1"
-          [style.--alto-fila]="altoFila() + 'px'"
-          [style.--ancho-columna]="anchoColumna() + 'px'"
-          [style.--ancho-numero]="anchoNumero() + 'px'"
-          [style.--fuente]="fuente() + 'px'"
-          [style.--alto-marco]="altoMarco() + 'px'"
-        >
-          <div #encabezadoVisor class="visor-encabezado" role="row">
-            <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
-              <span class="esquina" role="columnheader">Fila</span>
-              @for (c of columnas(); track c) {
-                <span
-                  class="columna"
-                  role="columnheader"
-                  [class]="claseDeColumna(c)"
-                  [attr.title]="tituloDeColumna(c)"
-                  >{{ letra(c) }}</span
+        @if (celular) {
+          <!-- movil-sectores T13b: el visor con zoom no entra en el celular; una muestra fija de las primeras filas. -->
+          <div class="muestra-celular">
+            <div class="muestra-celular-cabecera">
+              @if (m.hojas.length > 1) {
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja anterior"
+                  [disabled]="hojaVista() <= 0"
+                  (click)="moverHoja(-1)"
                 >
+                  ◀
+                </button>
+                <span class="hoja-actual" aria-live="polite">
+                  Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
+                </span>
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja siguiente"
+                  [disabled]="hojaVista() >= m.hojas.length - 1"
+                  (click)="moverHoja(1)"
+                >
+                  ▶
+                </button>
+              } @else {
+                <span class="hoja-actual">{{ hoja.nombre }}</span>
               }
             </div>
+            <div class="muestra-celular-marco" role="region" aria-label="Primeras filas de la lista" tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Fila</th>
+                    @for (c of columnas(); track c) {
+                      <th scope="col">{{ letra(c) }}</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (fila of filasDeMuestra(); track fila.numero) {
+                    <tr>
+                      <td>{{ fila.numero }}</td>
+                      @for (celda of fila.celdas; track $index) {
+                        <td>{{ celda }}</td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p class="muestra-conteo ayuda">
+              {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
+              {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
+            </p>
           </div>
-          <cdk-virtual-scroll-viewport
-            #cuerpoVisor
-            class="visor-cuerpo"
-            role="rowgroup"
-            tabindex="0"
-            [itemSize]="altoFila()"
-            (scroll)="sincronizarEncabezado($event)"
+        } @else {
+          <div class="herramientas-visor">
+            @if (m.hojas.length > 1) {
+              <div class="navegacion-hojas">
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja anterior"
+                  [disabled]="hojaVista() <= 0"
+                  (click)="moverHoja(-1)"
+                >
+                  ◀
+                </button>
+                <span class="hoja-actual" aria-live="polite">
+                  Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
+                </span>
+                <button
+                  type="button"
+                  class="chico"
+                  aria-label="Hoja siguiente"
+                  [disabled]="hojaVista() >= m.hojas.length - 1"
+                  (click)="moverHoja(1)"
+                >
+                  ▶
+                </button>
+                <label for="hojaVista">Ver la hoja</label>
+                <select id="hojaVista" (change)="elegirHojaVista($any($event.target).value)">
+                  @for (nombre of nombresDeHojas(); track $index) {
+                    <option [value]="$index" [selected]="$index === hojaVista()">{{ nombre }}</option>
+                  }
+                </select>
+              </div>
+            }
+
+            <div class="zoom" role="group" aria-label="Zoom de la lista">
+              <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
+              <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
+                {{ zoom() }} %
+              </button>
+              <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+            </div>
+          </div>
+
+          <div
+            class="visor"
+            role="table"
+            aria-label="Contenido de la lista"
+            [attr.aria-rowcount]="filasDelVisor().length + 1"
+            [attr.aria-colcount]="columnas().length + 1"
+            [style.--alto-fila]="altoFila() + 'px'"
+            [style.--ancho-columna]="anchoColumna() + 'px'"
+            [style.--ancho-numero]="anchoNumero() + 'px'"
+            [style.--fuente]="fuente() + 'px'"
+            [style.--alto-marco]="altoMarco() + 'px'"
           >
-            <div
-              *cdkVirtualFor="let fila of filasDelVisor(); trackBy: porNumero; let i = index"
-              class="visor-fila"
-              role="row"
-              [class.previa]="esPrevia(fila.numero)"
-              [attr.aria-rowindex]="i + 2"
-              [style.width]="anchoTotal() + 'px'"
-            >
-              <span class="numero" role="rowheader">{{ fila.numero }}</span>
-              @for (celda of fila.celdas; track $index) {
-                <span
-                  role="cell"
-                  class="celda"
-                  [class]="claseDeColumna($index)"
-                  [attr.title]="celda === '' ? null : celda"
-                  >{{ celda }}</span
-                >
-              }
+            <div #encabezadoVisor class="visor-encabezado" role="row">
+              <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
+                <span class="esquina" role="columnheader">Fila</span>
+                @for (c of columnas(); track c) {
+                  <span
+                    class="columna"
+                    role="columnheader"
+                    [class]="claseDeColumna(c)"
+                    [attr.title]="tituloDeColumna(c)"
+                    >{{ letra(c) }}</span
+                  >
+                }
+              </div>
             </div>
-          </cdk-virtual-scroll-viewport>
-        </div>
-        <p class="visor-conteo ayuda">
-          {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
-          {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
-        </p>
+            <cdk-virtual-scroll-viewport
+              #cuerpoVisor
+              class="visor-cuerpo"
+              role="rowgroup"
+              tabindex="0"
+              [itemSize]="altoFila()"
+              (scroll)="sincronizarEncabezado($event)"
+            >
+              <div
+                *cdkVirtualFor="let fila of filasDelVisor(); trackBy: porNumero; let i = index"
+                class="visor-fila"
+                role="row"
+                [class.previa]="esPrevia(fila.numero)"
+                [attr.aria-rowindex]="i + 2"
+                [style.width]="anchoTotal() + 'px'"
+              >
+                <span class="numero" role="rowheader">{{ fila.numero }}</span>
+                @for (celda of fila.celdas; track $index) {
+                  <span
+                    role="cell"
+                    class="celda"
+                    [class]="claseDeColumna($index)"
+                    [attr.title]="celda === '' ? null : celda"
+                    >{{ celda }}</span
+                  >
+                }
+              </div>
+            </cdk-virtual-scroll-viewport>
+          </div>
+          <p class="visor-conteo ayuda">
+            {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
+            {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
+          </p>
+        }
       }
 
       @if (m.hojas.length > 1) {
@@ -206,96 +393,119 @@
         </p>
       }
 
-      <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
-
-      <form class="mapeo" [formGroup]="listaForm" novalidate>
-        <div class="fila incluye-iva">
-          <label class="casilla" for="listaIncluyeIva">
-            <input
-              id="listaIncluyeIva"
-              type="checkbox"
-              formControlName="listaIncluyeIva"
-              [attr.aria-describedby]="
-                avisoIva() ? 'lista-incluye-iva-ayuda lista-incluye-iva-aviso' : 'lista-incluye-iva-ayuda'
-              "
-            />
-            La lista incluye IVA
-          </label>
-          <p id="lista-incluye-iva-ayuda" class="ayuda">Marcala solo si la columna del costo ya trae el IVA adentro.</p>
-          @if (avisoIva(); as aviso) {
-            <p id="lista-incluye-iva-aviso" class="alerta advertencia" role="status">{{ aviso }}</p>
-          }
-        </div>
-
-        <div class="fila">
-          @for (n of [1, 2, 3]; track n) {
-            <div class="campo">
-              <label [for]="'bonificacion' + n">Bonificación {{ n }} (%)</label>
+      <ng-template #formularioLista>
+        <form class="mapeo" [formGroup]="listaForm" novalidate>
+          <div class="fila incluye-iva">
+            <label class="casilla" for="listaIncluyeIva">
               <input
-                [id]="'bonificacion' + n"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                max="100"
-                step="0.01"
-                [formControlName]="'bonificacion' + n"
-                [attr.aria-invalid]="listaForm.get('bonificacion' + n)?.invalid ? 'true' : null"
-                [attr.aria-describedby]="listaForm.get('bonificacion' + n)?.invalid ? 'bonificacion' + n + '-error' : null"
+                id="listaIncluyeIva"
+                type="checkbox"
+                formControlName="listaIncluyeIva"
+                [attr.aria-describedby]="
+                  avisoIva() ? 'lista-incluye-iva-ayuda lista-incluye-iva-aviso' : 'lista-incluye-iva-ayuda'
+                "
               />
-              @if (listaForm.get('bonificacion' + n)?.invalid) {
-                <span [id]="'bonificacion' + n + '-error'" class="campo-error">
-                  La bonificación {{ n }} tiene que estar entre 0 y 100.
-                </span>
-              }
-            </div>
-          }
-        </div>
-        <p class="ayuda ayuda-bonificaciones">
-          Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
-          al confirmar la importación. Dejá vacía la que no corresponda.
-        </p>
-
-        <div class="fila">
-          <div class="campo">
-            <label for="rubro">Rubro de los artículos nuevos</label>
-            <select id="rubro" formControlName="rubroId" aria-describedby="rubro-ayuda">
-              <option [ngValue]="null">Sin rubro (margen por defecto)</option>
-              @for (rubro of rubros(); track rubro.id) {
-                <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
-              }
-            </select>
-            <span id="rubro-ayuda" class="ayuda">
-              Define el margen con el que se calcula el precio de los artículos nuevos en la vista previa. Si
-              lo cambiás, hay que volver a generarla.
-            </span>
+              La lista incluye IVA
+            </label>
+            <p id="lista-incluye-iva-ayuda" class="ayuda">Marcala solo si la columna del costo ya trae el IVA adentro.</p>
+            @if (avisoIva(); as aviso) {
+              <p id="lista-incluye-iva-aviso" class="alerta advertencia" role="status">{{ aviso }}</p>
+            }
           </div>
-        </div>
 
-        <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
-          {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
-        </button>
-      </form>
+          <div class="fila">
+            @for (n of [1, 2, 3]; track n) {
+              <div class="campo">
+                <label [for]="'bonificacion' + n">Bonificación {{ n }} (%)</label>
+                <input
+                  [id]="'bonificacion' + n"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  [formControlName]="'bonificacion' + n"
+                  [attr.aria-invalid]="listaForm.get('bonificacion' + n)?.invalid ? 'true' : null"
+                  [attr.aria-describedby]="listaForm.get('bonificacion' + n)?.invalid ? 'bonificacion' + n + '-error' : null"
+                />
+                @if (listaForm.get('bonificacion' + n)?.invalid) {
+                  <span [id]="'bonificacion' + n + '-error'" class="campo-error">
+                    La bonificación {{ n }} tiene que estar entre 0 y 100.
+                  </span>
+                }
+              </div>
+            }
+          </div>
+          <p class="ayuda ayuda-bonificaciones">
+            Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
+            al confirmar la importación. Dejá vacía la que no corresponda.
+          </p>
+
+          <div class="fila">
+            <div class="campo">
+              <label for="rubro">Rubro de los artículos nuevos</label>
+              <select id="rubro" formControlName="rubroId" aria-describedby="rubro-ayuda">
+                <option [ngValue]="null">Sin rubro (margen por defecto)</option>
+                @for (rubro of rubros(); track rubro.id) {
+                  <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+                }
+              </select>
+              <span id="rubro-ayuda" class="ayuda">
+                Define el margen con el que se calcula el precio de los artículos nuevos en la vista previa. Si
+                lo cambiás, hay que volver a generarla.
+              </span>
+            </div>
+          </div>
+
+          <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
+            {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
+          </button>
+        </form>
+      </ng-template>
+
+      @if (celular) {
+        <!-- movil-sectores T13b: los datos arriba y lo que casi no se toca en «Más ajustes»; el mismo formulario, una sola vez. -->
+        <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" modo="datos" />
+
+        <details class="mas-ajustes">
+          <summary>
+            <span><b>Más ajustes</b><small>IVA, moneda, bonificación, rubro nuevo</small></span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </summary>
+          <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" modo="ajustes" />
+          <ng-container *ngTemplateOutlet="formularioLista" />
+        </details>
+      } @else {
+        <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
+
+        <ng-container *ngTemplateOutlet="formularioLista" />
+      }
     </section>
   }
 
   @if (vistaPrevia(); as vp) {
-    <section class="paso panel vista-previa">
+    <section class="paso panel vista-previa" [class.confirmando]="enConfirmar()" [attr.tabindex]="celular ? -1 : null">
       <h2>3. Vista previa</h2>
       <p class="ayuda">
         Todavía no se cambió nada. Revisá lo que va a pasar y elegí qué filas aplicar: al abrir están
         todas marcadas. Las tarjetas cuentan lo elegido.
       </p>
 
-      <div class="tarjetas">
-        @for (t of tarjetasDeLaVistaPrevia(); track t.etiqueta) {
-          <div class="tarjeta">
-            {{ t.etiqueta }} <strong>{{ t.valor | number }}</strong>
-            @if (t.total !== null) {
-              <span class="de-total"> de {{ t.total | number }}</span>
-            }
-          </div>
-        }
-      </div>
+      <!-- movil-sectores T13c: en el celular las tarjetas y el filtro «Tipo» son la fila de conteos de la tabla. -->
+      @if (!celular) {
+        <div class="tarjetas">
+          @for (t of tarjetasDeLaVistaPrevia(); track t.etiqueta) {
+            <div class="tarjeta">
+              {{ t.etiqueta }} <strong>{{ t.valor | number }}</strong>
+              @if (t.total !== null) {
+                <span class="de-total"> de {{ t.total | number }}</span>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (vp.conteos.salteadas > 0) {
         <p class="ayuda salteadas">
@@ -312,6 +522,14 @@
           {{ vp.conteos.conError === 1 ? 'fila con error: no se importa' : 'filas con error: no se importan' }}.
           Filtrá por el tipo «Con error» para {{ vp.conteos.conError === 1 ? 'verla' : 'verlas' }}.
         </p>
+      }
+
+      <!-- movil-sectores T13d: el error de dólares sin moneda lleva su salida a mano; el texto es el del servidor. -->
+      @if (celular && avisoDolaresSinMoneda(); as aviso) {
+        <div class="aviso-dolares">
+          <p>{{ aviso }}</p>
+          <button type="button" class="secundario" (click)="irAMasAjustes()">Ir a Más ajustes</button>
+        </div>
       }
 
       @if (vp.advertencias.length > 0) {
@@ -352,7 +570,7 @@
           <p class="ayuda">Artículos activos del proveedor que no figuran en el archivo. No se tocan.</p>
           @if (noEstanAbierto()) {
             <div class="grilla-contenedor">
-              <table>
+              <table [class.tabla-tarjetas]="celular">
                 <thead>
                   <tr>
                     <th>Código interno</th>
@@ -363,9 +581,9 @@
                 <tbody>
                   @for (a of noEstanVisibles(); track a.id) {
                     <tr>
-                      <td class="codigo">{{ a.codigoInterno }}</td>
-                      <td class="codigo">{{ a.codigoProveedor ?? '—' }}</td>
-                      <td>{{ a.descripcion }}</td>
+                      <td class="codigo" [attr.data-etiqueta]="celular ? 'Código interno' : null">{{ a.codigoInterno }}</td>
+                      <td class="codigo" [attr.data-etiqueta]="celular ? 'Código del proveedor' : null">{{ a.codigoProveedor ?? '—' }}</td>
+                      <td [attr.data-etiqueta]="celular ? 'Descripción' : null">{{ a.descripcion }}</td>
                     </tr>
                   }
                 </tbody>
@@ -392,41 +610,30 @@
         </details>
       }
 
-      <h2 class="titulo-confirmar">4. Confirmar</h2>
-      <div class="fila">
-        <label class="casilla" for="crearNuevos">
-          <input
-            id="crearNuevos"
-            type="checkbox"
-            [checked]="crearNuevos()"
-            [attr.aria-describedby]="nuevosSinCrear() ? 'nuevos-sin-crear' : null"
-            (change)="cambiarCrearNuevos($any($event.target).checked)"
-          />
-          Crear los artículos nuevos
-        </label>
-      </div>
-      @if (nuevosSinCrear(); as n) {
-        <p id="nuevos-sin-crear" class="aviso nuevos-sin-crear">{{ textoNuevosSinCrear(n) }}</p>
+      @if (!celular) {
+        <h2 class="titulo-confirmar">4. Confirmar</h2>
+        <ng-container *ngTemplateOutlet="decisionConfirmar" />
+        <ng-container *ngTemplateOutlet="motivoConfirmar" />
+        <ng-container *ngTemplateOutlet="botonConfirmar" />
+      } @else if (enConfirmar()) {
+        <!-- movil-sectores T13d: la pantalla de confirmar del celular; el botón y el motivo están en el pie fijo. -->
+        <div class="confirmar-celular" tabindex="-1">
+          <h2 class="titulo-confirmar">4. Confirmar</h2>
+          <div class="conteos-confirmar">
+            @for (c of conteosAplicados(); track c.etiqueta) {
+              <div class="conteo-confirmar"><b>{{ c.valor | number }}</b><span>{{ c.etiqueta }}</span></div>
+            }
+          </div>
+          <div class="decision-confirmar">
+            <ng-container *ngTemplateOutlet="decisionConfirmar" />
+          </div>
+          <dl class="datos-confirmar">
+            <div><dt>Archivo</dt><dd>{{ archivo()?.name }}</dd></div>
+            <div><dt>Proveedor</dt><dd>{{ nombreDelProveedor() }}</dd></div>
+            <div><dt>Filas elegidas</dt><dd>{{ cantidadElegidas() | number }}</dd></div>
+          </dl>
+        </div>
       }
-      <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
-      @if (sinFilasElegidas() && !nuevosSinCrear()) {
-        <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">{{ MOTIVO_SIN_FILAS }}</p>
-      }
-      @if (motivo.visible(); as texto) {
-        <p class="motivo-accion" role="status">{{ texto }}</p>
-      }
-      <button
-        type="button"
-        class="confirmar primario"
-        [disabled]="aplicando()"
-        [attr.aria-disabled]="ariaDe(motivos().confirmar)"
-        [attr.aria-describedby]="
-          sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null
-        "
-        (click)="confirmar()"
-      >
-        {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
-      </button>
     </section>
   }
   }

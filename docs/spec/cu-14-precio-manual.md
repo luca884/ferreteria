@@ -12,3 +12,9 @@
 5. **Aislamiento.** Los ajustes son datos de la ferretería: un artículo de otra ferretería es 404, igual que uno inexistente.
 <!-- fin payload: spec.md:298-306 -->
 
+**Agregado móvil: precio manual y ajustes** (≤639.98 px).
+En la ficha a pantalla completa, la casilla «Precio manual» y los ajustes se encuentran al desplegar «Precio».
+La acción «Guardar» queda fija al pie de la ficha; las vistas previas de CU-04, CU-05 y CU-13 se adaptan como allí se indica.
+No cambian las reglas de negocio, quién puede editar, los nombres de los campos ni el aviso de margen negativo.
+Para la rotación de la ficha queda pendiente lo indicado en CU-03 (L15–L16).
+

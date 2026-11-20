@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { cantidadConUnidad } from '../../core/formato/unidad';
+import { MotivoDeAccion, ariaDe } from '../../shared/motivo-de-accion';
 import {
   AjusteStockResponse,
   MOTIVOS_AJUSTE,
@@ -66,6 +67,13 @@ const PASO_POR_TECLA: Partial<Record<string, 1 | -1>> = {
 const MAXIMO = 999_999_999_999.999;
 
 const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const consultaCelular = (): MediaQueryList | null =>
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 639.98px)') : null;
+
+/** Las acciones del celular que pueden quedar apagadas y explican por qué (S5 de movil-sectores). */
+type AccionApagable = 'restar' | 'sumar' | 'guardar';
 
 /** Lo escrito en el campo numérico, ya leído: «-0» también lleva signo (`negativo`), aunque valga cero. */
 interface Lectura {
@@ -152,19 +160,38 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
  * hasta 3 decimales, motivo obligatorio, detalle con OTRO) y muestra todos los errores juntos, cada uno junto a su
  * campo. Es un <dialog> nativo abierto con showModal(): el navegador encierra el foco y Esc lo cancela; al
  * cerrarse el foco vuelve a quien lo abrió.
+ *
+ * movil-sectores T5 (5e): en el celular (`celular()`, que sigue a la pantalla) el mismo <dialog> cubre toda la pantalla (artboard 07 de
+ * movil-articulos): barra «Volver», «Cómo cargarlo» y «Entra o sale» como control segmentado, − y + junto a la
+ * cantidad y el pie fijo. Es el mismo formulario con el mismo estado y los mismos manejadores; lo único que se agrega
+ * en el DOM es la barra, los rótulos de los grupos, los dos botones − y + y el «Queda». El escritorio no cambia (S5).
  */
 @Component({
   selector: 'app-dialogo-ajuste-stock',
+  imports: [NgTemplateOutlet],
   template: `
     <dialog
       #dialogo
       class="panel-lateral"
+      [class.ajuste-celular]="celular()"
       aria-labelledby="ajuste-titulo ajuste-articulo"
       (cancel)="alCancelar($event)"
     >
       <form class="ajuste" novalidate (submit)="$event.preventDefault(); confirmar()">
+        @if (celular()) {
+          <div class="ficha-barra">
+            <button type="button" class="ficha-volver" aria-label="Volver" (click)="cancelar.emit()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
+            <h2 id="ajuste-titulo">Ajustar stock</h2>
+          </div>
+        }
         <header>
-          <h2 id="ajuste-titulo" class="sobretitulo">Ajustar stock</h2>
+          @if (!celular()) {
+            <h2 id="ajuste-titulo" class="sobretitulo">Ajustar stock</h2>
+          }
           <p id="ajuste-articulo" class="articulo">{{ articulo().descripcion }}</p>
           <p class="referencia">
             @if (articulo().codigoInterno; as codigo) {<span class="codigo">{{ codigo }}</span> · hoy } @else {Hoy hay }<span class="stock-actual">{{ conUnidad(articulo().stockActual) }}</span>
@@ -192,6 +219,9 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
         </div>
 
         <div class="modos" role="radiogroup" aria-label="Cómo cargar el ajuste" (keydown)="alTeclearModo($event)">
+          @if (celular()) {
+            <span class="etq" aria-hidden="true">Cómo cargarlo</span>
+          }
           @for (m of modos; track m) {
             <button
               type="button"
@@ -209,8 +239,11 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
         </div>
 
         @if (modo() === 'STOCK_REAL') {
-          <div class="campo">
+          <div class="campo" [class.con-paso]="celular()">
             <label for="stock-real">Stock real (lo que contaste)</label>
+            @if (celular()) {
+              <ng-container *ngTemplateOutlet="restar" />
+            }
             <input
               #numero
               id="stock-real"
@@ -225,6 +258,9 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
               [attr.aria-describedby]="errores()['stockReal'] ? 'stock-real-error' : null"
               (input)="cambiar('stockReal', $any($event.target).value)"
             />
+            @if (celular()) {
+              <ng-container *ngTemplateOutlet="sumar" />
+            }
             @if (errores()['stockReal']; as mensaje) {
               <span id="stock-real-error" class="campo-error">{{ mensaje }}</span>
             }
@@ -232,6 +268,9 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
         } @else {
           <div class="carga">
             <div class="signos" role="radiogroup" aria-label="Entra o sale" (keydown)="alTeclearSigno($event)">
+              @if (celular()) {
+                <span class="etq" aria-hidden="true">Entra o sale</span>
+              }
               @for (s of signos; track s) {
                 <button
                   type="button"
@@ -248,8 +287,11 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
                 </button>
               }
             </div>
-            <div class="campo">
+            <div class="campo" [class.con-paso]="celular()">
               <label for="cantidad">Cantidad que {{ signo() === 'ENTRA' ? 'entra' : 'sale' }}</label>
+              @if (celular()) {
+                <ng-container *ngTemplateOutlet="restar" />
+              }
               <input
                 #numero
                 id="cantidad"
@@ -264,6 +306,9 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
                 [attr.aria-describedby]="errores()['cantidad'] ? 'cantidad-error' : null"
                 (input)="cambiar('cantidad', $any($event.target).value)"
               />
+              @if (celular()) {
+                <ng-container *ngTemplateOutlet="sumar" />
+              }
             </div>
             @if (errores()['cantidad']; as mensaje) {
               <span id="cantidad-error" class="campo-error error-carga">{{ mensaje }}</span>
@@ -272,6 +317,9 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
         }
 
         <div class="vista-previa">
+          @if (celular()) {
+            <span class="queda-rotulo">Queda</span>
+          }
           <span class="desde">{{ numero(articulo().stockActual) }}&nbsp;<span aria-hidden="true">→</span></span>&ngsp;
           <span class="resultado">
             <strong
@@ -290,6 +338,12 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
             }
           </span>
         </div>
+
+        @if (celular()) {
+          @if (explicacion.visible(); as texto) {
+            <p class="motivo-accion" role="status">{{ texto }}</p>
+          }
+        }
 
         <div class="campo">
           <label for="detalle">
@@ -319,14 +373,45 @@ const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
 
-        <div class="acciones-panel">
+        <div class="acciones-panel" [class.ficha-pie]="celular()">
           <button type="button" class="cancelar secundario" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
             Cancelar
           </button>
-          <button type="submit" class="confirmar" data-tecla="Enter" [disabled]="guardando()">Guardar ajuste</button>
+          <!-- En el celular un botón apagado explica por qué (S5): aria-disabled deja llegar el toque; en el escritorio sigue disabled. -->
+          <button
+            type="submit"
+            class="confirmar"
+            data-tecla="Enter"
+            [disabled]="guardando() && !celular()"
+            [attr.aria-disabled]="celular() ? ariaDe(apagadas().guardar) : null"
+          >Guardar ajuste</button>
         </div>
       </form>
     </dialog>
+
+    <!-- − y + del celular: sólo cambian el campo numérico de siempre (la misma señal que al escribir). -->
+    <ng-template #restar>
+      <button
+        type="button"
+        class="paso-boton paso-menos"
+        aria-label="Restar uno"
+        [attr.aria-disabled]="ariaDe(apagadas().restar)"
+        (click)="paso(-1)"
+      >
+        −
+      </button>
+    </ng-template>
+    <ng-template #sumar>
+      <button
+        type="button"
+        class="paso-boton paso-mas"
+        aria-label="Sumar uno"
+        [attr.aria-disabled]="ariaDe(apagadas().sumar)"
+        (click)="paso(1)"
+      >
+        +
+      </button>
+    </ng-template>
   `,
   styles: `
     /* Panel lateral derecho de 460 px a todo el alto, sobre el velo del ::backdrop. */
@@ -557,6 +642,9 @@ export class DialogoAjusteStock {
   protected readonly errores = signal<Partial<Record<Campo, string>>>({});
   protected readonly errorGeneral = signal<string | null>(null);
   protected readonly guardando = signal(false);
+  /** Pantalla del celular: se lee al abrir, como la ficha del artículo (movil-sectores T5, 5c y 5e). */
+  protected readonly celular = signal(consultaCelular()?.matches ?? false);
+  protected readonly ariaDe = ariaDe;
 
   private readonly dialogo = viewChild.required<ElementRef<HTMLDialogElement>>('dialogo');
   private readonly campoNumero = viewChild<ElementRef<HTMLInputElement>>('numero');
@@ -598,6 +686,30 @@ export class DialogoAjusteStock {
     return q === null ? '—' : this.conUnidad(q);
   });
 
+  /** Adonde llega − o +: lo escrito (0 si está vacío o no se lee) ± 1; null si se saldría de 0 a MAXIMO. En UNIDAD, entero. */
+  private destinoDelPaso(delta: 1 | -1): number | null {
+    const leido = leerNumero(this.valorTexto().trim() === '' ? '0' : this.valorTexto());
+    const base = leido && !leido.negativo ? Math.round(Math.min(leido.valor, MAXIMO) * 1000) / 1000 : 0;
+    const destino =
+      this.articulo().unidad === 'UNIDAD'
+        ? delta > 0
+          ? Math.floor(base) + 1
+          : Math.ceil(base) - 1
+        : Math.round((base + delta) * 1000) / 1000;
+    return destino < 0 || destino > MAXIMO ? null : destino;
+  }
+
+  /** Por qué − y + (y Guardar) están apagados, con los textos de los errores de formato de hoy; null si se pueden usar. */
+  protected readonly apagadas = computed(() => {
+    const mensajes = MENSAJES[this.modo() === 'CANTIDAD' ? 'cantidad' : 'stockReal'].formato;
+    return {
+      restar: this.destinoDelPaso(-1) === null ? mensajes.NEGATIVO : null,
+      sumar: this.destinoDelPaso(1) === null ? mensajes.MAXIMO : null,
+      guardar: this.guardando() ? 'Guardando el ajuste: esperá un momento.' : null,
+    } satisfies Record<AccionApagable, string | null>;
+  });
+  protected readonly explicacion = new MotivoDeAccion<AccionApagable>(() => this.apagadas());
+
   protected readonly textoDiferencia = computed(() => {
     const d = this.diferencia();
     if (d === null) return '—';
@@ -616,7 +728,12 @@ export class DialogoAjusteStock {
       else abierto.setAttribute('open', '');
       this.campoNumero()?.nativeElement.focus();
     });
+    // Girar el teléfono con el ajuste abierto cambia de pantalla completa a panel lateral (y al revés) sin cerrarlo.
+    const consulta = consultaCelular();
+    const alCambiarDePantalla = (evento: MediaQueryListEvent) => this.celular.set(evento.matches);
+    consulta?.addEventListener?.('change', alCambiarDePantalla);
     inject(DestroyRef).onDestroy(() => {
+      consulta?.removeEventListener?.('change', alCambiarDePantalla);
       if (abierto?.open && typeof abierto.close === 'function') abierto.close();
       abridor?.focus?.();
     });
@@ -679,8 +796,15 @@ export class DialogoAjusteStock {
     this.errorGeneral.set(null);
   }
 
+  /** − o +: cambia el mismo campo numérico que al escribir (borra su error), o explica por qué no se puede. */
+  protected paso(delta: 1 | -1): void {
+    if (this.explicacion.mostrar(delta > 0 ? 'sumar' : 'restar')) return;
+    const destino = this.destinoDelPaso(delta)!;
+    this.cambiar(this.modo() === 'CANTIDAD' ? 'cantidad' : 'stockReal', String(destino).replace('.', ','));
+  }
+
   protected confirmar(): void {
-    if (this.guardando()) return;
+    if (this.explicacion.mostrar('guardar')) return;
     const errores = this.validar();
     this.errores.set(errores);
     this.errorGeneral.set(null);

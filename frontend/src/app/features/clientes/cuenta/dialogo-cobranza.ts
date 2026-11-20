@@ -15,6 +15,7 @@ import {
 import { MontoPipe } from '../../../core/formato/monto';
 import { CampoMoneda } from '../../../shared/campo-moneda';
 import { ImporteInput } from '../../../shared/importe-input';
+import { esCelular } from '../../../shared/es-celular';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { fechaHoraLocal } from '../../caja/caja.models';
 import {
@@ -54,6 +55,12 @@ const TOTAL_MAXIMO_CENTAVOS = 999_999_999_999_999;
 export class DialogoCobranza {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  /**
+   * En el celular es una pantalla completa (movil-sectores T12b): la flecha «Volver» arriba y la acción principal en un pie
+   * fijo. Se lee al abrir: no sigue la rotación. Es sólo cómo se ve: el estado, la validación, los manejadores y lo que se
+   * confirma son los de siempre, y en la tablet y el escritorio el DOM no cambia.
+   */
+  protected readonly celular = esCelular();
 
   readonly clienteNombre = input.required<string>();
   /** Las partidas con deuda (ventas y Recargos) en orden FIFO, como las manda el servidor. Si cambian (409) se vuelve a sugerir. */

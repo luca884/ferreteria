@@ -4,6 +4,7 @@ import {
   armarMapeo,
   camposReconocidos,
   crearFormMapeo,
+  ejemplosPorColumna,
   ivaEnPar,
   mapeoVacio,
   precargarMapeo,
@@ -401,5 +402,42 @@ describe('mapeo-lista', () => {
       expect(ivaEnPar(form as AbstractControl)).toEqual({ ivaEnPar: true });
       expect(grupo({ columnaSinIva: 0, columnaConIva: 1 }).errors).toBeNull();
     });
+  });
+});
+
+describe('ejemplosPorColumna (movil-sectores T13b)', () => {
+  const filas = [
+    { numero: 1, celdas: ['CÓDIGO', 'DESCRIPCIÓN', 'PRECIO'] },
+    { numero: 2, celdas: ['4021-B', 'Bulón 3/8', '1.532,00'] },
+    { numero: 3, celdas: ['4021-C', '', '1.790,00'] },
+    { numero: 4, celdas: ['  7733  ', 'Tuerca', ''] },
+    { numero: 5, celdas: ['8000', 'Arandela', '210,50'] },
+    { numero: 6, celdas: ['9000', 'Clavo', '99,00'] },
+  ];
+
+  it('toma los primeros valores no vacíos de las filas de datos, sin los de arriba de la primera fila de datos', () => {
+    expect(ejemplosPorColumna(filas, 2, 3)).toEqual([
+      ['4021-B', '4021-C', '7733'],
+      ['Bulón 3/8', 'Tuerca', 'Arandela'],
+      ['1.532,00', '1.790,00', '210,50'],
+    ]);
+  });
+
+  it('con la primera fila de datos en 1 también cuenta el encabezado', () => {
+    expect(ejemplosPorColumna(filas, 1, 1, 2)).toEqual([['CÓDIGO', '4021-B']]);
+  });
+
+  it('sin primera fila de datos arranca desde la primera fila', () => {
+    expect(ejemplosPorColumna(filas, null, 1, 1)).toEqual([['CÓDIGO']]);
+  });
+
+  it('una columna que no tiene nada queda con la lista vacía y las que sobran de la fila se ignoran', () => {
+    expect(ejemplosPorColumna([{ numero: 2, celdas: ['a'] }], 2, 3)).toEqual([['a'], [], []]);
+  });
+
+  it('no lee toda la hoja: se detiene a las primeras filas', () => {
+    const muchas = Array.from({ length: 5000 }, (_, i) => ({ numero: i + 1, celdas: i < 100 ? [''] : ['tarde'] }));
+
+    expect(ejemplosPorColumna(muchas, 1, 1)).toEqual([[]]);
   });
 });

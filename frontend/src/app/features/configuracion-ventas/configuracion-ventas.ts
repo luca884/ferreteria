@@ -4,6 +4,7 @@ import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { esCelular } from '../../shared/es-celular';
 import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionVentasService } from './configuracion-ventas.service';
 
@@ -20,6 +21,7 @@ import { ConfiguracionVentasService } from './configuracion-ventas.service';
 export class PaginaConfiguracionVentas implements OnInit {
   private readonly service = inject(ConfiguracionVentasService);
   protected readonly auth = inject(AuthService);
+  protected readonly celular = esCelular();
 
   protected readonly form = inject(FormBuilder).group({
     topeConsumidorFinal: [null as number | null, [Validators.required, Validators.min(0.01)]],

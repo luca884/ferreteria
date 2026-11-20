@@ -1,0 +1,97 @@
+{
+  "title": "Móvil · Ventas",
+  "brief": "Sector Ventas en móvil (dirección A, tono cian de la sección; Dueño y Vendedor): entrada del grupo, presupuestos, remitos, caja (abrir, movimientos, cierre, resumen, historial), clientes, cuenta corriente (cobrar, recargo, descuento, anular recibo), consulta de ventas, detalle con bandeja ARCA y reportes. Sólo cambia lo visual: lógica y textos de hoy.",
+  "artboards": [
+    {
+      "file": "01-entrada-del-grupo.html",
+      "title": "Entrada del grupo",
+      "tradeoff": "Una pantalla con los destinos del grupo por rol; agrega un toque más que ir directo a cada uno.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-presupuestos.html",
+      "title": "Presupuestos",
+      "tradeoff": "Tarjetas con estado y detalle a pantalla completa; los filtros finos quedan detrás de «Filtros».",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-remitos.html",
+      "title": "Remitos",
+      "tradeoff": "Igual que Presupuestos; Anular sale del ⋯ con confirmación, un toque más que hoy.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-caja-abrir-y-movimientos.html",
+      "title": "Caja: abrir y movimientos",
+      "tradeoff": "Abrir y cargar movimientos en una pantalla con acción fija; el cierre queda un paso más abajo.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-caja-cierre-y-resumen.html",
+      "title": "Caja: cierre y resumen",
+      "tradeoff": "Cierre a ciegas y resumen en renglones; el resumen largo pide scroll.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-historial-de-cajas.html",
+      "title": "Historial de cajas",
+      "tradeoff": "Tarjetas con la diferencia como pastilla; el detalle completo está a un toque.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "07-clientes.html",
+      "title": "Clientes",
+      "tradeoff": "Lista y ficha como Artículos; la cuenta corriente queda en la ficha y no en la barra.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "08-cuenta-corriente.html",
+      "title": "Cuenta corriente y movimientos",
+      "tradeoff": "Saldo y acciones arriba; el extracto en tarjetas pierde la lectura de tabla.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "09-cobrar-y-ajustes.html",
+      "title": "Cobrar, recargo y descuento",
+      "tradeoff": "Cobro en pantalla completa con imputación por fila; más largo que el diálogo de escritorio.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "10-consulta-de-ventas.html",
+      "title": "Consulta de ventas",
+      "tradeoff": "Filtros y bandeja ARCA en una hoja; marcas como pastillas en lugar de columnas.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "11-detalle-de-venta-y-arca.html",
+      "title": "Detalle de venta y bandeja ARCA",
+      "tradeoff": "Errores de ARCA legibles y acciones fijas; Anular queda en el ⋯ por ser destructivo.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "12-reportes.html",
+      "title": "Reportes",
+      "tradeoff": "Formulario fijo y resultados en tarjetas; se pierde la comparación lado a lado de las columnas.",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "13-anulaciones.html",
+      "title": "Anular recibo y anular venta",
+      "tradeoff": "Lo destructivo exige un paso extra y un texto claro; cuesta un toque más que un botón suelto.",
+      "width": 1300,
+      "height": 1010
+    }
+  ]
+}

@@ -59,6 +59,21 @@ export function guardarEtiquetas(clave: string, items: readonly EtiquetaGuardada
   }
 }
 
+/**
+ * Suma artículos a la lista guardada sin abrir la pantalla (la selección múltiple de Artículos en el celular): uno que
+ * no estaba entra con una copia; uno que ya estaba suma otra, hasta 999 (CU-03). Devuelve cuántos artículos quedan.
+ */
+export function sumarEtiquetas(clave: string, ids: readonly number[]): number {
+  const lista = leerEtiquetas(clave);
+  for (const id of new Set(ids)) {
+    const existente = lista.find((item) => item.id === id);
+    if (existente) existente.copias = Math.min(existente.copias + 1, MAX_COPIAS);
+    else lista.push({ id, copias: 1 });
+  }
+  guardarEtiquetas(clave, lista);
+  return lista.length;
+}
+
 /** Paso de `AL_CERRAR_SESION`: la lista de ese usuario se va con la sesión. */
 export function borrarEtiquetasGuardadas(sesion: Sesion): void {
   const clave = claveDeEtiquetas(sesion);

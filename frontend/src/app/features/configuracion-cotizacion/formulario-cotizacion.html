@@ -1,4 +1,4 @@
-<form class="cotizacion" [formGroup]="form" (ngSubmit)="enviar()" novalidate>
+<form class="cotizacion" [class.cotizacion-celular]="celular()" [formGroup]="form" (ngSubmit)="enviar()" novalidate>
   <fieldset class="seccion">
     <legend>Cotización del dólar</legend>
 
@@ -103,7 +103,10 @@
     }
   </fieldset>
 
-  <div class="acciones-form">
+  <div class="acciones-form" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
+    @if (celular()) {
+      <button type="button" class="secundario" [disabled]="guardando()" (click)="cancelar.emit()">Cancelar</button>
+    }
     <button type="submit" [disabled]="guardando()">Guardar</button>
   </div>
 </form>

@@ -16,6 +16,7 @@ import {
 import { centavosDeImporte, normalizarImporte } from '../../core/formato/importe';
 import { MontoPipe, RestadoPipe, formatearMonto } from '../../core/formato/monto';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { esCelular } from '../../shared/es-celular';
 import { ImporteInput } from '../../shared/importe-input';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { CuentaCliente } from '../clientes/cliente.models';
@@ -94,6 +95,8 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
       <div
         class="dialogo cobro"
+        [class.cobro-celular]="celular"
+        [class.cobro-exceso]="celular && autoriza()"
         tabindex="-1"
         role="dialog"
         aria-modal="true"
@@ -101,9 +104,22 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         appTrampaFoco
         (keydown)="alTeclear($event)"
       >
+        @if (celular) {
+          <!-- movil-sectores T9a: en el celular es una pantalla completa: la flecha «Volver» arriba (hace de «Cancelar») y la acción fija abajo. -->
+          <div class="ficha-barra">
+            <button type="button" class="ficha-volver" aria-label="Volver" (click)="cancelar.emit()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
+            <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+          </div>
+        }
         <div class="cabecera">
           <div class="titulo">
-            <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+            @if (!celular) {
+              <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+            }
             @if (renglones(); as n) {
               <p class="conteo">{{ n }} {{ n === 1 ? 'renglón' : 'renglones' }}</p>
             }
@@ -160,6 +176,13 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
                   <small class="marca-recargo">+{{ o.recargo }}&nbsp;%</small>
                 } @else if (o.descuento) {
                   <small class="marca-recargo marca-descuento">−{{ o.descuento }}&nbsp;%</small>
+                }
+                @if (celular) {
+                  <!-- movil-sectores T9b: en la lista larga del celular la razón va en la propia fila apagada, a la vista. Es la misma
+                       frase de abajo (que sigue siendo la descripción enlazada y queda sólo para los lectores): acá no se lee dos veces. -->
+                  @if (o.deshabilitada; as razon) {
+                    <small class="razon-en-medio" aria-hidden="true">{{ razon }}</small>
+                  }
                 }
               </button>
             }
@@ -238,7 +261,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         @if (eligeFactura()) {
           <!-- Bloque 2, S4: facturar o no se elige con un clic; Enter no cobra, para que nadie facture sin querer. -->
           <p class="pista-factura">Elegí con un clic si la venta se factura.</p>
-          <div class="dialogo-acciones elige-factura">
+          <div class="dialogo-acciones elige-factura" [class.ficha-pie]="celular">
             <div class="formas-de-cobrar">
               <button type="button" class="sin-factura secundario" (click)="confirmarCobro(true)">
                 {{ autoriza() ? 'Autorizar exceso y cobrar sin factura' : 'Cobrar sin factura' }}
@@ -247,9 +270,11 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
                 {{ autoriza() ? 'Autorizar exceso, cobrar y facturar' : 'Cobrar y facturar con ARCA' }}
               </button>
             </div>
-            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
-              Cancelar
-            </button>
+            @if (!celular) {
+              <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+                Cancelar
+              </button>
+            }
           </div>
         } @else {
           <p class="sin-arca">Sin factura: la facturación con ARCA no está activa.</p>
@@ -258,10 +283,12 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
             No facturable
             <small>cobra igual, pero no se factura nunca</small>
           </label>
-          <div class="dialogo-acciones">
-            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
-              Cancelar
-            </button>
+          <div class="dialogo-acciones" [class.ficha-pie]="celular">
+            @if (!celular) {
+              <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+                Cancelar
+              </button>
+            }
             <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">
               {{ autoriza() ? 'Autorizar exceso y cobrar' : 'Cobrar' }}
             </button>
@@ -617,6 +644,13 @@ export class DialogoCobro {
    * cliente identificado se rechaza. null mientras no se leyó: no se avisa nada y el servidor sigue controlando (#57).
    */
   readonly topeConsumidorFinal = input<number | null>(null);
+
+  /**
+   * En el celular el cobro es una pantalla completa (movil-sectores T9a); en el escritorio y la tablet, el diálogo centrado
+   * de siempre. Se lee al abrir: no sigue la rotación, como el selector de cliente. Es sólo cómo se ve: el estado, la
+   * validación y lo que se confirma son los mismos.
+   */
+  protected readonly celular = esCelular();
 
   readonly confirmar = output<ConfirmacionCobro>();
   readonly cancelar = output<void>();

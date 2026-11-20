@@ -1057,7 +1057,7 @@ describe('Shell', () => {
       expect(destinos(el)).toEqual(['Mostrador', 'Ventas', 'Artículos', 'Más']);
       expect(Array.from(nav!.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
         '/mostrador',
-        '/ventas',
+        '/area-ventas',
         '/articulos',
       ]);
     });
@@ -1068,7 +1068,7 @@ describe('Shell', () => {
 
       await irA('/ventas');
 
-      expect(actual()).toBe('/ventas');
+      expect(actual()).toBe('/area-ventas');
       expect(barra(el)!.querySelector('a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(
         false,
       );
@@ -1079,9 +1079,29 @@ describe('Shell', () => {
       await irA('/articulos/12');
 
       expect(actual()).toBe('/articulos');
-      expect(barra(el)!.querySelector('a[href="/ventas"]')!.hasAttribute('aria-current')).toBe(
+      expect(barra(el)!.querySelector('a[href="/area-ventas"]')!.hasAttribute('aria-current')).toBe(
         false,
       );
+    });
+
+    it('«Artículos» queda marcado también en Rubros y en las pantallas de su grupo', async () => {
+      const el = await render(true, null, TODAS);
+      const actual = () => barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href');
+
+      for (const ruta of ['/articulos', '/rubros', '/etiquetas', '/stock-bajo-minimo']) {
+        await irA(ruta);
+        expect(actual(), ruta).toBe('/articulos');
+      }
+    });
+
+    it('«Ventas» queda marcado en cualquier pantalla del grupo, no sólo en el hub', async () => {
+      const el = await render(true, null, TODAS);
+      const actual = () => barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href');
+
+      for (const ruta of ['/area-ventas', '/caja', '/presupuestos', '/clientes', '/reportes']) {
+        await irA(ruta);
+        expect(actual(), ruta).toBe('/area-ventas');
+      }
     });
 
     it('«Más» abre el cajón del menú y, al cerrarlo, la barra vuelve al estado cerrado', async () => {
@@ -1109,10 +1129,11 @@ describe('Shell', () => {
       expect(cajon.classList.contains('abierto')).toBe(false);
     });
 
-    it('el Vendedor no ve en la barra un destino que no puede abrir', async () => {
+    it('el Vendedor también tiene «Ventas» en la barra, y apunta al hub: nunca a la consulta que no puede abrir', async () => {
       const el = await render(false);
 
-      expect(destinos(el)).toEqual(['Mostrador', 'Artículos', 'Más']);
+      expect(destinos(el)).toEqual(['Mostrador', 'Ventas', 'Artículos', 'Más']);
+      expect(barra(el)!.querySelector('a[href="/area-ventas"]')).not.toBeNull();
       expect(barra(el)!.querySelector('a[href="/ventas"]')).toBeNull();
       expect(barra(el)!.querySelector('a[href="/articulos"]')).not.toBeNull();
     });

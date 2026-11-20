@@ -19,7 +19,7 @@
 
 
   <form class="paso panel" [formGroup]="form" novalidate>
-    <h2>1. Qué artículos</h2>
+    <h2>{{ celular ? '1 · Qué artículos' : '1. Qué artículos' }}</h2>
     <div class="fila">
       <div class="campo">
         <label for="proveedor">Proveedor</label>
@@ -64,19 +64,27 @@
       </label>
     </div>
 
-    <h2 class="segundo">2. Qué cambio</h2>
+    <h2 class="segundo">{{ celular ? '2 · Qué cambio' : '2. Qué cambio' }}</h2>
     <div class="fila fila-cambio">
       <div class="campo">
-        <label for="modo">Operación</label>
-        <select id="modo" formControlName="modo">
-          <option [ngValue]="null">Elegí qué querés hacer</option>
-          <option ngValue="COSTO_PORCENTAJE">Cambiar el costo en %</option>
-          <option ngValue="MARGEN">Fijar el margen</option>
-          <option ngValue="COSTO_MONTO">Sumar o restar un monto al costo</option>
-          <option ngValue="PRECIO_PORCENTAJE">Cambiar el precio final en %</option>
-          <option ngValue="PRECIO_MONTO">Sumar o restar un monto al precio final</option>
-          <option ngValue="CAMBIAR_RUBRO">Cambiar el rubro</option>
-        </select>
+        @if (celular) {
+          <label id="etiqueta-modo" for="modo">Operación</label>
+          <button #modo id="modo" type="button" aria-haspopup="dialog" [attr.aria-expanded]="hojaOperacion()"
+            aria-labelledby="etiqueta-modo nombre-modo" (click)="abrirOperaciones(modo)">
+            <span id="nombre-modo">{{ nombreOperacion() }}</span><span aria-hidden="true">▾</span>
+          </button>
+        } @else {
+          <label for="modo">Operación</label>
+          <select id="modo" formControlName="modo">
+            <option [ngValue]="null">Elegí qué querés hacer</option>
+            <option ngValue="COSTO_PORCENTAJE">Cambiar el costo en %</option>
+            <option ngValue="MARGEN">Fijar el margen</option>
+            <option ngValue="COSTO_MONTO">Sumar o restar un monto al costo</option>
+            <option ngValue="PRECIO_PORCENTAJE">Cambiar el precio final en %</option>
+            <option ngValue="PRECIO_MONTO">Sumar o restar un monto al precio final</option>
+            <option ngValue="CAMBIAR_RUBRO">Cambiar el rubro</option>
+          </select>
+        }
       </div>
       @if (eligeRubroDestino()) {
         <!-- Cambiar el rubro no lleva valor: en su lugar se elige el rubro al que pasan los artículos. -->
@@ -121,7 +129,7 @@
         van a cambiar el precio.
       </p>
     }
-    <div class="fila-generar">
+    <div class="fila-generar" [class.ficha-pie]="celular" [class.en-pagina]="celular">
       <button
         #generarEl
         type="button"
@@ -143,6 +151,24 @@
     </div>
   </form>
 
+  @if (celular && hojaOperacion()) {
+    <app-hoja-inferior titulo="Operación" (cerrar)="hojaOperacion.set(false)">
+      <div role="radiogroup" aria-label="Operación">
+        @for (op of operaciones; track op.modo) {
+          <label class="opcion-masiva">
+            <span>
+              <strong [id]="op.modo + '-nombre'">{{ op.nombre }}</strong>
+              <small [id]="op.modo + '-detalle'">{{ op.detalle }}</small>
+            </span>
+            <input type="radio" name="operacion-masiva" [checked]="modoActual() === op.modo"
+              [attr.aria-labelledby]="op.modo + '-nombre'" [attr.aria-describedby]="op.modo + '-detalle'"
+              (click)="elegirOperacion(op.modo)" />
+          </label>
+        }
+      </div>
+    </app-hoja-inferior>
+  }
+
   @if (erroresCampos().length > 0) {
     <ul class="error errores-campos" role="alert">
       @for (mensaje of erroresCampos(); track $index) {
@@ -154,42 +180,73 @@
   }
 
   @if (resultado(); as r) {
-    <app-dialogo-detalle titulo="Resultado de la actualización" (cerrar)="cerrarResultado()">
-      <p class="resumen alerta exito" role="status">
-        @if (r.conteos.modificados === 1) {
-          Se actualizó 1 artículo.
-        } @else {
-          Se actualizaron {{ r.conteos.modificados | number }} artículos.
-        }
-      </p>
-
-      @if (r.cambios.length > 0) {
-        <table class="cambios resultado-cambios">
-          <caption>Qué cambió en cada artículo</caption>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Artículo</th>
-              <th>Antes</th>
-              <th>Ahora</th>
-            </tr>
-          </thead>
-          <tbody>
+    @if (celular) {
+      <app-detalle-pantalla titulo="Resultado de la actualización" (cerrar)="cerrarResultado()">
+        <p class="resumen alerta exito" role="status">
+          @if (r.conteos.modificados === 1) {
+            Se actualizó 1 artículo.
+          } @else {
+            Se actualizaron {{ r.conteos.modificados | number }} artículos.
+          }
+        </p>
+        @if (r.cambios.length > 0) {
+          <h3>Antes → ahora</h3>
+          <ul class="lista-masiva">
             @for (c of r.cambios; track c.articuloId) {
-              <tr>
-                <td>{{ c.codigo }}</td>
-                <td>{{ c.descripcion }}</td>
-                <td>{{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}</td>
-                <td>{{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}</td>
-              </tr>
+              <li class="resultado-articulo">
+                <strong>{{ c.descripcion }}</strong>
+                <span class="detalle-fila">{{ c.codigo }}</span>
+                <div class="antes-ahora">
+                  <span>Antes <s>{{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}</s></span>
+                  <strong>Ahora {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}</strong>
+                </div>
+              </li>
             }
-          </tbody>
-        </table>
-        @if (r.detalleRecortado) {
-          <p class="ayuda resultado-recortado">Se muestran solo los primeros {{ r.cambios.length | number }} artículos.</p>
+          </ul>
+          @if (r.detalleRecortado) {
+            <p class="ayuda resultado-recortado">Se muestran solo los primeros {{ r.cambios.length | number }} artículos.</p>
+          }
         }
-      }
-    </app-dialogo-detalle>
+        <button pie type="button" class="primario" (click)="cerrarResultado()">Cerrar</button>
+      </app-detalle-pantalla>
+    } @else {
+      <app-dialogo-detalle titulo="Resultado de la actualización" (cerrar)="cerrarResultado()">
+        <p class="resumen alerta exito" role="status">
+          @if (r.conteos.modificados === 1) {
+            Se actualizó 1 artículo.
+          } @else {
+            Se actualizaron {{ r.conteos.modificados | number }} artículos.
+          }
+        </p>
+
+        @if (r.cambios.length > 0) {
+          <table class="cambios resultado-cambios">
+            <caption>Qué cambió en cada artículo</caption>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Artículo</th>
+                <th>Antes</th>
+                <th>Ahora</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (c of r.cambios; track c.articuloId) {
+                <tr>
+                  <td>{{ c.codigo }}</td>
+                  <td>{{ c.descripcion }}</td>
+                  <td>{{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}</td>
+                  <td>{{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (r.detalleRecortado) {
+            <p class="ayuda resultado-recortado">Se muestran solo los primeros {{ r.cambios.length | number }} artículos.</p>
+          }
+        }
+      </app-dialogo-detalle>
+    }
   }
 
   @if (vistaPrevia(); as vp) {
@@ -232,101 +289,161 @@
         }
 
         @if (vp.cambios.length > 0) {
-          <div class="grilla-contenedor">
-            <table class="cambios">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Descripción</th>
-                  @if (vistaPreviaDeRubro()) {
-                    <th>Rubro</th>
-                  }
-                  <th class="num">Costo (sin IVA)</th>
-                  <th class="num">Margen (%)</th>
-                  <th class="num">IVA (%)</th>
-                  <th class="num">Precio de venta (con IVA)</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (c of vp.cambios; track c.articuloId) {
-                  <tr [class.fuerte]="c.advertencia !== null">
-                    <td>{{ c.codigo }}</td>
-                    <td>
-                      {{ c.descripcion }}
-                      @if (c.advertencia !== null) {
-                        <p class="advertencia">{{ c.advertencia }}</p>
-                      }
-                    </td>
-                    @if (vistaPreviaDeRubro()) {
-                      <td>{{ nombreDeRubro(c.rubroAnteriorId) }}&nbsp;→ {{ nombreDeRubro(c.rubroNuevoId) }}</td>
+          @if (celular) {
+            <ul class="lista-masiva" aria-label="Cambios por artículo">
+              @for (c of vp.cambios; track c.articuloId) {
+                <li class="cambio-celular" [class.fuerte]="c.advertencia !== null">
+                  <div>
+                    <strong>{{ c.descripcion }}</strong>
+                    <p class="detalle-fila">{{ c.codigo }}</p>
+                    @if (c.advertencia !== null) {
+                      <p class="advertencia">{{ c.advertencia }}</p>
                     }
-                    <td class="num">
-                      @if (c.costoAnterior === c.costoNuevo) {
-                        {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
-                      } @else {
-                        {{ costo(c.costoAnterior, c.moneda) }}{{ porUnidadDe(c) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
+                    @if (vistaPreviaDeRubro()) {
+                      <p class="detalle-fila">Rubro: {{ nombreDeRubro(c.rubroAnteriorId) }} → {{ nombreDeRubro(c.rubroNuevoId) }}</p>
+                    }
+                    <p class="detalle-fila">
+                      Costo (sin IVA):
+                      @if (c.costoAnterior !== c.costoNuevo) {
+                        {{ costo(c.costoAnterior, c.moneda) }}{{ porUnidadDe(c) }} →
                       }
-                      @if (costoRealDe(c); as real) {
-                        <p class="detalle-fila">
-                          Costo real: {{ real }} (recargos {{ c.recargosPorcentaje | number: '1.0-2' }}&nbsp;%)
-                        </p>
-                      }
-                    </td>
-                    <td class="num">
+                      {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }} · Margen:
                       @if (c.margenAnterior !== c.margenNuevo) {
-                        {{ c.margenAnterior | number: '1.0-2' }}&nbsp;%&nbsp;→ {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
+                        {{ c.margenAnterior | number: '1.0-2' }} % →
                       } @else if (c.margenHeredado) {
-                        Heredado {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
-                      } @else {
-                        {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
+                        heredado
                       }
-                    </td>
-                    <td class="num">{{ c.ivaPorcentaje | number: '1.0-2' }}&nbsp;%</td>
-                    <td class="num">
-                      @if (c.precioAnterior === c.precioNuevo) {
-                        {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
-                        @if (vistaPreviaDeRubro()) {
-                          <p class="solo-rubro">Solo cambia el rubro</p>
-                        }
-                      } @else {
-                        {{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}&nbsp;→ {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
-                      }
-                      @if (c.precioSinAjustes != null) {
-                        <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}{{ porUnidadDe(c) }}</p>
-                      }
-                      @if (c.precioManual) {
-                        <p class="detalle-fila">Precio manual: no cambia</p>
-                      }
-                    </td>
+                      {{ c.margenNuevo | number: '1.0-2' }} % · IVA {{ c.ivaPorcentaje | number: '1.0-2' }} %
+                    </p>
+                    @if (costoRealDe(c); as real) {
+                      <p class="detalle-fila">Costo real: {{ real }} (recargos {{ c.recargosPorcentaje | number: '1.0-2' }} %)</p>
+                    }
+                  </div>
+                  <div class="precio-celular" aria-label="Precio de venta (con IVA)">
+                    <strong>{{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}</strong>
+                    @if (c.precioAnterior !== c.precioNuevo) {
+                      <p class="detalle-fila">Antes <s>{{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}</s></p>
+                    } @else if (vistaPreviaDeRubro()) {
+                      <p class="solo-rubro">Solo cambia el rubro</p>
+                    }
+                    @if (c.precioSinAjustes != null) {
+                      <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}{{ porUnidadDe(c) }}</p>
+                    }
+                    @if (c.precioManual) {
+                      <p class="detalle-fila">Precio manual: no cambia</p>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="grilla-contenedor">
+              <table class="cambios">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    @if (vistaPreviaDeRubro()) {
+                      <th>Rubro</th>
+                    }
+                    <th class="num">Costo (sin IVA)</th>
+                    <th class="num">Margen (%)</th>
+                    <th class="num">IVA (%)</th>
+                    <th class="num">Precio de venta (con IVA)</th>
                   </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  @for (c of vp.cambios; track c.articuloId) {
+                    <tr [class.fuerte]="c.advertencia !== null">
+                      <td>{{ c.codigo }}</td>
+                      <td>
+                        {{ c.descripcion }}
+                        @if (c.advertencia !== null) {
+                          <p class="advertencia">{{ c.advertencia }}</p>
+                        }
+                      </td>
+                      @if (vistaPreviaDeRubro()) {
+                        <td>{{ nombreDeRubro(c.rubroAnteriorId) }}&nbsp;→ {{ nombreDeRubro(c.rubroNuevoId) }}</td>
+                      }
+                      <td class="num">
+                        @if (c.costoAnterior === c.costoNuevo) {
+                          {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
+                        } @else {
+                          {{ costo(c.costoAnterior, c.moneda) }}{{ porUnidadDe(c) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
+                        }
+                        @if (costoRealDe(c); as real) {
+                          <p class="detalle-fila">
+                            Costo real: {{ real }} (recargos {{ c.recargosPorcentaje | number: '1.0-2' }}&nbsp;%)
+                          </p>
+                        }
+                      </td>
+                      <td class="num">
+                        @if (c.margenAnterior !== c.margenNuevo) {
+                          {{ c.margenAnterior | number: '1.0-2' }}&nbsp;%&nbsp;→ {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
+                        } @else if (c.margenHeredado) {
+                          Heredado {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
+                        } @else {
+                          {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
+                        }
+                      </td>
+                      <td class="num">{{ c.ivaPorcentaje | number: '1.0-2' }}&nbsp;%</td>
+                      <td class="num">
+                        @if (c.precioAnterior === c.precioNuevo) {
+                          {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
+                          @if (vistaPreviaDeRubro()) {
+                            <p class="solo-rubro">Solo cambia el rubro</p>
+                          }
+                        } @else {
+                          {{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}&nbsp;→ {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
+                        }
+                        @if (c.precioSinAjustes != null) {
+                          <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}{{ porUnidadDe(c) }}</p>
+                        }
+                        @if (c.precioManual) {
+                          <p class="detalle-fila">Precio manual: no cambia</p>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         }
 
         @if (vp.errores.length > 0) {
-          <h3 class="titulo-errores">Artículos que no se van a actualizar</h3>
-          <div class="grilla-contenedor">
-            <table class="errores">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Descripción</th>
-                  <th>Motivo</th>
-                </tr>
-              </thead>
-              <tbody>
+          @if (celular) {
+            <details class="errores-celular">
+              <summary>Artículos que no se van a actualizar</summary>
+              <ul class="lista-masiva">
                 @for (e of vp.errores; track e.articuloId) {
-                  <tr>
-                    <td>{{ e.codigo }}</td>
-                    <td>{{ e.descripcion }}</td>
-                    <td>{{ e.motivo }}</td>
-                  </tr>
+                  <li class="resultado-articulo"><strong>{{ e.descripcion }}</strong><span>{{ e.codigo }}</span><p>{{ e.motivo }}</p></li>
                 }
-              </tbody>
-            </table>
-          </div>
+              </ul>
+            </details>
+          } @else {
+            <h3 class="titulo-errores">Artículos que no se van a actualizar</h3>
+            <div class="grilla-contenedor">
+              <table class="errores">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (e of vp.errores; track e.articuloId) {
+                    <tr>
+                      <td>{{ e.codigo }}</td>
+                      <td>{{ e.descripcion }}</td>
+                      <td>{{ e.motivo }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         }
 
         <h2 class="titulo-confirmar">4. Confirmar</h2>

@@ -9,7 +9,29 @@
     <p class="sin-cambios">No cambia ningún precio.</p>
   }
 
-  @if (queCambian().length > 0) {
+  @if (queCambian().length > 0 && celular()) {
+    <ul class="cotizacion-tarjetas" role="list">
+      @for (fila of queCambian(); track fila.id) {
+        <li class="cotizacion-tarjeta">
+          <small>{{ fila.codigoInterno }}</small>
+          <strong>
+            {{ fila.descripcion }}
+            @if (!fila.activo) {
+              <span class="inactivo">(inactivo)</span>
+            }
+          </strong>
+          <span class="cotizacion-antes-ahora">
+            <s>{{ monto(fila.precioActual) }}</s>
+            <span>→</span>
+            <b>{{ monto(fila.precioNuevo) }}</b>
+          </span>
+          <span class="cotizacion-diferencia" [class.sube]="fila.diferencia > 0" [class.baja]="fila.diferencia < 0">
+            {{ diferencia(fila.diferencia) }}
+          </span>
+        </li>
+      }
+    </ul>
+  } @else if (queCambian().length > 0) {
     <div class="tabla-contenedor">
       <table>
         <thead>
@@ -53,7 +75,7 @@
     </div>
   }
 
-  <div class="acciones">
+  <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
     <button type="button" class="secundario cancelar-recalculo" [disabled]="aplicando()" (click)="cancelar.emit()">
       Cancelar
     </button>

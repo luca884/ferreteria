@@ -7,6 +7,261 @@
   los pasás a venta con los precios de hoy.
 </p>
 
+<!--
+  Celular (movil-sectores T12c): el estado son chips sobre la lista y el resto de los filtros una hoja inferior con el
+  mismo formulario —una sola copia de los campos—. El aviso de un filtro mal puesto va adentro de la hoja mientras está
+  abierta (la tapa) y en la página cuando se cerró. En escritorio y tablet el formulario sigue a la vista.
+-->
+@if (celular) {
+  <div class="herramientas-doc">
+    <button
+      type="button"
+      class="secundario filtros-celular"
+      aria-haspopup="dialog"
+      [attr.aria-expanded]="filtrosAbiertos()"
+      (click)="filtrosAbiertos.set(true)"
+    >
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M2 4h12M4.5 8h7M6.5 12h3" />
+      </svg>
+      Filtros
+      @if (filtrosActivos(); as activos) {
+        <span class="cuenta pastilla pastilla-acento" aria-hidden="true">{{ activos }}</span>
+        <span class="sr-only">{{ activos === 1 ? '1 filtro activo' : activos + ' filtros activos' }}</span>
+      }
+    </button>
+  </div>
+  <div class="chips-estado" role="group" aria-label="Estado">
+    <button type="button" class="chip-estado" [attr.aria-pressed]="estadoAplicado() === ''" (click)="elegirEstado('')">Todos</button>
+    @for (e of estados; track e) {
+      <button type="button" class="chip-estado" [attr.aria-pressed]="estadoAplicado() === e" (click)="elegirEstado(e)">
+        {{ etiqueta[e] }}
+      </button>
+    }
+  </div>
+  @if (filtrosAbiertos()) {
+    <app-hoja-inferior titulo="Filtros" (cerrar)="filtrosAbiertos.set(false)">
+      <ng-container *ngTemplateOutlet="formFiltros" />
+      <ng-container *ngTemplateOutlet="avisoFiltros" />
+    </app-hoja-inferior>
+  } @else {
+    <ng-container *ngTemplateOutlet="avisoFiltros" />
+  }
+} @else {
+  <ng-container *ngTemplateOutlet="formFiltros" />
+  <ng-container *ngTemplateOutlet="avisoFiltros" />
+}
+
+@if (error(); as texto) {
+  <div class="error con-accion" role="alert">
+    <span>{{ texto }}</span>
+    <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+  </div>
+}
+
+@if (pagina(); as actual) {
+  @if (actual.items.length === 0) {
+    <p class="ayuda estado-vacio" role="status">
+      {{ filtrada() ? 'No hay presupuestos con esos filtros.' : 'Todavía no hay presupuestos.' }}
+    </p>
+  } @else {
+    @if (actual.totalPages > 1) {
+      <nav class="paginas" aria-label="Páginas de presupuestos">
+        <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+          Anterior
+        </button>
+        <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+        <button
+          type="button"
+          class="secundario chico"
+          [disabled]="actual.page + 1 >= actual.totalPages"
+          (click)="cargar(actual.page + 1)"
+        >
+          Siguiente
+        </button>
+      </nav>
+    }
+    @if (celular) {
+      <!-- Celular (movil-sectores T12c): una tarjeta por presupuesto, de dos líneas, con el estado como pastilla. -->
+      <ul class="documentos-celular" aria-label="Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.">
+        @for (fila of actual.items; track fila.presupuestoId) {
+          <li>
+            <button
+              type="button"
+              class="doc-tarjeta"
+              aria-haspopup="dialog"
+              [class.elegida]="elegido() === fila.presupuestoId"
+              (click)="elegir(fila)"
+            >
+              <span class="doc-cuerpo">
+                <span class="doc-linea">N.º {{ fila.numero }} · {{ fila.clienteNombre ?? '—' }}</span>
+                <span class="doc-sub">{{ fechaHora(fila.fecha) }} · Vence {{ dia(fila.vence) }}</span>
+              </span>
+              <span class="doc-lado">
+                <span class="doc-total">{{ fila.total | monto }}</span>
+                <span class="pastilla doc-estado" [class]="'pastilla-' + color[fila.estado]">{{ etiqueta[fila.estado] }}@if (fila.vencido) {&ngsp;· Vencido}</span>
+              </span>
+            </button>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="tabla-scroll">
+        <table class="presupuestos tabla-tarjetas">
+          <caption class="sr-only">
+            Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">N.º</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Cliente</th>
+              <th scope="col" class="num">Total</th>
+              <th scope="col">Vence</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fila of actual.items; track fila.presupuestoId) {
+              <tr [class.elegida]="elegido() === fila.presupuestoId" (click)="elegir(fila)">
+                <td class="numero" data-etiqueta="N.º">
+                  <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.presupuestoId">
+                    {{ fila.numero }}
+                  </button>
+                </td>
+                <td class="fecha" data-etiqueta="Fecha">{{ fechaHora(fila.fecha) }}</td>
+                <td class="cliente" data-etiqueta="Cliente">{{ fila.clienteNombre ?? '—' }}</td>
+                <td class="num total" data-etiqueta="Total">{{ fila.total | monto }}</td>
+                <td class="fecha vence" data-etiqueta="Vence">{{ dia(fila.vence) }}</td>
+                <td class="situacion" data-etiqueta="Estado">
+                  {{ etiqueta[fila.estado] }}
+                  @if (fila.vencido) {
+                    <span class="vencido">· Vencido</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+} @else if (cargando()) {
+  <p class="ayuda estado-vacio">Cargando…</p>
+}
+
+@if (elegido() !== null) {
+  @if (celular) {
+    <!--
+      Celular (movil-sectores T12c): el detalle es una pantalla completa con «Volver»; «Imprimir» y «Pasar a venta» quedan
+      fijos al pie y Aceptar, Rechazar y Volver a pendiente en el ⋯. Los mismos manejadores y la misma pregunta de
+      reemplazar el ticket que en el pop-up del escritorio.
+    -->
+    <app-detalle-pantalla [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+      @if (hayMasOpciones()) {
+        <button
+          mas
+          type="button"
+          class="mas-doc"
+          aria-label="Más opciones del presupuesto"
+          aria-haspopup="dialog"
+          [attr.aria-expanded]="menuAbierto()"
+          (click)="menuAbierto.set(true)"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" />
+          </svg>
+        </button>
+      }
+      @if (detalle(); as p) {
+        <span class="marcas">
+          <span class="estado pastilla" [class]="'pastilla-' + color[p.estado]">{{ etiqueta[p.estado] }}</span>
+          @if (p.vencido) {
+            <span class="vencido">Vencido</span>
+          }
+        </span>
+      }
+      <ng-container *ngTemplateOutlet="cuerpoDetalle" />
+      @if (enPie()) {
+        <button pie type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">
+          Imprimir
+        </button>
+      }
+      @if (puedePasar()) {
+        <button pie type="button" class="primario" [disabled]="cambiando() || pasando()" (click)="pasarAVenta()">
+          Pasar a venta
+        </button>
+      }
+    </app-detalle-pantalla>
+    @if (menuAbierto()) {
+      <app-hoja-inferior [titulo]="tituloDetalle()" (cerrar)="menuAbierto.set(false)">
+        @if (puedeAceptar()) {
+          <button type="button" class="accion-hoja" [disabled]="cambiando() || pasando()" (click)="cambiarEstadoDesdeElMenu('ACEPTADO')">
+            Aceptar
+          </button>
+        }
+        @if (puedeRechazar()) {
+          <button type="button" class="accion-hoja" [disabled]="cambiando() || pasando()" (click)="cambiarEstadoDesdeElMenu('RECHAZADO')">
+            Rechazar
+          </button>
+        }
+        @if (puedeVolver()) {
+          <button type="button" class="accion-hoja" [disabled]="cambiando() || pasando()" (click)="cambiarEstadoDesdeElMenu('PENDIENTE')">
+            Volver a pendiente
+          </button>
+        }
+      </app-hoja-inferior>
+    }
+  } @else {
+    <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+      @if (detalle(); as p) {
+        <span cabecera class="marcas">
+          <span class="estado pastilla" [class]="'pastilla-' + color[p.estado]">{{ etiqueta[p.estado] }}</span>
+          @if (p.vencido) {
+            <span class="vencido">Vencido</span>
+          }
+        </span>
+      }
+      <ng-container *ngTemplateOutlet="cuerpoDetalle" />
+      <!-- Al pie, cada botón en su propio @if: así se proyecta a su lugar. Mientras se pregunta si se reemplaza el ticket
+           del mostrador, el pie no ofrece nada (la pregunta tiene sus botones). -->
+      @if (enPie()) {
+        <button accion type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">
+          Imprimir
+        </button>
+      }
+      @if (puedeAceptar()) {
+        <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">
+          Aceptar
+        </button>
+      }
+      @if (puedeRechazar()) {
+        <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('RECHAZADO')">
+          Rechazar
+        </button>
+      }
+      @if (puedeVolver()) {
+        <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('PENDIENTE')">
+          Volver a pendiente
+        </button>
+      }
+      @if (puedePasar()) {
+        <button accion type="button" class="primario" [disabled]="cambiando() || pasando()" (click)="pasarAVenta()">
+          Pasar a venta
+        </button>
+      }
+    </app-dialogo-detalle>
+  }
+}
+
+@if (detalle(); as p) {
+  @if (emisor(); as datos) {
+    <app-documento-no-fiscal-imprimible [documento]="documentoDe(p)" [emisor]="datos" (cerrar)="cerrarImpresion()" />
+  }
+}
+
+<!-- Los filtros, una sola vez: en escritorio y tablet van en la página; en el celular, en la hoja inferior. -->
+<ng-template #formFiltros>
 <form class="filtros" (submit)="buscar($event)">
   <label>
     Estado
@@ -39,92 +294,15 @@
   <button type="submit" class="primario">Buscar</button>
   <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
 </form>
+</ng-template>
+<ng-template #avisoFiltros>
 @if (errorFiltros(); as texto) {
   <p class="error" role="alert">{{ texto }}</p>
 }
+</ng-template>
 
-@if (error(); as texto) {
-  <div class="error con-accion" role="alert">
-    <span>{{ texto }}</span>
-    <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
-  </div>
-}
-
-@if (pagina(); as actual) {
-  @if (actual.items.length === 0) {
-    <p class="ayuda estado-vacio" role="status">
-      {{ filtrada() ? 'No hay presupuestos con esos filtros.' : 'Todavía no hay presupuestos.' }}
-    </p>
-  } @else {
-    @if (actual.totalPages > 1) {
-      <nav class="paginas" aria-label="Páginas de presupuestos">
-        <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
-          Anterior
-        </button>
-        <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
-        <button
-          type="button"
-          class="secundario chico"
-          [disabled]="actual.page + 1 >= actual.totalPages"
-          (click)="cargar(actual.page + 1)"
-        >
-          Siguiente
-        </button>
-      </nav>
-    }
-    <div class="tabla-scroll">
-      <table class="presupuestos tabla-tarjetas">
-        <caption class="sr-only">
-          Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">N.º</th>
-            <th scope="col">Fecha</th>
-            <th scope="col">Cliente</th>
-            <th scope="col" class="num">Total</th>
-            <th scope="col">Vence</th>
-            <th scope="col">Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of actual.items; track fila.presupuestoId) {
-            <tr [class.elegida]="elegido() === fila.presupuestoId" (click)="elegir(fila)">
-              <td class="numero" data-etiqueta="N.º">
-                <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.presupuestoId">
-                  {{ fila.numero }}
-                </button>
-              </td>
-              <td class="fecha" data-etiqueta="Fecha">{{ fechaHora(fila.fecha) }}</td>
-              <td class="cliente" data-etiqueta="Cliente">{{ fila.clienteNombre ?? '—' }}</td>
-              <td class="num total" data-etiqueta="Total">{{ fila.total | monto }}</td>
-              <td class="fecha vence" data-etiqueta="Vence">{{ dia(fila.vence) }}</td>
-              <td class="situacion" data-etiqueta="Estado">
-                {{ etiqueta[fila.estado] }}
-                @if (fila.vencido) {
-                  <span class="vencido">· Vencido</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
-} @else if (cargando()) {
-  <p class="ayuda estado-vacio">Cargando…</p>
-}
-
-@if (elegido() !== null) {
-  <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
-    @if (detalle(); as p) {
-      <span cabecera class="marcas">
-        <span class="estado pastilla" [class]="'pastilla-' + color[p.estado]">{{ etiqueta[p.estado] }}</span>
-        @if (p.vencido) {
-          <span class="vencido">Vencido</span>
-        }
-      </span>
-    }
+<!-- El contenido del detalle, una sola vez: dentro del pop-up (escritorio y tablet) o de la pantalla completa (celular). -->
+<ng-template #cuerpoDetalle>
     @if (errorAccion(); as texto) {
       <p class="error" role="alert">{{ texto }}</p>
     }
@@ -211,38 +389,4 @@
     } @else if (!errorAccion()) {
       <p class="ayuda">Cargando…</p>
     }
-    <!-- Al pie, cada botón en su propio @if: así se proyecta a su lugar. Mientras se pregunta si se reemplaza el ticket
-         del mostrador, el pie no ofrece nada (la pregunta tiene sus botones). -->
-    @if (enPie()) {
-      <button accion type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">
-        Imprimir
-      </button>
-    }
-    @if (puedeAceptar()) {
-      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">
-        Aceptar
-      </button>
-    }
-    @if (puedeRechazar()) {
-      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('RECHAZADO')">
-        Rechazar
-      </button>
-    }
-    @if (puedeVolver()) {
-      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('PENDIENTE')">
-        Volver a pendiente
-      </button>
-    }
-    @if (puedePasar()) {
-      <button accion type="button" class="primario" [disabled]="cambiando() || pasando()" (click)="pasarAVenta()">
-        Pasar a venta
-      </button>
-    }
-  </app-dialogo-detalle>
-}
-
-@if (detalle(); as p) {
-  @if (emisor(); as datos) {
-    <app-documento-no-fiscal-imprimible [documento]="documentoDe(p)" [emisor]="datos" (cerrar)="cerrarImpresion()" />
-  }
-}
+</ng-template>

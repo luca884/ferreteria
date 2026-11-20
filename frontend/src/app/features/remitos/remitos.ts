@@ -1,4 +1,4 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -21,8 +21,11 @@ import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
+import { DetallePantalla } from '../../shared/detalle-pantalla';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
@@ -64,7 +67,19 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, Confirmacion, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RestadoPipe, RouterLink],
+  imports: [
+    BarraAcciones,
+    Confirmacion,
+    DecimalPipe,
+    DetallePantalla,
+    DialogoDetalle,
+    DocumentoNoFiscalImprimible,
+    HojaInferior,
+    MontoPipe,
+    NgTemplateOutlet,
+    RestadoPipe,
+    RouterLink,
+  ],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })
@@ -78,6 +93,12 @@ export class Remitos implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly generarClave = inject(GENERAR_CLAVE);
 
+  /**
+   * En el celular (movil-sectores T12c) la lista son tarjetas con el estado en chips, los filtros una hoja inferior y el
+   * detalle una pantalla completa con «Imprimir» y «Pasar a venta» en el pie y «Anular» en el ⋯. Se lee al crearse: no
+   * sigue la rotación. Es sólo cómo se ve: el estado, los pedidos y los textos son los mismos.
+   */
+  protected readonly celular = esCelular();
   protected readonly estados = ESTADOS_REMITO;
   protected readonly etiqueta = ETIQUETA_ESTADO_REMITO;
   protected readonly fechaHora = fechaHoraLocal;
@@ -104,6 +125,16 @@ export class Remitos implements OnInit {
   /** Los filtros aplicados a la lista que se ve (sin `page`). */
   private aplicados: Omit<FiltroRemitos, 'page'> = {};
   protected readonly filtrada = signal(false);
+  /** El estado de los filtros aplicados a la lista que se ve (no el que se está eligiendo): lo marcan los chips del celular. */
+  protected readonly estadoAplicado = signal<EstadoRemito | ''>('');
+  /** La hoja de filtros del celular. */
+  protected readonly filtrosAbiertos = signal(false);
+  /** Cuántos de los filtros están escritos: lo dice el botón «Filtros» del celular. */
+  protected readonly filtrosActivos = computed(
+    () => [this.estado(), this.numero(), this.desde(), this.hasta()].filter((valor) => valor.trim() !== '').length,
+  );
+  /** La hoja del ⋯ del detalle del celular: «Anular». */
+  protected readonly menuAbierto = signal(false);
 
   protected readonly elegido = signal<number | null>(null);
   /** El remito se abrió por `/remitos/:id` (un link desde otro documento): la lista no lo cierra y al cerrarlo se vuelve a `/remitos`. */
@@ -183,6 +214,16 @@ export class Remitos implements OnInit {
   /** Aplica los filtros y vuelve a la primera página. Un número que no es un entero positivo no se manda. */
   protected buscar(evento: Event): void {
     evento.preventDefault();
+    this.aplicarFiltros();
+  }
+
+  /** Un chip de estado del celular: el mismo filtro que elegir el estado en la hoja y apretar «Buscar». */
+  protected elegirEstado(estado: EstadoRemito | ''): void {
+    this.estado.set(estado);
+    this.aplicarFiltros();
+  }
+
+  private aplicarFiltros(): void {
     const texto = this.numero().trim();
     if (texto !== '' && !/^[1-9]\d{0,17}$/.test(texto)) {
       this.errorFiltros.set(MENSAJE_NUMERO);
@@ -194,6 +235,9 @@ export class Remitos implements OnInit {
       return;
     }
     this.errorFiltros.set(null);
+    // Buscar deja la lista a la vista: la hoja del celular se cierra con los filtros ya puestos.
+    this.filtrosAbiertos.set(false);
+    this.estadoAplicado.set(this.estado());
     this.aplicados = {
       ...(this.estado() ? { estado: this.estado() as EstadoRemito } : {}),
       ...(texto ? { numero: Number(texto) } : {}),
@@ -210,6 +254,8 @@ export class Remitos implements OnInit {
     this.desde.set('');
     this.hasta.set('');
     this.errorFiltros.set(null);
+    this.filtrosAbiertos.set(false);
+    this.estadoAplicado.set('');
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
@@ -238,6 +284,7 @@ export class Remitos implements OnInit {
       this.origen = null;
     }
     this.confirmandoAnulacion.set(false);
+    this.menuAbierto.set(false);
   }
 
   protected elegir(fila: RemitoResumen): void {
@@ -289,6 +336,12 @@ export class Remitos implements OnInit {
   }
 
   protected readonly documentoDe = documentoDeRemito;
+
+  /** «Anular» de la hoja del ⋯ del celular: cierra la hoja y abre la confirmación de siempre. */
+  protected anularDesdeElMenu(): void {
+    this.menuAbierto.set(false);
+    this.pedirAnulacion();
+  }
 
   protected pedirAnulacion(): void {
     if (!this.detalle() || this.anulando() || this.pasando()) return;

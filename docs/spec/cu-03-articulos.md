@@ -19,3 +19,15 @@
 8. **Controles de datos** (menú, solo el Dueño), como los «Controles de datos» de GDS (G81, GDS-18). El Dueño elige un control y ve todos los artículos activos que caen en él, ordenados por descripción, con código, descripción, rubro, proveedor, costo (y debajo el costo real, si tiene recargos, CU-13), IVA y precio (marca el precio manual); cada descripción lleva a la ficha para corregirlo y «Imprimir» saca el listado con la ferretería, el control y la fecha. Controles: **costo en cero**; **sin rubro** (un rubro de otra ferretería cuenta como ninguno); **margen negativo**, el costo real en pesos mayor que el precio sin IVA, con la misma cuenta que el aviso de precio manual (CU-14 punto 2; un artículo en USD usa el dólar de los precios; sin dólar no sale); e **IVA en 0 %**. «Ventas con costo mayor a precio de venta» de GDS queda afuera: la ganancia de lo vendido está en Reportes.
 <!-- fin payload: spec.md:67-82 -->
 
+**Agregado móvil: Artículos, margen y cotización** (≤639.98 px).
+Al tocar una fila se abre la ficha. El Dueño tiene «Nuevo» flotante; alta y ficha tienen tarjetas plegables,
+«Guardar» al pie y, en un artículo existente, las acciones de baja o reactivación en la hoja del ⋯.
+El Dueño puede mantener apretada una fila activa y tocar otras para sumar o sacar de la selección:
+«Agregar N a Etiquetas» queda fijo al pie y suma una copia por artículo (regla 6); no abre la lista automáticamente.
+Margen y redondeo lleva «Guardar» al pie y la confirmación de recálculo a una hoja inferior.
+Cotización usa interruptor y segmentado Compra/Venta; «Guardar» está al pie y la previa en tarjetas fija «Aplicar» en su lugar.
+No cambian las reglas de negocio, los roles ni los mensajes de validación o recálculo.
+Pendientes: «el rubro de cada fila se pide a `/rubros` sólo en el celular» y girar con la ficha abierta «no la reacomoda» (L15, no discutidos en L16).
+«Volver» y «Cancelar» descartan cambios y van a `/articulos` sin aviso (L57, L59); Cotización no tiene «Promedio» y salir en un recálculo «no cancela el POST» (L59).
+
+

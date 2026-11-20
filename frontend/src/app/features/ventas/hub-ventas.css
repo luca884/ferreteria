@@ -1,0 +1,77 @@
+/*
+ * El hub «Ventas» (movil-sectores T2): una lista de filas de 68px, con el ícono en el tono de la sección. Se pensó
+ * para el celular; desde 640 px es la misma lista, centrada y con ancho de lectura, por si alguien llega por la URL.
+ */
+:host {
+  display: block;
+  max-width: var(--ancho-medio);
+  margin-inline: auto;
+}
+.titulo-hub {
+  margin: 0 0 var(--e-3);
+  font-size: var(--texto-lg);
+}
+.grupo-hub {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-xl);
+  background: var(--superficie);
+}
+.grupo-hub li + li {
+  border-top: 1px solid var(--borde-suave);
+}
+.fila-hub {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  gap: var(--e-3);
+  align-items: center;
+  min-height: 68px;
+  padding: var(--e-2) var(--e-3) var(--e-2) var(--e-4);
+  color: var(--texto);
+  text-decoration: none;
+}
+.icono-hub {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radio-lg);
+  background: var(--tono-suave);
+  color: var(--tono);
+}
+.fila-hub b {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.fila-hub small {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+}
+.pastilla-hub {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--error);
+  color: #fff;
+  font-size: var(--texto-xs);
+  font-weight: 700;
+}
+.chevron-hub {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--texto-tenue);
+  stroke-width: 1.5;
+}
+/* Sin la pastilla, el chevron ocupa la columna de la pastilla: queda pegado a la derecha igual. */
+.fila-hub:not(:has(.pastilla-hub)) .chevron-hub {
+  grid-column: 3 / -1;
+  justify-self: end;
+}

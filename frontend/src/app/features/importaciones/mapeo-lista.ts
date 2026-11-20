@@ -1,6 +1,6 @@
 import { AbstractControl, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
 import { Moneda } from '../articulos/articulo.models';
-import { MapeoLista, MapeoRequest, Muestra, PropuestaDeMapeo } from './importacion.models';
+import { FilaDeMuestra, MapeoLista, MapeoRequest, Muestra, PropuestaDeMapeo } from './importacion.models';
 
 /**
  * Las columnas que se pueden mapear: la lista cerrada de la spec (R-109). No existe una para el stock ni para la
@@ -244,4 +244,31 @@ export function armarMapeo(valores: ValoresDeMapeo, hojaDeReferencia: number, ho
   }
   if (valores.monedaFija !== null) mapeo.monedaFija = valores.monedaFija;
   return mapeo;
+}
+
+/** Cuántas filas de datos se miran, como mucho, para juntar los ejemplos: una hoja de 100.000 filas no se recorre entera. */
+const FILAS_PARA_EJEMPLOS = 30;
+
+/**
+ * Hasta `maximo` valores de ejemplo por columna (la hoja del celular para elegir la columna): los primeros que no están
+ * vacíos, de las filas de datos (desde `desde`, la primera fila de datos; sin ella, desde la primera fila). Mira a lo sumo
+ * {@link FILAS_PARA_EJEMPLOS} filas. Devuelve una lista por columna, vacía si la columna no tiene nada.
+ */
+export function ejemplosPorColumna(
+  filas: readonly FilaDeMuestra[],
+  desde: number | null,
+  columnas: number,
+  maximo = 3,
+): string[][] {
+  const ejemplos: string[][] = Array.from({ length: columnas }, () => []);
+  let vistas = 0;
+  for (const fila of filas) {
+    if (desde !== null && fila.numero < desde) continue;
+    if (++vistas > FILAS_PARA_EJEMPLOS) break;
+    for (let columna = 0; columna < columnas; columna++) {
+      const valor = (fila.celdas[columna] ?? '').trim();
+      if (valor !== '' && ejemplos[columna].length < maximo) ejemplos[columna].push(valor);
+    }
+  }
+  return ejemplos;
 }

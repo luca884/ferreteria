@@ -15,6 +15,7 @@ import { Subject, catchError, debounceTime, map, merge, of, switchMap } from 'rx
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { formatearMonto } from '../../core/formato/monto';
+import { esCelular } from '../../shared/es-celular';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
   CONDICIONES_IVA,
@@ -49,13 +50,26 @@ const ESPERA_MS = 250;
     <div class="dialogo-fondo">
       <div
         class="dialogo cliente"
+        [class.cliente-celular]="celular"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-cliente-titulo"
         appTrampaFoco
         (keydown)="alTeclear($event)"
       >
-        <h2 id="dialogo-cliente-titulo">Cliente</h2>
+        @if (celular) {
+          <!-- movil-sectores T8c: en el celular es una pantalla completa: la flecha «Volver» arriba (hace de «Cancelar») y las acciones fijas abajo. -->
+          <div class="ficha-barra">
+            <button type="button" class="ficha-volver" aria-label="Volver" (click)="volver()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
+            <h2 id="dialogo-cliente-titulo">{{ enAlta() ? 'Nuevo cliente' : 'Cliente' }}</h2>
+          </div>
+        } @else {
+          <h2 id="dialogo-cliente-titulo">Cliente</h2>
+        }
         @if (actual(); as nombre) {
           <p class="actual">
             Cliente actual: <strong>{{ nombre }}</strong>
@@ -81,6 +95,9 @@ const ESPERA_MS = 250;
           @if (errorBusqueda()) {
             <p class="error" role="alert">No se pudo buscar clientes. Probá de nuevo.</p>
           }
+          @if (celular && resultados().length > 0 && total() <= resultados().length) {
+            <p class="conteo-clientes">{{ total() === 1 ? '1 cliente' : total() + ' clientes' }}</p>
+          }
           @if (resultados().length > 0) {
             <ul id="dialogo-cliente-resultados" class="resultados" role="listbox" aria-label="Clientes">
               @for (c of resultados(); track c.id; let i = $index) {
@@ -89,6 +106,7 @@ const ESPERA_MS = 250;
                   [id]="'cliente-' + c.id"
                   [attr.aria-selected]="i === resaltado()"
                   [class.resaltado]="i === resaltado()"
+                  (mousedown)="alApretarUnaFila($event)"
                   (click)="elegir.emit(c)"
                 >
                   <span class="nombre">{{ c.razonSocial }}</span
@@ -117,14 +135,16 @@ const ESPERA_MS = 250;
           } @else if (!cargando() && !errorBusqueda()) {
             <p class="sin-resultados">No hay clientes con esa búsqueda.</p>
           }
-          <div class="dialogo-acciones">
+          <div class="dialogo-acciones" [class.ficha-pie]="celular">
             @if (actual()) {
               <button type="button" class="secundario" (click)="quitar.emit()">Quitar cliente</button>
             }
-            <button type="button" class="secundario" (click)="abrirAlta()">Nuevo cliente</button>
-            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
-              Cancelar
-            </button>
+            <button type="button" [class]="celular ? 'primario' : 'secundario'" (click)="abrirAlta()">Nuevo cliente</button>
+            @if (!celular) {
+              <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+                Cancelar
+              </button>
+            }
           </div>
         } @else {
           <form class="alta-rapida" (submit)="guardarAlta($event)" novalidate>
@@ -230,7 +250,7 @@ const ESPERA_MS = 250;
             @if (errorTelefono(); as mensaje) {
               <span id="nuevo-telefono-error" class="campo-error">{{ mensaje }}</span>
             }
-            <div class="dialogo-acciones">
+            <div class="dialogo-acciones" [class.ficha-pie]="celular">
               <button type="button" class="secundario" (click)="volverABuscar()">Volver a buscar</button>
               <button type="submit" class="aceptar primario" [disabled]="guardando()">Guardar y elegir</button>
             </div>
@@ -340,6 +360,12 @@ export class DialogoCliente {
   private readonly buscador = viewChild<ElementRef<HTMLInputElement>>('buscador');
   private readonly razonSocial = viewChild<ElementRef<HTMLInputElement>>('razonSocial');
 
+  /**
+   * En el celular el selector es una pantalla completa (movil-sectores T8c); en el escritorio y la tablet, el diálogo
+   * centrado de siempre. Se lee al abrir: no sigue la rotación, como la hoja de la cantidad.
+   */
+  protected readonly celular = esCelular();
+
   protected readonly tipos = TIPOS_DOCUMENTO;
   protected readonly condiciones = CONDICIONES_IVA;
   protected readonly condicionLabels = CONDICION_IVA_LABELS;
@@ -440,6 +466,20 @@ export class DialogoCliente {
       const elegido = this.resultados()[this.resaltado()];
       if (elegido) this.elegir.emit(elegido);
     }
+  }
+
+  /**
+   * En el celular, apretar una fila no le saca el foco al buscador (iría al contenido de la página, que lo rodea): así, al
+   * elegir, `appTrampaFoco` devuelve el foco a lo que abrió el selector («Cambiar» o el ⋯) y no a la página.
+   */
+  protected alApretarUnaFila(evento: MouseEvent): void {
+    if (this.celular) evento.preventDefault();
+  }
+
+  /** La flecha «Volver» del celular: en el alta vuelve a la búsqueda y en la búsqueda cancela, como el «Cancelar» de siempre. */
+  protected volver(): void {
+    if (this.enAlta()) this.volverABuscar();
+    else this.cancelar.emit();
   }
 
   protected abrirAlta(): void {

@@ -3,8 +3,10 @@
   <a routerLink="/compras" class="btn accion-barra">Ver compras</a>
 </app-barra-acciones>
 
-@if (motivo.visible(); as texto) {
-  <p class="motivo-accion" role="status">{{ texto }}</p>
+@if (!celular()) {
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
 }
 
 @if (!auth.esDueno()) {
@@ -16,14 +18,23 @@
   </p>
 
   @if (registrada(); as compra) {
-    <p class="exito" role="status">
+    <p #mensajeExito class="exito" role="status" [attr.tabindex]="celular() ? -1 : null">
       Compra registrada: {{ compra.comprobante }} de {{ compra.proveedorNombre }}.
       <a routerLink="/compras">Ver compras</a>
     </p>
   }
 
   <section class="paso panel">
-    <h2>Comprobante</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button #cabeceraComprobante type="button" [attr.aria-expanded]="pasoAbierto('comprobante')" (click)="alternarPaso('comprobante')">
+          <span>Comprobante</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Comprobante</h2>
+    }
     <app-selector-archivo
       class="factura-pdf"
       rotulo="Leer factura en PDF"
@@ -104,7 +115,17 @@
   </section>
 
   <section class="paso panel">
-    <h2>Artículos</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button type="button" [attr.aria-expanded]="pasoAbierto('articulos')" (click)="alternarPaso('articulos')">
+          <span>Artículos</span>
+          <span class="compra-paso-resumen">{{ renglones().length + sinArticulo().length }}</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Artículos</h2>
+    }
     <form class="buscador" (submit)="buscar($event)">
       <label>
         Agregar artículo
@@ -168,7 +189,7 @@
         </thead>
         <tbody>
           @for (r of renglones(); track r.articuloId; let i = $index) {
-            <tr>
+            <tr [attr.aria-label]="celular() ? r.descripcion + (r.moneda === 'USD' ? ' (USD)' : '') : null">
               <td>
                 {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
                 @if (r.codigoProveedor && r.codigoProveedor !== r.codigoInterno) {
@@ -179,6 +200,9 @@
                 }
               </td>
               <td class="num">
+                @if (celular()) {
+                  <span class="compra-renglon-etiqueta" aria-hidden="true">Cantidad</span>
+                }
                 <input
                   [name]="'cantidad-' + i"
                   type="text"
@@ -190,6 +214,9 @@
                 />
               </td>
               <td class="num">
+                @if (celular()) {
+                  <span class="compra-renglon-etiqueta" aria-hidden="true">Costo unitario sin IVA</span>
+                }
                 <app-campo-moneda [moneda]="r.moneda === 'USD' ? 'USD' : 'ARS'">
                   <input
                     [name]="'costo-' + i"
@@ -239,7 +266,17 @@
   </section>
 
   <section class="paso panel recargos-costo">
-    <h2>Recargos del costo</h2>
+    @if (celular()) {
+      <h2 class="compra-paso-titulo">
+        <button type="button" [attr.aria-expanded]="pasoAbierto('recargos')" (click)="alternarPaso('recargos')">
+          <span>Recargos del costo</span>
+          <span class="compra-paso-resumen">{{ recargos().length || 'ninguno' }}</span>
+          <span class="compra-paso-flecha" aria-hidden="true"></span>
+        </button>
+      </h2>
+    } @else {
+      <h2>Recargos del costo</h2>
+    }
     <p class="ayuda">
       Se suman al costo de cada artículo de la compra antes del margen (por ejemplo «Embalaje y carga» 4,44 %). Negativo
       descuenta. Hasta {{ maximoRecargos }}.
@@ -278,7 +315,12 @@
       </div>
     }
     @if (errorRecargos(); as mensaje) {
-      <span class="campo-error" role="alert">{{ mensaje }}</span>
+      <span #mensajeRecargos class="campo-error" role="alert" [attr.tabindex]="celular() ? -1 : null">{{ mensaje }}</span>
+    }
+    @if (celular()) {
+      @if (motivo.visible(); as texto) {
+        <p class="motivo-accion" role="status">{{ texto }}</p>
+      }
     }
     <button
       type="button"
@@ -291,7 +333,7 @@
   </section>
 
   @if (errores().length > 0) {
-    <div class="error" role="alert">
+    <div #mensajeError class="error" role="alert" [attr.tabindex]="celular() ? -1 : null">
       <ul>
         @for (e of errores(); track e) {
           <li>{{ e }}</li>
@@ -300,63 +342,125 @@
     </div>
   }
 
-  <div class="acciones">
-    <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
-  </div>
+  @if (!celular() || !plan()) {
+    @if (motivoPrevia.visible(); as texto) {
+      <p class="motivo-accion motivo-previa" role="status">{{ texto }}</p>
+    }
+    <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
+      <button
+        type="button"
+        class="primario"
+        [disabled]="trabajando()"
+        [attr.aria-disabled]="ariaDe(motivosPrevia().vistaPrevia)"
+        (click)="verVistaPrevia()"
+      >
+        Ver vista previa
+      </button>
+    </div>
+  }
 
   @if (plan(); as p) {
     <section class="vista-previa" aria-label="Vista previa de la compra">
-      <h2>Vista previa</h2>
-      <p class="datos">
-        {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} ·
-        {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
-        {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
-      </p>
-      <div class="tabla-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Artículo</th>
-              <th scope="col" class="num">Cantidad</th>
-              <th scope="col" class="num">Costo antes</th>
-              <th scope="col" class="num">Costo nuevo</th>
-              @if (p.recargos.length > 0) {
-                <th scope="col" class="num">Costo real antes</th>
-                <th scope="col" class="num">Costo real nuevo</th>
-              }
-              <th scope="col" class="num">Precio antes</th>
-              <th scope="col" class="num">Precio nuevo</th>
-              <th scope="col" class="num">Stock antes → después</th>
-              <th scope="col" class="num">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (r of p.renglones; track r.articuloId) {
-              <tr [class.advertencia]="r.advertencia">
-                <td>
+      <h2 #tituloPrevia [attr.tabindex]="celular() ? -1 : null">Vista previa</h2>
+      @if (celular()) {
+        <p class="datos">
+          {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} · {{ comprobante() }} ·
+          {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
+          {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
+        </p>
+      } @else {
+        <p class="datos">
+          {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} ·
+          {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
+          {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
+        </p>
+      }
+      @if (celular()) {
+        <ul class="previa-renglones" role="list">
+          @for (r of p.renglones; track r.articuloId; let i = $index) {
+            @let abierto = renglonPreviaAbierto(r.articuloId);
+            <li [class.advertencia]="r.advertencia">
+              <button
+                type="button"
+                class="acc-b"
+                [attr.aria-expanded]="abierto"
+                [attr.aria-controls]="'previa-renglon-' + i"
+                (click)="alternarRenglonPrevia(r.articuloId)"
+              >
+                <span>
                   {{ r.codigoInterno }} · {{ r.descripcion }}
-                  @if (r.advertencia) {
-                    <span class="aviso-fila">{{ r.advertencia }}</span>
+                  <span class="previa-cantidad">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</span>
+                </span>
+                <strong class="previa-subtotal">{{ r.subtotal | monto }}</strong>
+                <span class="compra-paso-flecha" aria-hidden="true"></span>
+              </button>
+              <div [id]="'previa-renglon-' + i" [hidden]="!abierto">
+                <dl>
+                  <dt>Costo antes</dt><dd>{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Costo nuevo</dt><dd class="previa-nuevo">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  @if (p.recargos.length > 0) {
+                    <dt>Costo real antes</dt><dd>{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                    <dt>Costo real nuevo</dt><dd class="previa-nuevo">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
                   }
-                </td>
-                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-                <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                @if (p.recargos.length > 0) {
-                  <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <dt>Precio antes</dt><dd>{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Precio nuevo</dt><dd class="previa-nuevo">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Stock antes</dt><dd>{{ r.stockAnterior | number: '1.0-3' }}</dd>
+                  <dt>Stock después</dt><dd class="previa-nuevo">{{ cantidadConUnidad(r.stockNuevo, r.unidad) }}</dd>
+                </dl>
+                @if (r.advertencia) {
+                  <span class="aviso-fila">{{ r.advertencia }}</span>
                 }
-                <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num stock">
-                  {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
-                </td>
-                <td class="num">{{ r.subtotal | monto }}</td>
+              </div>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div class="tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Artículo</th>
+                <th scope="col" class="num">Cantidad</th>
+                <th scope="col" class="num">Costo antes</th>
+                <th scope="col" class="num">Costo nuevo</th>
+                @if (p.recargos.length > 0) {
+                  <th scope="col" class="num">Costo real antes</th>
+                  <th scope="col" class="num">Costo real nuevo</th>
+                }
+                <th scope="col" class="num">Precio antes</th>
+                <th scope="col" class="num">Precio nuevo</th>
+                <th scope="col" class="num">Stock antes → después</th>
+                <th scope="col" class="num">Subtotal</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (r of p.renglones; track r.articuloId) {
+                <tr [class.advertencia]="r.advertencia">
+                  <td>
+                    {{ r.codigoInterno }} · {{ r.descripcion }}
+                    @if (r.advertencia) {
+                      <span class="aviso-fila">{{ r.advertencia }}</span>
+                    }
+                  </td>
+                  <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                  <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  @if (p.recargos.length > 0) {
+                    <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  }
+                  <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num stock">
+                    {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
+                  </td>
+                  <td class="num">{{ r.subtotal | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
       <div class="totales">
         <p>
           <span>Neto</span><span>{{ p.neto | monto }}</span>
@@ -378,9 +482,16 @@
           <span>Total</span><span>{{ p.total | monto }}</span>
         </p>
       </div>
-      <div class="acciones">
-        <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
-      </div>
+      @if (celular()) {
+        <div class="acciones ficha-pie en-pagina">
+          <button type="button" class="secundario" [disabled]="trabajando()" (click)="volverDeLaPrevia()">Volver</button>
+          <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
+        </div>
+      } @else {
+        <div class="acciones">
+          <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
+        </div>
+      }
     </section>
   }
 }

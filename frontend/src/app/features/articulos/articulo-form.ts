@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -26,6 +27,7 @@ import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } 
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { conOrigen } from '../../shared/documento-por-ruta';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
@@ -184,6 +186,70 @@ type CampoDeAjuste = 'nombre' | 'tipo' | 'valor';
 /** Al guardar o cancelar se vuelve al listado con la búsqueda, la página y los inactivos de la dirección. */
 const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
 
+/** La pantalla del celular (la misma consulta de todo el CSS móvil); sin `matchMedia` (pruebas, impresión) no lo es. */
+const esCelular = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
+
+/** Las tarjetas plegables de la ficha del celular (movil-sectores T5, 5c); `desglose` es «De dónde sale el precio». */
+type SeccionFicha = 'identificacion' | 'precio' | 'clasificacion' | 'stock' | 'desglose';
+
+/** Los campos de cada tarjeta, para abrir las que traen un error al guardar (los del backend son `campo` o `campo[i]…`). */
+const CAMPOS_POR_SECCION: Record<Exclude<SeccionFicha, 'desglose'>, readonly string[]> = {
+  identificacion: ['codigoInterno', 'unidad', 'descripcion'],
+  precio: ['moneda', 'costo', 'margenPorcentaje', 'alicuotaIva', 'precioManual', 'precioFinal', 'ajustesPrecio', 'recargosCosto'],
+  clasificacion: ['rubroId', 'proveedorId', 'codigoBarras', 'codigoProveedor'],
+  stock: ['stockMinimo', 'ubicacion'],
+};
+
+/** Los destinos del resumen «Revisá estos datos» para los errores del backend: la clave del campo y qué enfocar. */
+const SELECTOR_DE_CAMPO: Record<string, string> = {
+  // En el orden en que se ven en la pantalla: el resumen ordena los errores del backend así.
+  codigoInterno: '#codigoInterno',
+  unidad: '#unidad',
+  descripcion: '#descripcion',
+  moneda: '#moneda',
+  costo: '#costo',
+  margenPorcentaje: '#margen',
+  alicuotaIva: '#alicuotaIva',
+  recargosCosto: '.agregar-recargo-costo',
+  precioFinal: '#precioFinalManual',
+  ajustesPrecio: '.agregar-ajuste-precio',
+  rubroId: '#rubro',
+  proveedorId: '#proveedor',
+  codigoBarras: '#codigoBarras',
+  codigoProveedor: '#codigoProveedor',
+  stockMinimo: '#stockMinimo',
+  ubicacion: '#ubicacion',
+};
+const ORDEN_DE_CAMPOS = Object.keys(SELECTOR_DE_CAMPO);
+const lugarDelCampo = (clave: string): number => {
+  const lugar = ORDEN_DE_CAMPOS.indexOf(clave.replace(/\[.*$/, ''));
+  return lugar < 0 ? ORDEN_DE_CAMPOS.length : lugar;
+};
+
+/** Un renglón del resumen «Revisá estos datos» del celular: el mensaje del campo, y qué tarjeta abrir y qué enfocar. */
+interface EntradaResumen {
+  clave: string;
+  mensaje: string;
+  selector: string | null;
+  seccion: SeccionFicha | null;
+}
+
+const seccionDeCampo = (campo: string): SeccionFicha | null =>
+  (Object.keys(CAMPOS_POR_SECCION) as (keyof typeof CAMPOS_POR_SECCION)[]).find((s) =>
+    CAMPOS_POR_SECCION[s].includes(campo),
+  ) ?? null;
+
+/** Los errores del backend son `campo` o `campo[i].subcampo` (filas de ajustes): a qué campo de la pantalla llevan. */
+function destinoDelServidor(clave: string): { selector: string | null; seccion: SeccionFicha | null } {
+  const fila = /^ajustesPrecio\[(\d+)\]\.(nombre|tipo|valor)$/.exec(clave);
+  if (fila) return { selector: `#ajuste-precio-${fila[2]}-${fila[1]}`, seccion: 'precio' };
+  return { selector: SELECTOR_DE_CAMPO[clave] ?? null, seccion: seccionDeCampo(clave.replace(/\[.*$/, '')) };
+}
+
+const MENSAJE_MARGEN = 'El margen tiene que estar entre 0 y 1000.';
+const MENSAJE_STOCK_MINIMO = 'El stock mínimo no puede ser negativo.';
+
 const MENSAJE_EAN = 'No parece un EAN-13 válido: el último dígito no coincide. Revisalo antes de guardar.';
 
 /**
@@ -212,9 +278,12 @@ export function avisoDeEan13(codigo: string | null | undefined): string | null {
     CampoMoneda,
     ImporteInput,
     OfertaArticulo,
+    HojaInferior,
+    NgTemplateOutlet,
   ],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
+  host: { '[class.ficha-celular]': 'fichaCelular()' },
 })
 export class ArticuloForm implements OnInit {
   private readonly service = inject(ArticulosService);
@@ -235,6 +304,8 @@ export class ArticuloForm implements OnInit {
   protected readonly monedaLabels = MONEDA_LABELS;
   protected readonly tiposAjuste = TIPOS_AJUSTE_PRECIO;
   protected readonly tipoAjusteLabels = TIPO_AJUSTE_PRECIO_LABELS;
+  protected readonly mensajeDeMargen = MENSAJE_MARGEN;
+  protected readonly mensajeDeStockMinimo = MENSAJE_STOCK_MINIMO;
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly porUnidad = porUnidad;
 
@@ -262,6 +333,20 @@ export class ArticuloForm implements OnInit {
   /** Si falló la carga del artículo no hay nada que editar. */
   protected readonly sinFormulario = signal(false);
   protected readonly confirmandoDescarte = signal(false);
+  /**
+   * movil-sectores T5 (5c y 5d): la ficha de un artículo, existente o nuevo (`/articulos/nuevo`), en el celular es una
+   * pantalla completa con la barra «Volver», las secciones plegables y el pie fijo (la ficha existente suma el resumen
+   * de arriba y el ⋯). El escritorio no cambia: nada de esto está en su DOM.
+   */
+  protected readonly fichaCelular = signal(false);
+  /** Las tarjetas abiertas de la ficha del celular; arranca con «Identificación» abierta, como el artboard. */
+  protected readonly seccionesAbiertas = signal<ReadonlySet<SeccionFicha>>(new Set(['identificacion']));
+  /** El ⋯ de la barra de la ficha (Dar de baja / Reactivar) abierto en su hoja inferior. */
+  protected readonly menuAbierto = signal(false);
+  /** Dar de baja pidió confirmación (la misma que la del listado). */
+  protected readonly confirmandoBaja = signal(false);
+  /** Se intentó guardar con datos inválidos: desde ahí el resumen «Revisá estos datos» lista lo que falta corregir. */
+  private readonly intentoGuardar = signal(false);
   protected readonly ajustandoStock = signal(false);
   /** El desglose del precio (solo en la edición); null en el alta o si no se pudo leer. */
   protected readonly desglose = signal<DesglosePrecio | null>(null);
@@ -464,6 +549,57 @@ export class ArticuloForm implements OnInit {
    */
   protected readonly unidadElegida = computed(() => this.valores().unidad);
 
+  /** El dato clave de cada tarjeta plegada del celular: el código, el precio guardado y el stock mínimo. */
+  protected readonly resumenIdentificacion = computed(() => this.valores().codigoInterno.trim());
+  protected readonly resumenPrecio = computed(() => {
+    const actual = this.articulo();
+    return actual ? formatearTexto(String(actual.precioFinal), 'ARS') : '';
+  });
+  protected readonly resumenStock = computed(() => {
+    const minimo = this.valores().stockMinimo;
+    return minimo === null ? '' : `mínimo ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(minimo)}`;
+  });
+
+  /**
+   * El resumen «Revisá estos datos» del celular: los campos inválidos (después de intentar guardar) y los errores del
+   * backend, con el mismo mensaje que cada campo. Sólo presenta la validación que ya existe; al corregir un campo su
+   * renglón sale.
+   */
+  protected readonly resumenErrores = computed<EntradaResumen[]>(() => {
+    this.valores();
+    const entradas: EntradaResumen[] = [];
+    const agregar = (clave: string, mensaje: string | null, selector: string, seccion: SeccionFicha) => {
+      if (mensaje) entradas.push({ clave, mensaje, selector, seccion });
+    };
+    if (this.intentoGuardar()) {
+      const c = this.form.controls;
+      if (c.codigoInterno.invalid) agregar('codigoInterno', this.mensajeLocal('codigoInterno'), '#codigoInterno', 'identificacion');
+      if (c.descripcion.invalid) agregar('descripcion', this.mensajeLocal('descripcion'), '#descripcion', 'identificacion');
+      if (c.costo.invalid) agregar('costo', this.mensajeLocal('costo'), '#costo', 'precio');
+      if (c.margenPorcentaje.invalid) agregar('margenPorcentaje', MENSAJE_MARGEN, '#margen', 'precio');
+      this.filasRecargo().forEach((_, i) =>
+        (['nombre', 'porcentaje'] as const).forEach((campo) =>
+          agregar(`recargo-${campo}-${i}`, this.errorLocalDeRecargo(i, campo), `#recargo-costo-${campo}-${i}`, 'precio'),
+        ),
+      );
+      agregar('precioFinal', this.errorLocalDelPrecio(), '#precioFinalManual', 'precio');
+      this.filasAjuste().forEach((_, i) =>
+        (['nombre', 'tipo', 'valor'] as const).forEach((campo) =>
+          agregar(`ajuste-${campo}-${i}`, this.errorLocalDeFila(i, campo), `#ajuste-precio-${campo}-${i}`, 'precio'),
+        ),
+      );
+      if (c.stockMinimo.invalid) agregar('stockMinimo', MENSAJE_STOCK_MINIMO, '#stockMinimo', 'stock');
+    }
+    const delServidor = Object.entries(this.erroresServidor()).sort(([a], [b]) => lugarDelCampo(a) - lugarDelCampo(b));
+    for (const [clave, mensaje] of delServidor) {
+      const destino = destinoDelServidor(clave);
+      if (destino.selector === null || !entradas.some((e) => e.selector === destino.selector)) {
+        entradas.push({ clave: `servidor-${clave}`, mensaje, ...destino });
+      }
+    }
+    return entradas;
+  });
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();
@@ -489,6 +625,7 @@ export class ArticuloForm implements OnInit {
 
   ngOnInit(): void {
     const crudo = this.route.snapshot.paramMap.get('id');
+    this.fichaCelular.set(esCelular());
     if (crudo !== null) {
       this.id = Number(crudo);
       if (!Number.isInteger(this.id)) {
@@ -506,6 +643,64 @@ export class ArticuloForm implements OnInit {
 
   protected get esEdicion(): boolean {
     return this.id !== null;
+  }
+
+  protected estaAbierta(seccion: SeccionFicha): boolean {
+    return this.seccionesAbiertas().has(seccion);
+  }
+
+  /** En el celular una tarjeta cerrada no muestra sus campos; fuera de la ficha del celular nada se pliega. */
+  protected cerrada(seccion: SeccionFicha): boolean {
+    return this.fichaCelular() && !this.estaAbierta(seccion);
+  }
+
+  protected alternar(seccion: SeccionFicha): void {
+    this.seccionesAbiertas.update((abiertas) => {
+      const siguientes = new Set(abiertas);
+      if (!siguientes.delete(seccion)) siguientes.add(seccion);
+      return siguientes;
+    });
+  }
+
+  /** El texto del error propio de los campos que tienen más de uno; el mismo en el campo y en el resumen del celular. */
+  protected mensajeLocal(campo: 'codigoInterno' | 'descripcion' | 'costo'): string {
+    const errores = this.form.controls[campo].errors;
+    if (campo === 'codigoInterno') {
+      return errores?.['maxlength']
+        ? 'El código interno no puede superar 30 caracteres.'
+        : 'El código interno es obligatorio.';
+    }
+    if (campo === 'descripcion') {
+      return errores?.['maxlength']
+        ? 'La descripción no puede superar 200 caracteres.'
+        : 'La descripción es obligatoria.';
+    }
+    return errores?.['min'] ? 'El costo tiene que ser mayor que cero.' : 'El costo es obligatorio.';
+  }
+
+  /** Un renglón del resumen del celular: abre la tarjeta del campo (si está plegada) y lo enfoca. */
+  protected irAlCampo(entrada: EntradaResumen): void {
+    const enfocar = () => this.host.nativeElement.querySelector<HTMLElement>(entrada.selector ?? '')?.focus();
+    if (entrada.selector === null) return;
+    if (entrada.seccion === null || this.estaAbierta(entrada.seccion)) {
+      enfocar();
+      return;
+    }
+    this.alternar(entrada.seccion);
+    afterNextRender(enfocar, { injector: this.injector });
+  }
+
+  /** Al guardar con errores se abren las tarjetas que los traen: un campo plegado no se puede ver ni enfocar. */
+  private abrirSeccionesConError(): void {
+    if (!this.fichaCelular()) return;
+    const servidor = Object.keys(this.erroresServidor());
+    const controles = this.form.controls as Record<string, AbstractControl>;
+    const conError = (campo: string) =>
+      controles[campo]?.invalid === true || servidor.some((clave) => clave === campo || clave.startsWith(`${campo}[`));
+    const aAbrir = (Object.keys(CAMPOS_POR_SECCION) as (keyof typeof CAMPOS_POR_SECCION)[]).filter((seccion) =>
+      CAMPOS_POR_SECCION[seccion].some(conError),
+    );
+    if (aAbrir.length > 0) this.seccionesAbiertas.update((abiertas) => new Set([...abiertas, ...aAbrir]));
   }
 
   protected errorServidor(campo: CampoArticulo | CampoPrecio): string | null {
@@ -704,6 +899,8 @@ export class ArticuloForm implements OnInit {
     }
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.intentoGuardar.set(true);
+      this.abrirSeccionesConError();
       this.enfocarPrimerInvalido();
       return;
     }
@@ -726,7 +923,10 @@ export class ArticuloForm implements OnInit {
         this.error.set(mensajeDe(err, 'No se pudo guardar el artículo.'));
         this.versionVencida.set(esVersionVencida(err));
         if (this.versionVencida()) this.enfocarAvisoDeAjustes();
-        else this.enfocarPrimerInvalido();
+        else {
+          this.abrirSeccionesConError();
+          this.enfocarPrimerInvalido();
+        }
       },
     });
   }
@@ -882,6 +1082,7 @@ export class ArticuloForm implements OnInit {
   }
 
   private limpiarMensajes(): void {
+    this.intentoGuardar.set(false);
     this.versionVencida.set(false);
     this.error.set(null);
     this.aviso.set(null);
@@ -921,6 +1122,38 @@ export class ArticuloForm implements OnInit {
         this.aviso.set('Se reactivó el artículo.');
       },
       error: (err: unknown) => this.error.set(mensajeDe(err, 'No se pudo reactivar el artículo.')),
+    });
+  }
+
+  /** «Reactivar» del ⋯ del celular: cierra la hoja y hace lo mismo que el botón de la barra del escritorio. */
+  protected reactivarDesdeElMenu(): void {
+    this.menuAbierto.set(false);
+    this.reactivar();
+  }
+
+  /** «Dar de baja» del ⋯ del celular: cierra la hoja y pide la confirmación del listado. */
+  protected pedirBaja(): void {
+    this.menuAbierto.set(false);
+    this.confirmandoBaja.set(true);
+  }
+
+  /** Confirmó la baja: se vuelve a leer el artículo (la baja sube la versión) y la ficha pasa a mostrar «De baja». */
+  protected darDeBaja(): void {
+    this.confirmandoBaja.set(false);
+    const id = this.id;
+    if (id === null || !this.auth.esDueno()) return;
+    this.error.set(null);
+    this.aviso.set(null);
+    this.service.desactivar(id).subscribe({
+      next: () =>
+        this.service.obtener(id).subscribe({
+          next: (articulo) => {
+            this.articulo.set(articulo);
+            this.aviso.set('Se dio de baja el artículo.');
+          },
+          error: () => this.fallaLaRelectura('Se dio de baja el artículo, pero no se pudo releerlo.'),
+        }),
+      error: (err: unknown) => this.error.set(mensajeDe(err, 'No se pudo dar de baja el artículo.')),
     });
   }
 

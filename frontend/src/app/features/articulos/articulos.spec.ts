@@ -11,12 +11,23 @@ import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { Avisos } from '../../core/avisos/avisos';
 import { AuthService } from '../../core/auth/auth.service';
+import { Sesion } from '../../core/auth/auth.models';
 import { Articulo } from './articulo.models';
 import { Articulos } from './articulos';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
+import { RubrosService } from '../rubros/rubros.service';
 
 registerLocaleData(localeEsAr);
+
+const SESION = {
+  userId: 7,
+  nombre: 'Dueño',
+  email: 'dueno@tornillo.demo',
+  rol: 'DUENO',
+  ferreteriaId: 1,
+  ferreteriaNombre: 'El Tornillo',
+} as Sesion;
 
 const NBSP = ' ';
 
@@ -59,6 +70,8 @@ describe('Articulos', () => {
     exportar: ReturnType<typeof vi.fn>;
   };
   let avisos: Avisos;
+  /** Los rubros que conoce la lista para la línea de detalle del celular: el 7 es «Bazar». */
+  const rubrosServicio = { listar: vi.fn(() => of([{ id: 7, nombre: 'Bazar', margenPorcentaje: 30 }])) };
   let navegar: ReturnType<typeof vi.spyOn>;
 
   const errorHttp = (status: number, message: string) =>
@@ -85,7 +98,8 @@ describe('Articulos', () => {
         provideRouter([]),
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ArticulosService, useValue: servicio },
-        { provide: AuthService, useValue: { esDueno } },
+        { provide: AuthService, useValue: { esDueno, sesion: signal<Sesion | null>(SESION) } },
+        { provide: RubrosService, useValue: rubrosServicio },
       ],
     }).compileComponents();
     const router = TestBed.inject(Router);
@@ -139,7 +153,8 @@ describe('Articulos', () => {
           recorrer(hijas, [consulta, media.mediaText].filter(Boolean).join(' '));
           return;
         }
-        if ((regla as CSSStyleRule).selectorText?.includes(selector)) {
+        const selectorText = (regla as CSSStyleRule).selectorText?.replace(/\[_ng(content|host)-[^\]]+\]/g, '');
+        if (selectorText?.includes(selector)) {
           encontradas.push({ consulta, estilo: (regla as CSSStyleRule).style });
         }
       });
@@ -849,7 +864,8 @@ describe('Articulos', () => {
       expect(el().querySelector('button.movimientos')).toBeNull();
       expect(el().querySelector('button.clientes')).toBeNull();
       expect(el().querySelector('button.exportar')).toBeNull();
-      const acciones = Array.from(el().querySelectorAll('app-barra-acciones .accion-barra'));
+      // El ⋯ del celular (sin texto, sólo ícono) es de las acciones que no son de un artículo: no cuenta acá.
+      const acciones = Array.from(el().querySelectorAll('app-barra-acciones .accion-barra:not(.mas-opciones)'));
       expect(acciones.map((a) => a.textContent?.trim())).toEqual(['Ver ficha']);
       expect(el().textContent).not.toContain('Dar de baja');
       expect(el().textContent).not.toContain('Reactivalo para ajustar el stock');
@@ -1166,9 +1182,8 @@ describe('Articulos', () => {
    */
   describe('celular: buscador, filtros y fila de una línea (móvil-pulgar, T2)', () => {
     const renglon = () => el().querySelector<HTMLElement>('.herramientas-movil');
-    const botonFiltros = () => el().querySelector<HTMLButtonElement>('.herramientas-movil button.filtros');
-    const panel = () => el().querySelector<HTMLElement>('.filtros-panel');
-    const cuenta = () => botonFiltros()?.querySelector('.cuenta')?.textContent?.trim() ?? null;
+    const chip = (nombre: 'dados-de-baja' | 'en-oferta') =>
+      el().querySelector<HTMLButtonElement>(`.herramientas-movil button.chip.${nombre}`)!;
 
     it('el buscador va en su propio renglón, fuera de la barra que se desliza', async () => {
       await crearComponente(true);
@@ -1257,55 +1272,363 @@ describe('Articulos', () => {
       ).toEqual(['Cód. proveedor', 'IVA', 'Última actualización']);
     });
 
-    it('«Filtros» abre y cierra el panel y muestra cuántos filtros están activos', async () => {
+    it('los filtros son dos chips de 44 px que mueven los mismos filtros que los tildes de la barra', async () => {
       await crearComponente(true);
 
-      expect(botonFiltros()!.textContent).toContain('Filtros');
-      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
-      expect(panel()).toBeNull();
-      expect(cuenta()).toBeNull();
+      const chips = Array.from(el().querySelectorAll<HTMLButtonElement>('.herramientas-movil .chips button.chip'));
+      expect(chips.map((chip) => chip.textContent!.trim())).toEqual(['Dados de baja', 'Solo en oferta']);
+      expect(chips.map((chip) => chip.getAttribute('aria-pressed'))).toEqual(['false', 'false']);
+      // El panel plegado y su botón «Filtros» ya no están en el celular.
+      expect(el().querySelector('.herramientas-movil button.filtros')).toBeNull();
+      expect(el().querySelector('.filtros-panel')).toBeNull();
 
-      await clickEn('.herramientas-movil button.filtros');
-
-      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('true');
-      // No inventa filtros: son los dos tildes que ya tenía la barra, con su mismo texto.
-      expect(
-        Array.from(panel()!.querySelectorAll('label')).map((etiqueta) =>
-          etiqueta.textContent!.replace(/\s+/g, ' ').trim(),
-        ),
-      ).toEqual(['Mostrar dados de baja', 'Solo en oferta']);
-
-      const oferta = panel()!.querySelector<HTMLInputElement>('#en-oferta-movil')!;
-      oferta.checked = true;
-      oferta.dispatchEvent(new Event('change'));
+      chips[1].click();
       await refrescar();
 
       expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, true);
-      expect(cuenta()).toBe('1');
+      expect(chip('en-oferta').getAttribute('aria-pressed')).toBe('true');
+      expect(chip('dados-de-baja').getAttribute('aria-pressed')).toBe('false');
+      // Es el mismo estado que el tilde de la barra de escritorio.
+      expect(el().querySelector<HTMLInputElement>('#en-oferta')!.checked).toBe(true);
 
-      const inactivos = panel()!.querySelector<HTMLInputElement>('#inactivos-movil')!;
-      inactivos.checked = true;
-      inactivos.dispatchEvent(new Event('change'));
+      chip('dados-de-baja').click();
       await refrescar();
 
       expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true, true);
-      expect(cuenta()).toBe('2');
+      expect(chip('dados-de-baja').getAttribute('aria-pressed')).toBe('true');
+      expect(el().querySelector<HTMLInputElement>('#inactivos')!.checked).toBe(true);
 
-      await clickEn('.herramientas-movil button.filtros');
+      // Volver a tocar un chip apagado el filtro.
+      chip('en-oferta').click();
+      await refrescar();
 
-      expect(panel()).toBeNull();
-      expect(botonFiltros()!.getAttribute('aria-expanded')).toBe('false');
-      // Al cerrar, el contador sigue diciendo que hay dos filtros puestos.
-      expect(cuenta()).toBe('2');
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true, false);
+      expect(chip('en-oferta').getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('el contador sale de los filtros que ya venían puestos en la dirección', async () => {
+    it('los chips arrancan apretados si los filtros venían puestos en la dirección', async () => {
       await crearComponente(true, pagina([articulo(1)]), null, '/?inactivos=1&oferta=1');
 
-      expect(cuenta()).toBe('2');
-      await clickEn('.herramientas-movil button.filtros');
-      expect(panel()!.querySelector<HTMLInputElement>('#inactivos-movil')!.checked).toBe(true);
-      expect(panel()!.querySelector<HTMLInputElement>('#en-oferta-movil')!.checked).toBe(true);
+      expect(chip('dados-de-baja').getAttribute('aria-pressed')).toBe('true');
+      expect(chip('en-oferta').getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('los chips miden 44 px y las reglas nuevas viven sólo en el celular', async () => {
+      await crearComponente(true);
+
+      const chips = reglasDe('.chip').filter((regla) => regla.estilo.getPropertyValue('min-height') === '44px');
+      expect(chips.length).toBeGreaterThan(0);
+      for (const regla of [...chips, ...reglasDe('.mas-opciones'), ...reglasDe('.conteo-movil')].filter(
+        (regla) => regla.estilo.getPropertyValue('display') !== 'none',
+      )) {
+        expect(regla.consulta).toContain('max-width: 639.98px');
+      }
+      // Fuera del celular el ⋯, la cuenta y los chips no se dibujan.
+      const base = [...reglasDe('.mas-opciones'), ...reglasDe('.conteo-movil'), ...reglasDe('.herramientas-movil')].filter(
+        (regla) => regla.consulta === '',
+      );
+      expect(base.length).toBeGreaterThan(0);
+      expect(base.every((regla) => regla.estilo.getPropertyValue('display') === 'none')).toBe(true);
+    });
+
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      rubrosServicio.listar.mockClear();
+    });
+
+    it('la línea de detalle de la fila lleva el código y el rubro, sin cambiar el texto del escritorio', async () => {
+      enElCelular();
+      await crearComponente(
+        true,
+        pagina([
+          articulo(1, { codigoInterno: 'TOR-001', rubroId: 7 }),
+          articulo(2, { rubroId: 99 }),
+          articulo(3, { rubroId: null }),
+        ]),
+      );
+
+      // El rubro viaja en un atributo que pinta la línea del celular: el texto de la celda es el de siempre.
+      expect(filas()[0].querySelector('.codigo')!.getAttribute('data-rubro')).toBe('Bazar');
+      expect(texto('.codigo', 0)).toBe('TOR-001');
+      // Sin rubro, o con uno que la lista de rubros no conoce, no se inventa nada.
+      expect(filas()[1].querySelector('.codigo')!.hasAttribute('data-rubro')).toBe(false);
+      expect(filas()[2].querySelector('.codigo')!.hasAttribute('data-rubro')).toBe(false);
+      const meta = reglasDe('.codigo[data-rubro]::after');
+      expect(meta).toHaveLength(1);
+      expect(meta[0].consulta).toContain('max-width: 639.98px');
+      expect(meta[0].estilo.getPropertyValue('content')).toContain('attr(data-rubro)');
+    });
+
+    it('si la lista de rubros no se puede leer, la fila queda sin rubro y el listado sigue andando', async () => {
+      enElCelular();
+      rubrosServicio.listar.mockReturnValueOnce(throwError(() => errorHttp(500, 'Error interno')));
+      await crearComponente(true, pagina([articulo(1, { rubroId: 7 })]));
+
+      expect(filas()).toHaveLength(1);
+      expect(filas()[0].querySelector('.codigo')!.hasAttribute('data-rubro')).toBe(false);
+      expect(el().querySelector('.error')).toBeNull();
+    });
+
+    it('en el escritorio no se piden los rubros: sólo los usa la línea de detalle del celular', async () => {
+      await crearComponente(true, pagina([articulo(1, { rubroId: 7 })]));
+
+      expect(rubrosServicio.listar).not.toHaveBeenCalled();
+      expect(filas()[0].querySelector('.codigo')!.hasAttribute('data-rubro')).toBe(false);
+    });
+
+    it('el stock en cero va marcado en rojo; el que no es cero, no', async () => {
+      await crearComponente(true, pagina([articulo(1, { stockActual: 0 }), articulo(2, { stockActual: 3 })]));
+
+      expect(filas()[0].querySelector('.stock')!.classList).toContain('sin-stock');
+      expect(filas()[1].querySelector('.stock')!.classList).not.toContain('sin-stock');
+      const rojo = reglasDe('.stock.sin-stock').filter((regla) => regla.estilo.getPropertyValue('color') !== '');
+      expect(rojo.length).toBeGreaterThan(0);
+      expect(rojo.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+    });
+
+    it('el precio de oferta se ve en la fila, con el normal tachado', async () => {
+      await crearComponente(
+        true,
+        pagina([
+          articulo(1, {
+            precioFinal: 200,
+            oferta: { vigente: true, precioOferta: 150 } as Articulo['oferta'],
+          }),
+        ]),
+      );
+
+      const precio = filas()[0].querySelector('.precio')!;
+      expect(precio.querySelector('.precio-oferta')!.textContent!.trim()).toBe(`$${NBSP}150,00`);
+      expect(precio.querySelector('s.precio-normal')!.textContent!.trim()).toBe(`$${NBSP}200,00`);
+      expect(filas()[0].querySelector('.marca-oferta')!.textContent!.trim()).toBe('Oferta');
+    });
+
+    it('la cuenta de artículos va arriba de la lista y el paginador sigue diciendo la página', async () => {
+      await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+
+      const conteo = el().querySelector('.conteo-movil')!;
+      expect(conteo.textContent!.trim()).toBe('45 artículos');
+      expect(conteo.compareDocumentPosition(el().querySelector('table')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // En el escritorio el paginador conserva su texto de siempre.
+      expect(el().querySelector('nav.paginacion [aria-live]')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
+        'Página 1 de 3 · 45 artículos',
+      );
+      expect(el().querySelector('nav.paginacion .conteo-total')).not.toBeNull();
+      const oculto = reglasDe('.conteo-total');
+      expect(oculto.length).toBeGreaterThan(0);
+      expect(oculto.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+
+      TestBed.resetTestingModule();
+      await crearComponente(true, pagina([articulo(1)], 0, 1, 1));
+      expect(el().querySelector('.conteo-movil')!.textContent!.trim()).toBe('1 artículo');
+    });
+
+    /*
+     * 5c: «Tocá la fila». La ficha lleva ahora las acciones del artículo, así que en el celular un toque en la fila la
+     * abre y las acciones de la barra se esconden; el escritorio sigue eligiendo con un clic y abriendo con doble clic.
+     */
+    describe('tocar la fila (movil-sectores T5, 5c)', () => {
+      const ABRE_LA_7 = [['/articulos', 7], { queryParams: { elegido: 7 }, queryParamsHandling: 'merge' }];
+
+      it('en el celular un toque en la fila abre su ficha, con la dirección de vuelta', async () => {
+        enElCelular();
+        await crearComponente(true, pagina([articulo(7), articulo(8)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar).toHaveBeenCalledTimes(1);
+        expect(navegar.mock.calls[0]).toEqual(ABRE_LA_7);
+      });
+
+      it('el Vendedor también abre la ficha de solo lectura con un toque', async () => {
+        enElCelular();
+        await crearComponente(false, pagina([articulo(7)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar.mock.calls[0]).toEqual(ABRE_LA_7);
+      });
+
+      it('en el escritorio un clic sólo elige la fila: no navega', async () => {
+        await crearComponente(true, pagina([articulo(7), articulo(8)]));
+        navegar.mockClear();
+
+        await elegir(0);
+
+        expect(navegar).not.toHaveBeenCalled();
+        expect(filas()[0].getAttribute('aria-selected')).toBe('true');
+        expect(el().querySelector('.elegido')!.textContent).toContain('Elegido');
+      });
+
+      it('en el escritorio el doble clic y Enter siguen abriendo la ficha', async () => {
+        await crearComponente(true, pagina([articulo(7)]));
+
+        filas()[0].querySelector('.descripcion')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        await refrescar();
+
+        expect(navegar.mock.calls.at(-1)).toEqual(ABRE_LA_7);
+      });
+
+      it('las acciones de un artículo siguen en la barra del DOM, y sólo en el celular se esconden', async () => {
+        await crearComponente(true);
+
+        const acciones = ['.editar', '.ajustar-stock', '.movimientos', '.clientes', '.desactivar'];
+        for (const accion of acciones) expect(barra(accion)).not.toBeNull();
+        const reglas = reglasDe('.editar').filter((regla) => regla.estilo.getPropertyValue('display') === 'none');
+        expect(reglas.length).toBeGreaterThan(0);
+        expect(reglas.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+        // La regla que las esconde nombra todas las acciones de la fila, no sólo Editar.
+        const textoDeLaRegla = Array.from(document.styleSheets)
+          .flatMap((hoja) => Array.from(hoja.cssRules))
+          .flatMap((regla) => Array.from((regla as CSSMediaRule).cssRules ?? []))
+          .map((regla) => (regla as CSSStyleRule).selectorText ?? '')
+          .find((selector) => selector.includes('.editar') && selector.includes('.desactivar'))!;
+        for (const accion of [...acciones, '.reactivar', '.ver-ficha']) expect(textoDeLaRegla).toContain(accion);
+      });
+    });
+  });
+
+  /*
+   * movil-sectores T5 (5a): el ⋯ de la barra con las acciones que no son de un artículo (en una hoja inferior) y el
+   * botón flotante «Nuevo». Vitest no evalúa media queries: los dos están siempre en el DOM y el CSS los muestra sólo en
+   * el celular (se mide en el navegador); acá se prueba lo que hacen y para quién están.
+   */
+  describe('celular: ⋯ de la barra y botón «Nuevo» (movil-sectores T5, 5a)', () => {
+    const abrir = () => el().querySelector<HTMLButtonElement>('app-barra-acciones button.mas-opciones')!;
+    const hoja = () => el().querySelector<HTMLElement>('app-hoja-inferior');
+    const accionesDeLaHoja = () =>
+      Array.from(el().querySelectorAll('app-hoja-inferior .accion-hoja')).map((a) =>
+        a.querySelector('span')!.firstChild!.textContent!.trim(),
+      );
+    const flotante = () => el().querySelector<HTMLButtonElement>('button.boton-flotante');
+
+    it('el ⋯ está en la barra con su nombre, es de 44×44 y arranca con la hoja cerrada', async () => {
+      await crearComponente(true);
+
+      expect(abrir().getAttribute('aria-label')).toBe('Más opciones de Artículos');
+      expect(abrir().getAttribute('aria-expanded')).toBe('false');
+      expect(hoja()).toBeNull();
+      const medida = reglasDe('.mas-opciones').find((regla) => regla.estilo.getPropertyValue('width') === '44px')!;
+      expect(medida.consulta).toContain('max-width: 639.98px');
+      expect(medida.estilo.getPropertyValue('height')).toBe('44px');
+    });
+
+    it('el Dueño ve las cinco acciones, en el orden del artboard, y la hoja se abre y se cierra', async () => {
+      await crearComponente(true);
+
+      abrir().click();
+      await refrescar();
+
+      expect(hoja()!.querySelector('h2')!.textContent!.trim()).toBe('Artículos');
+      expect(abrir().getAttribute('aria-expanded')).toBe('true');
+      expect(accionesDeLaHoja()).toEqual([
+        'Exportar a CSV',
+        'Stock bajo mínimo',
+        'Etiquetas',
+        'Controles de datos',
+        'Rubros',
+      ]);
+
+      // Un toque en el velo la cierra…
+      el().querySelector<HTMLElement>('.hoja-inferior-fondo')!.click();
+      await refrescar();
+      expect(hoja()).toBeNull();
+      expect(abrir().getAttribute('aria-expanded')).toBe('false');
+
+      // …y Esc también.
+      abrir().click();
+      await refrescar();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await refrescar();
+      expect(hoja()).toBeNull();
+    });
+
+    it('el Vendedor sólo ve Rubros, que es lo único que tiene de esa lista', async () => {
+      await crearComponente(false);
+
+      abrir().click();
+      await refrescar();
+
+      expect(accionesDeLaHoja()).toEqual(['Rubros']);
+    });
+
+    it('cada acción lleva a la misma pantalla que hoy y cierra la hoja', async () => {
+      const destinos: [string, string][] = [
+        ['.stock-bajo-hoja', '/stock-bajo-minimo'],
+        ['.etiquetas-hoja', '/etiquetas'],
+        ['.controles-hoja', '/controles-de-datos'],
+        ['.rubros-hoja', '/rubros'],
+      ];
+      await crearComponente(true);
+
+      for (const [selector, ruta] of destinos) {
+        navegar.mockClear();
+        abrir().click();
+        await refrescar();
+        el().querySelector<HTMLButtonElement>(`app-hoja-inferior ${selector}`)!.click();
+        await refrescar();
+
+        expect(navegar).toHaveBeenCalledWith([ruta]);
+        expect(hoja()).toBeNull();
+      }
+    });
+
+    it('«Exportar a CSV» baja lo mismo que el botón de la barra y cierra la hoja', async () => {
+      await crearComponente(true);
+      servicio.exportar.mockReturnValue(new Subject());
+      await buscarTexto('tornillo');
+
+      abrir().click();
+      await refrescar();
+      el().querySelector<HTMLButtonElement>('app-hoja-inferior .exportar-hoja')!.click();
+      await refrescar();
+
+      expect(servicio.exportar).toHaveBeenCalledWith('tornillo', false, false);
+      expect(hoja()).toBeNull();
+      // Mientras baja, el botón de la barra queda apagado y la hoja, si se vuelve a abrir, dice lo mismo.
+      expect(barra('button.exportar')!.disabled).toBe(true);
+      abrir().click();
+      await refrescar();
+      const exportar = el().querySelector<HTMLButtonElement>('app-hoja-inferior .exportar-hoja')!;
+      expect(exportar.getAttribute('aria-disabled')).toBe('true');
+      expect(exportar.textContent).toContain('Exportando…');
+      exportar.click();
+      await refrescar();
+      expect(servicio.exportar).toHaveBeenCalledTimes(1);
+    });
+
+    it('en el celular la barra no repite «Nuevo» ni «Exportar»: son del botón flotante y del ⋯', async () => {
+      await crearComponente(true);
+
+      for (const selector of ['a.nuevo', 'button.exportar']) {
+        expect(barra(selector)!.classList).toContain('solo-escritorio');
+      }
+      const oculta = reglasDe('.solo-escritorio');
+      expect(oculta.length).toBeGreaterThan(0);
+      expect(oculta.every((regla) => regla.consulta.includes('max-width: 639.98px'))).toBe(true);
+      // Lo del artículo elegido sigue en la barra (hasta que la ficha lo reciba, T5 5c).
+      expect(barra('button.editar')!.classList).not.toContain('solo-escritorio');
+    });
+
+    it('el botón flotante «Nuevo» es sólo del Dueño y hace lo mismo que «Nuevo» de la barra', async () => {
+      await crearComponente(true);
+
+      expect(flotante()!.textContent!.trim()).toBe('Nuevo');
+      expect(el().querySelector('.grilla-marco')!.classList).toContain('con-flotante');
+      flotante()!.click();
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos/nuevo'], { queryParamsHandling: 'preserve' });
+      expect(barra('a.nuevo')!.getAttribute('href')).toBe('/articulos/nuevo');
+
+      TestBed.resetTestingModule();
+      await crearComponente(false);
+      expect(flotante()).toBeNull();
+      expect(el().querySelector('.grilla-marco')!.classList).not.toContain('con-flotante');
     });
   });
 
@@ -1367,15 +1690,17 @@ describe('Articulos', () => {
       expect(botones.some((regla) => regla.estilo.getPropertyValue('min-height') === '44px')).toBe(true);
     });
 
-    it('los tildes del celular siguen siendo un input de verdad dentro de su etiqueta', async () => {
+    it('los chips son botones de verdad, en el orden de Tab y con su estado anunciado', async () => {
       await crearComponente(true);
-      await clickEn('.herramientas-movil button.filtros');
 
-      const check = el().querySelector<HTMLInputElement>('.filtros-panel input#en-oferta-movil')!;
-      expect(check.tagName).toBe('INPUT');
-      expect(check.type).toBe('checkbox');
-      // La etiqueta que lo envuelve es el área de toque: la que se agranda en el celular, no el cuadradito.
-      expect(check.closest('label')?.classList.contains('casilla')).toBe(true);
+      for (const nombre of ['dados-de-baja', 'en-oferta'] as const) {
+        const boton = el().querySelector<HTMLButtonElement>(`.herramientas-movil button.chip.${nombre}`)!;
+        expect(boton.tagName).toBe('BUTTON');
+        expect(boton.type).toBe('button');
+        expect(boton.tabIndex).toBe(0);
+        expect(boton.hasAttribute('aria-pressed')).toBe(true);
+      }
+      expect(el().querySelector('.herramientas-movil .chips')!.getAttribute('role')).toBe('group');
     });
   });
 
@@ -1402,6 +1727,7 @@ describe('Articulos', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ArticulosService, useValue: servicio },
         { provide: AuthService, useValue: { esDueno } },
+        { provide: RubrosService, useValue: rubrosServicio },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Articulos);
@@ -1456,6 +1782,7 @@ describe('Articulos', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ArticulosService, useValue: servicio },
         { provide: AuthService, useValue: { esDueno } },
+        { provide: RubrosService, useValue: rubrosServicio },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Articulos);
@@ -1464,5 +1791,555 @@ describe('Articulos', () => {
     expect(el().querySelector('.error')?.textContent).toContain(
       'No se pudieron cargar los artículos.',
     );
+  });
+
+  /*
+   * movil-sectores T6: selección múltiple por mantener apretado → «Agregar N a Etiquetas». Sólo del Dueño y sólo del
+   * celular (S1): en el escritorio y para el Vendedor mantener apretado no hace nada.
+   */
+  // El CSS de la selección vive en styles.css, que Vitest no lee: se mide en el navegador a 390 y 360 px.
+  describe('celular: selección múltiple → Etiquetas (movil-sectores T6)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    const lista = () => pagina([articulo(1), articulo(2), articulo(3), articulo(4, { activo: false })]);
+    const GUARDADAS = 'etiquetas:1:7';
+
+    beforeEach(() => {
+      localStorage.clear();
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      localStorage.clear();
+    });
+
+    const pulsar = (fila: number, x = 100, y = 100) =>
+      filas()[fila].dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, pointerType: 'touch', isPrimary: true }),
+      );
+    const soltar = (fila: number) =>
+      filas()[fila].dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
+    const tocar = (fila: number) => (filas()[fila].querySelector('.descripcion') as HTMLElement).click();
+    /** Mantiene apretada la fila 600 ms y suelta: el toque que el navegador manda después va con `tocar`. */
+    const mantener = (fila: number) => {
+      pulsar(fila);
+      vi.advanceTimersByTime(600);
+      fixture.detectChanges();
+      soltar(fila);
+      tocar(fila);
+      fixture.detectChanges();
+    };
+    const barraSel = () => el().querySelector<HTMLElement>('.barra-seleccion');
+    const marcadas = () => filas().flatMap((f, i) => (f.classList.contains('marcada') ? [i] : []));
+    const pie = () => el().querySelector<HTMLButtonElement>('.pie-seleccion button.agregar')!;
+
+    it('mantener apretada una fila entra al modo selección con esa fila elegida, y el toque que sigue no abre la ficha', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      navegar.mockClear();
+
+      mantener(0);
+
+      expect(barraSel()!.getAttribute('role')).toBe('status');
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('1 elegido');
+      expect(marcadas()).toEqual([0]);
+      expect(navegar).not.toHaveBeenCalled();
+      expect(pie().textContent!.trim()).toBe('Agregar 1 a Etiquetas');
+    });
+
+    it('un toque corto no entra al modo selección: abre la ficha como hasta hoy', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      navegar.mockClear();
+
+      pulsar(0);
+      vi.advanceTimersByTime(200);
+      soltar(0);
+      tocar(0);
+      vi.advanceTimersByTime(1000);
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+      expect(navegar.mock.calls[0]).toEqual([['/articulos', 1], { queryParams: { elegido: 1 }, queryParamsHandling: 'merge' }]);
+    });
+
+    it('si el dedo se mueve (es un scroll) la pulsación se cancela', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      pulsar(0, 100, 100);
+      filas()[0].dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 140 }));
+      vi.advanceTimersByTime(1000);
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('en modo selección tocar suma o saca, cuenta bien y no abre la ficha', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      navegar.mockClear();
+
+      tocar(1);
+      tocar(2);
+      fixture.detectChanges();
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('3 elegidos');
+      expect(marcadas()).toEqual([0, 1, 2]);
+      expect(pie().textContent!.trim()).toBe('Agregar 3 a Etiquetas');
+
+      tocar(1);
+      fixture.detectChanges();
+      expect(marcadas()).toEqual([0, 2]);
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('2 elegidos');
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('«Elegir todos» marca los activos de la página; el dado de baja no tiene casilla y dice por qué', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+
+      barraSel()!.querySelector<HTMLButtonElement>('button.elegir-todos')!.click();
+      fixture.detectChanges();
+
+      expect(marcadas()).toEqual([0, 1, 2]);
+      expect(barraSel()!.querySelector('b')!.textContent!.trim()).toBe('3 elegidos');
+      expect(filas()[3].querySelector('.casilla-fila')).toBeNull();
+      expect(filas()[3].textContent).toContain('Dado de baja');
+      tocar(3);
+      fixture.detectChanges();
+      expect(marcadas()).toEqual([0, 1, 2]);
+    });
+
+    it('un artículo dado de baja no entra al modo selección al mantenerlo apretado', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      mantener(3);
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('la ✕ sale del modo selección sin tocar nada, y al volver a entrar no queda nada elegido', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(1);
+
+      barraSel()!.querySelector<HTMLButtonElement>('button.salir-seleccion')!.click();
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+      expect(localStorage.getItem(GUARDADAS)).toBeNull();
+      mantener(2);
+      expect(marcadas()).toEqual([2]);
+    });
+
+    it('«Agregar N a Etiquetas» guarda la lista, sale del modo y avisa con un atajo a Etiquetas', async () => {
+      enElCelular();
+      localStorage.setItem(GUARDADAS, JSON.stringify({ v: 1, items: [{ id: 9, copias: 2 }] }));
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(1);
+      navegar.mockClear();
+
+      pie().click();
+      fixture.detectChanges();
+
+      expect(JSON.parse(localStorage.getItem(GUARDADAS)!).items).toEqual([
+        { id: 9, copias: 2 },
+        { id: 1, copias: 1 },
+        { id: 2, copias: 1 },
+      ]);
+      expect(barraSel()).toBeNull();
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain(
+        'Se agregaron 2 artículos a la lista de etiquetas.',
+      );
+      const atajo = el().querySelector<HTMLElement>('.aviso-etiquetas')!;
+      expect(atajo.textContent).toContain('Lista de etiquetas: 3 artículos');
+      atajo.querySelector<HTMLButtonElement>('button')!.click();
+      expect(navegar).toHaveBeenCalledWith(['/etiquetas']);
+    });
+
+    it('con un solo artículo el aviso va en singular', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+
+      pie().click();
+      fixture.detectChanges();
+
+      expect(el().querySelector('.alerta.exito')!.textContent).toContain('Se agregó 1 artículo a la lista de etiquetas.');
+      expect(el().querySelector('.aviso-etiquetas')!.textContent).toContain('Lista de etiquetas: 1 artículo');
+    });
+
+    it('sin nada elegido el botón está apagado, dice por qué y no guarda', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      mantener(0);
+      tocar(0);
+      fixture.detectChanges();
+
+      expect(barraSel()).not.toBeNull();
+      expect(pie().getAttribute('aria-disabled')).toBe('true');
+      expect(el().querySelector('.pie-seleccion')!.textContent).toContain('Elegí al menos un artículo.');
+      pie().click();
+      fixture.detectChanges();
+      expect(localStorage.getItem(GUARDADAS)).toBeNull();
+      expect(barraSel()).not.toBeNull();
+    });
+
+    it('cambiar de página sale del modo selección', async () => {
+      enElCelular();
+      await crearComponente(true, pagina([articulo(1), articulo(2)], 0, 2, 30));
+      mantener(0);
+
+      el().querySelector<HTMLButtonElement>('nav.paginacion button.siguiente')!.click();
+      fixture.detectChanges();
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('el Vendedor no tiene Etiquetas: mantener apretado no le hace nada', async () => {
+      enElCelular();
+      await crearComponente(false, lista());
+
+      mantener(0);
+
+      expect(barraSel()).toBeNull();
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+    });
+
+    it('en el escritorio mantener apretado no hace nada', async () => {
+      await crearComponente(true, lista());
+
+      mantener(0);
+
+      expect(barraSel()).toBeNull();
+    });
+
+    it('la pista «Mantené apretado…» se ve hasta usar la selección una vez y no vuelve', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+      expect(el().querySelector('.pista-seleccion')!.textContent).toContain('Mantené apretado un artículo para elegir varios.');
+
+      mantener(0);
+      barraSel()!.querySelector<HTMLButtonElement>('button.salir-seleccion')!.click();
+      fixture.detectChanges();
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crearComponente(true, lista());
+      expect(el().querySelector('.pista-seleccion')).toBeNull();
+    });
+
+    it('en el celular el menú de contexto del navegador no aparece sobre una fila', async () => {
+      enElCelular();
+      await crearComponente(true, lista());
+
+      const evento = new Event('contextmenu', { bubbles: true, cancelable: true });
+      filas()[0].dispatchEvent(evento);
+
+      expect(evento.defaultPrevented).toBe(true);
+    });
+  });
+  /*
+   * movil-sectores T7: escáner de código de barras por cámara en el buscador del celular (S1; L18, L19). Sólo en el
+   * celular y sólo si el navegador trae `BarcodeDetector` y `getUserMedia`; un permiso negado nunca se recuerda. El CSS
+   * (botón y pantalla) no se evalúa en Vitest: se mide en el navegador.
+   */
+  describe('celular: escáner por cámara (movil-sectores T7)', () => {
+    const enElCelular = () =>
+      vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('639.98px'), media: consulta }));
+    const CODIGO = '7790001000123';
+    const con = () => pagina([articulo(1), articulo(2, { descripcion: 'Bulón 3/8', codigoBarras: CODIGO, stockActual: 12 })]);
+
+    let getUserMedia: ReturnType<typeof vi.fn>;
+    let pista: { stop: ReturnType<typeof vi.fn>; getCapabilities: () => object; applyConstraints: () => Promise<void> };
+    let porLeer: string[];
+
+    /** Simula el navegador del celular: `BarcodeDetector` y `getUserMedia` (que concede o niega el permiso). */
+    function instalarNavegador(opciones: { detector?: boolean; camara?: boolean; denegar?: boolean } = {}) {
+      const { detector = true, camara = true, denegar = false } = opciones;
+      pista = { stop: vi.fn(), getCapabilities: () => ({}), applyConstraints: async () => undefined };
+      porLeer = [];
+      getUserMedia = vi.fn(async () => {
+        if (denegar) throw new DOMException('Permission denied', 'NotAllowedError');
+        return { getTracks: () => [pista], getVideoTracks: () => [pista] };
+      });
+      if (detector) {
+        vi.stubGlobal(
+          'BarcodeDetector',
+          class {
+            detect = async () => (porLeer.length > 0 ? [{ rawValue: porLeer.shift()! }] : []);
+          },
+        );
+      }
+      if (camara) Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+      // jsdom no reproduce video: el video «tiene imagen» y reproducir no hace nada.
+      Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { get: () => 4, configurable: true });
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    }
+
+    const tras = async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+    };
+    const lectura = async () => {
+      await vi.advanceTimersByTimeAsync(600);
+      fixture.detectChanges();
+    };
+    const botonEscanear = () => el().querySelector<HTMLButtonElement>('form.busqueda-movil button.escanear');
+    const escaner = () => el().querySelector('app-escaner-camara');
+    const enEscaner = (nombre: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-escaner-camara button')).find(
+        (b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === nombre,
+      )!;
+    async function abrirEscaner() {
+      botonEscanear()!.click();
+      await tras();
+    }
+    const DENEGADA =
+      'No pudimos usar la cámara. Si la bloqueaste, habilitala desde los permisos del navegador y volvé a intentar.';
+
+    // jsdom no evalúa media queries y `articulos.css` esconde el buscador del celular por defecto: sin esto no se le puede
+    // dar el foco. Es la misma regla que el CSS aplica a 390 px.
+    let estiloDelCelular: HTMLStyleElement;
+
+    beforeEach(() => {
+      localStorage.clear();
+      vi.useFakeTimers();
+      estiloDelCelular = document.createElement('style');
+      estiloDelCelular.textContent = '.herramientas-movil { display: block !important; }';
+      document.head.appendChild(estiloDelCelular);
+    });
+    afterEach(() => {
+      estiloDelCelular.remove();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+      Reflect.deleteProperty(HTMLMediaElement.prototype, 'readyState');
+      localStorage.clear();
+    });
+
+    it('con BarcodeDetector y getUserMedia, el celular muestra el botón de cámara dentro del buscador, de Dueño y de Vendedor', async () => {
+      for (const dueno of [true, false]) {
+        TestBed.resetTestingModule();
+        enElCelular();
+        instalarNavegador();
+        await crearComponente(dueno, con());
+
+        const boton = botonEscanear()!;
+        expect(boton).not.toBeNull();
+        expect(boton.getAttribute('type')).toBe('button');
+        expect(boton.getAttribute('aria-label')).toBe('Escanear código de barras con la cámara');
+        expect(el().querySelectorAll('button.escanear').length).toBe(1);
+        expect(escaner()).toBeNull();
+      }
+    });
+
+    it('sin BarcodeDetector no hay botón (se escribe a mano, como siempre)', async () => {
+      enElCelular();
+      instalarNavegador({ detector: false });
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+      expect(el().querySelector('#q-movil')).not.toBeNull();
+    });
+
+    it('sin getUserMedia no hay botón', async () => {
+      enElCelular();
+      instalarNavegador({ camara: false });
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+    });
+
+    it('en el escritorio (no es el celular) no hay botón aunque el navegador tenga todo', async () => {
+      instalarNavegador();
+      await crearComponente(true, con());
+      expect(botonEscanear()).toBeNull();
+      expect(el().querySelector('app-escaner-camara')).toBeNull();
+      expect(getUserMedia).not.toHaveBeenCalled();
+    });
+
+    it('al tocarlo abre el escáner y pide la cámara trasera; la lista queda como estaba', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      const llamadasAntes = servicio.buscar.mock.calls.length;
+
+      await abrirEscaner();
+
+      expect(escaner()).not.toBeNull();
+      expect(el().querySelector('app-escaner-camara [role="dialog"]')).not.toBeNull();
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+      const pedido = getUserMedia.mock.calls[0][0] as MediaStreamConstraints;
+      expect((pedido.video as MediaTrackConstraints).facingMode).toEqual({ ideal: 'environment' });
+      expect(servicio.buscar.mock.calls.length).toBe(llamadasAntes);
+      expect(pista.stop).not.toHaveBeenCalled();
+    });
+
+    it('permiso negado: muestra el mensaje; al cerrar y volver a entrar la cámara se pide de nuevo y no se guarda nada', async () => {
+      enElCelular();
+      instalarNavegador({ denegar: true });
+      const guardar = vi.spyOn(Storage.prototype, 'setItem');
+      await crearComponente(true, con());
+
+      await abrirEscaner();
+      expect(el().querySelector('app-escaner-camara [role="alert"]')!.textContent!.trim()).toBe(DENEGADA);
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+      enEscaner('Cerrar el escáner').click();
+      await tras();
+      expect(escaner()).toBeNull();
+
+      await abrirEscaner();
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(el().querySelector('app-escaner-camara [role="alert"]')!.textContent!.trim()).toBe(DENEGADA);
+
+      enEscaner('Intentar de nuevo').click();
+      await tras();
+      expect(getUserMedia).toHaveBeenCalledTimes(3);
+
+      expect(guardar).not.toHaveBeenCalled();
+      expect(localStorage.length).toBe(0);
+    });
+
+    it('lee un código, apaga la cámara y «Abrir ficha» navega como abrirFicha, con elegido', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      navegar.mockClear();
+
+      porLeer.push(CODIGO);
+      await lectura();
+
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+      expect(servicio.buscar.mock.calls.at(-1)![0]).toBe(CODIGO);
+      const tarjeta = el().querySelector('app-escaner-camara .leido')!;
+      expect(tarjeta.textContent).toContain('Bulón 3/8');
+      expect(tarjeta.textContent).toContain('stock 12');
+
+      enEscaner('Abrir ficha').click();
+      await tras();
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 2], {
+        queryParams: { elegido: 2 },
+        queryParamsHandling: 'merge',
+      });
+      expect(escaner()).toBeNull();
+    });
+
+    it('un código que no es de ningún artículo lo dice y deja escribirlo a mano', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+
+      porLeer.push('0000000000000');
+      await lectura();
+
+      expect(el().querySelector('app-escaner-camara')!.textContent).toContain(
+        'No encontramos un artículo con el código 0000000000000.',
+      );
+      expect(enEscaner('Abrir ficha')).toBeUndefined();
+      expect(enEscaner('Escanear de nuevo')).toBeDefined();
+    });
+
+    it('«Escribir el código a mano» cierra el escáner, completa el buscador con el código, busca y le da el foco', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      porLeer.push('0000000000000');
+      await lectura();
+      servicio.buscar.mockClear();
+
+      enEscaner('Escribir el código a mano').click();
+      await tras();
+      await refrescar();
+
+      expect(escaner()).toBeNull();
+      const campo = el().querySelector<HTMLInputElement>('#q-movil')!;
+      expect(campo.value).toBe('0000000000000');
+      expect(servicio.buscar.mock.calls[0][0]).toBe('0000000000000');
+      expect(document.activeElement).toBe(campo);
+    });
+
+    it('«Escribir el código a mano» desde un permiso negado sólo cierra y enfoca el buscador, sin tocar lo escrito', async () => {
+      enElCelular();
+      instalarNavegador({ denegar: true });
+      await crearComponente(true, con(), null, '/?q=tornillo');
+      await abrirEscaner();
+      servicio.buscar.mockClear();
+
+      enEscaner('Escribir el código a mano').click();
+      await tras();
+
+      expect(escaner()).toBeNull();
+      const campo = el().querySelector<HTMLInputElement>('#q-movil')!;
+      expect(campo.value).toBe('tornillo');
+      expect(servicio.buscar).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(campo);
+    });
+
+    it('Esc y la ✕ cierran el escáner, apagan la cámara y devuelven el foco al botón de cámara', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      botonEscanear()!.focus();
+      await abrirEscaner();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await tras();
+
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(botonEscanear());
+
+      await abrirEscaner();
+      enEscaner('Cerrar el escáner').click();
+      await tras();
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(2);
+    });
+
+    it('al salir de la pantalla (navegar a otra) la cámara se apaga', async () => {
+      enElCelular();
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+      expect(pista.stop).not.toHaveBeenCalled();
+
+      fixture.destroy();
+
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('si la pantalla deja de ser la del celular (se gira) con el escáner abierto, se cierra', async () => {
+      let esCelular = true;
+      const oyentes: (() => void)[] = [];
+      vi.stubGlobal('matchMedia', (consulta: string) => ({
+        get matches() {
+          return esCelular && consulta.includes('639.98px');
+        },
+        media: consulta,
+        addEventListener: (_: string, f: () => void) => oyentes.push(f),
+        removeEventListener: () => undefined,
+      }));
+      instalarNavegador();
+      await crearComponente(true, con());
+      await abrirEscaner();
+
+      esCelular = false;
+      oyentes.forEach((f) => f());
+      await tras();
+
+      expect(escaner()).toBeNull();
+      expect(pista.stop).toHaveBeenCalledTimes(1);
+    });
   });
 });

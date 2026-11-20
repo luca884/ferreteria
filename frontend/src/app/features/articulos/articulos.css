@@ -194,13 +194,24 @@ th.actualizacion {
  * escritorio y la tablet siguen con la barra de siempre, en la que el buscador y los tildes van adentro de
  * app-barra-acciones, como hasta hoy.
  */
-.herramientas-movil {
+.herramientas-movil,
+.mas-opciones,
+.conteo-movil {
   display: none;
 }
 
 @media screen and (max-width: 639.98px) {
   /* Las copias de la barra se van: en el celular el buscador y los tildes viven en .herramientas-movil. */
   app-barra-acciones .solo-escritorio {
+    display: none;
+  }
+  /*
+   * movil-sectores T5 (5c): las acciones de un artículo (Editar, Ajustar stock, Movimientos, Clientes, Reactivar, Dar de
+   * baja y Ver ficha) pasan a la ficha, que se abre con un toque en la fila; en la barra del celular ya no están. El
+   * motivo de Ajustar stock apagado, que hablaba de ese botón, tampoco.
+   */
+  app-barra-acciones :is(.editar, .ajustar-stock, .movimientos, .clientes, .reactivar, .desactivar, .ver-ficha, .separador-barra),
+  .motivo-linea {
     display: none;
   }
   /*
@@ -232,23 +243,59 @@ th.actualizacion {
     height: 44px;
     min-width: 44px;
   }
-  /* «Filtros», con la cuenta de los que están puestos, a la izquierda del renglón. */
-  .herramientas-movil .filtros {
-    align-self: flex-start;
-    min-height: 44px;
-    padding: 0 var(--e-3);
+  /*
+   * movil-sectores T5 (5a): los dos filtros son chips de 44 px (artboard 01 de movil-articulos), uno al lado del otro,
+   * con el estado de los tildes de la barra: apretado, el chip toma el tono de la sección.
+   */
+  .herramientas-movil .chips {
+    display: flex;
+    gap: var(--e-2);
   }
-  /* El panel con los dos tildes de la barra, cada uno con su renglón de 44 px para el pulgar. */
-  .herramientas-movil .filtros-panel {
-    display: grid;
-    gap: var(--e-1);
-    padding: var(--e-2) var(--e-3);
-    border: 1px solid var(--borde);
-    border-radius: var(--radio-lg);
+  .herramientas-movil .chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
     background: var(--superficie);
+    color: var(--texto);
+    font-size: var(--texto-sm);
+    font-weight: 500;
   }
-  .herramientas-movil .filtros-panel .casilla {
-    min-height: 44px;
+  .herramientas-movil .chip[aria-pressed='true'] {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+    color: var(--tono);
+    font-weight: 600;
+  }
+
+  /* El ⋯ de la barra: un botón de 44×44 sólo con el ícono, pegado a la derecha (decisión de Luca, L16). */
+  .mas-opciones {
+    display: inline-flex;
+    flex: none;
+    margin-left: auto;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  /* El paginador deja de decir cuántos hay: lo dice la línea de arriba de la lista. */
+  .conteo-total {
+    display: none;
+  }
+  .conteo-movil {
+    display: block;
+    margin: 0 0 var(--e-1);
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  /* El botón flotante «Nuevo» no tapa el último renglón ni el paginador. */
+  .grilla-marco.con-flotante {
+    padding-bottom: calc(56px + var(--e-6, 24px));
   }
 
   /*
@@ -275,11 +322,22 @@ th.actualizacion {
   .tabla-tarjetas .solo-ficha {
     display: none;
   }
+  /*
+   * La línea de detalle (T5): código y rubro, en mono chico bajo la descripción. El rubro sale del atributo
+   * `data-rubro` de la celda (el listado trae sólo su id), así el texto de la celda es el mismo que en el escritorio.
+   */
   .tabla-tarjetas .codigo {
     grid-area: codigo;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--texto-tenue);
+    font-family: var(--fuente-mono);
     font-size: var(--texto-xs);
     white-space: nowrap;
+  }
+  .tabla-tarjetas .codigo[data-rubro]::after {
+    content: ' · ' attr(data-rubro);
   }
   /* La descripción no se parte en tres renglones: lo que no entra se corta con puntos suspensivos. */
   .tabla-tarjetas .descripcion {
@@ -303,9 +361,26 @@ th.actualizacion {
     font-size: var(--texto-xs);
     white-space: nowrap;
   }
-  /* El stock negativo sigue en rojo: el tono tenue de arriba es el de un stock normal. */
-  .tabla-tarjetas .stock.negativo {
+  /* El stock negativo y el cero van en rojo: el tono tenue de arriba es el de un stock normal. */
+  .tabla-tarjetas .stock.negativo,
+  .tabla-tarjetas .stock.sin-stock {
     color: var(--error);
+  }
+  .tabla-tarjetas .stock.sin-stock {
+    font-weight: 600;
+  }
+  /* En oferta: el precio de oferta arriba y el normal tachado abajo, cada uno en su renglón. */
+  .tabla-tarjetas .precio-oferta,
+  .tabla-tarjetas .precio-normal {
+    display: block;
+    margin-left: 0;
+  }
+  .tabla-tarjetas .precio-oferta {
+    color: var(--advertencia);
+  }
+  /* «Activo» es lo normal y no se dice en cada renglón: sólo la fila dada de baja lleva su etiqueta. */
+  .tabla-tarjetas > tbody > tr:not(.inactivo) > td.estado {
+    display: none;
   }
   .tabla-tarjetas .estado {
     grid-area: estado;

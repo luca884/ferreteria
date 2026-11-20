@@ -1,113 +1,193 @@
 <ng-template #selector let-s>
-  <div class="campo">
-    <label [for]="s.control">{{ s.etiqueta }}</label>
-    <select
+  @if (celular) {
+    <!-- movil-sectores T13b: en el celular el dato es una fila que abre la hoja de columnas; escribe en el mismo control. -->
+    <button
+      type="button"
+      class="fila-mapeo"
       [id]="s.control"
-      [formControl]="control(s.control)"
+      aria-haspopup="dialog"
       [attr.aria-invalid]="invalido(s.control) ? 'true' : null"
       [attr.aria-describedby]="descripcion(s.control)"
+      (click)="abrirHoja(s, $event)"
     >
-      <option [ngValue]="null">{{ s.vacio }}</option>
-      @for (o of opciones(); track o.indice) {
-        <option [ngValue]="o.indice">{{ o.etiqueta }}</option>
+      <span class="fila-mapeo-rotulo">{{ s.etiqueta }}</span>
+      <span class="fila-mapeo-valor">{{ valorDeFila(s) }}</span>
+      @if (ejemplosDeFila(s.control); as ejemplos) {
+        <span class="fila-mapeo-ejemplos">{{ ejemplos }}</span>
       }
-    </select>
-    @if (esReconocido(s.control)) {
-      <span class="etiqueta reconocida" [id]="s.control + '-reconocida'">Reconocida</span>
-    }
-  </div>
-</ng-template>
-
-<fieldset>
-  <legend>{{ datos.leyenda }}</legend>
-  <div class="fila">
+      <span class="fila-mapeo-extremo">
+        @if (esReconocido(s.control)) {
+          <span class="etiqueta reconocida" [id]="s.control + '-reconocida'">Reconocida</span>
+        }
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      </span>
+    </button>
+  } @else {
     <div class="campo">
-      <label for="filaDesde">Primera fila de datos</label>
-      <input
-        id="filaDesde"
-        type="number"
-        inputmode="numeric"
-        min="1"
-        [formControl]="grupo().controls.filaDesde"
-        [attr.aria-invalid]="filaDesdeInvalida() ? 'true' : null"
-        [attr.aria-describedby]="descripcionDeFilaDesde()"
-      />
-      @if (filaDesdeInvalida()) {
-        <span id="filaDesde-error" class="campo-error">Indicá la primera fila de datos (1 o más).</span>
-      }
-      @if (esReconocido('filaDesde')) {
-        <span class="etiqueta reconocida" id="filaDesde-reconocida">Reconocida</span>
-      }
-    </div>
-    @for (s of datos.selectores; track s.control) {
-      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
-    }
-  </div>
-</fieldset>
-
-<fieldset>
-  <legend>Moneda</legend>
-  <div class="fila">
-    <ng-container *ngTemplateOutlet="selector; context: { $implicit: moneda }" />
-    <div class="campo">
-      <label for="monedaFija">Moneda de todas las filas (opcional)</label>
-      <select id="monedaFija" [formControl]="grupo().controls.monedaFija">
-        <option [ngValue]="null">Sin moneda fija</option>
-        @for (m of monedas; track m.valor) {
-          <option [ngValue]="m.valor">{{ m.etiqueta }}</option>
+      <label [for]="s.control">{{ s.etiqueta }}</label>
+      <select
+        [id]="s.control"
+        [formControl]="control(s.control)"
+        [attr.aria-invalid]="invalido(s.control) ? 'true' : null"
+        [attr.aria-describedby]="descripcion(s.control)"
+      >
+        <option [ngValue]="null">{{ s.vacio }}</option>
+        @for (o of opciones(); track o.indice) {
+          <option [ngValue]="o.indice">{{ o.etiqueta }}</option>
         }
       </select>
+      @if (esReconocido(s.control)) {
+        <span class="etiqueta reconocida" [id]="s.control + '-reconocida'">Reconocida</span>
+      }
     </div>
-  </div>
-  <p class="ayuda" id="moneda-ayuda">
-    Si la lista tiene una columna con la moneda de cada fila, elegila arriba. Si no la tiene, elegí una moneda para
-    todas las filas. Se usa una o la otra, no las dos.
-  </p>
-</fieldset>
-
-<fieldset>
-  <legend>{{ iva.leyenda }}</legend>
-  <div class="fila">
-    @for (s of iva.selectores; track s.control) {
-      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
-    }
-  </div>
-  @if (ivaIncompleto()) {
-    <p id="iva-par-error" class="campo-error">
-      Elegí las dos columnas: el precio sin IVA y el precio con IVA, o ninguna de las dos.
-    </p>
   }
-  <p class="ayuda" id="iva-ayuda">
-    Si la lista trae el % de IVA, se toma tal cual (tiene que ser 0, 2,5, 5, 10,5, 21 o 27). Si trae el precio sin IVA
-    y el precio con IVA, el sistema calcula la alícuota más cercana; las dos columnas tienen que estar en la misma
-    base. El precio sin IVA solo sirve para calcular el IVA: el costo sale de la columna del costo.
-  </p>
-</fieldset>
+</ng-template>
 
-<fieldset>
-  <legend>{{ ajustes.leyenda }}</legend>
-  <div class="fila">
-    @for (s of ajustes.selectores; track s.control) {
-      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
-    }
-  </div>
-  <p class="ayuda" id="ajustes-ayuda">
-    El número lleva signo: negativo es descuento (−5 es un descuento del 5 %) y positivo es recargo (+3 es un recargo
-    del 3 %). Se aplican en orden, uno sobre otro, después de las bonificaciones del proveedor. Si la columna está
-    elegida y la celda de un artículo viene vacía, se le borra ese descuento o recargo; si no elegís la columna, se
-    conservan los que ya tiene.
-  </p>
-</fieldset>
+@if (mostrarDatos()) {
+  <fieldset>
+    <legend>{{ celular ? 'Datos a mapear' : datos.leyenda }}</legend>
+    <div class="fila">
+      <div class="campo">
+        <label for="filaDesde">Primera fila de datos</label>
+        <input
+          id="filaDesde"
+          type="number"
+          inputmode="numeric"
+          min="1"
+          [formControl]="grupo().controls.filaDesde"
+          [attr.aria-invalid]="filaDesdeInvalida() ? 'true' : null"
+          [attr.aria-describedby]="descripcionDeFilaDesde()"
+        />
+        @if (filaDesdeInvalida()) {
+          <span id="filaDesde-error" class="campo-error">Indicá la primera fila de datos (1 o más).</span>
+        }
+        @if (esReconocido('filaDesde')) {
+          <span class="etiqueta reconocida" id="filaDesde-reconocida">Reconocida</span>
+        }
+      </div>
+      @for (s of datos.selectores; track s.control) {
+        <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+      }
+    </div>
+  </fieldset>
+}
 
-<fieldset>
-  <legend>{{ otros.leyenda }}</legend>
-  <div class="fila">
-    @for (s of otros.selectores; track s.control) {
-      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+@if (mostrarAjustes()) {
+  <fieldset>
+    <legend>Moneda</legend>
+    <div class="fila">
+      <ng-container *ngTemplateOutlet="selector; context: { $implicit: moneda }" />
+      <div class="campo">
+        <label for="monedaFija">Moneda de todas las filas (opcional)</label>
+        <select id="monedaFija" [formControl]="grupo().controls.monedaFija">
+          <option [ngValue]="null">Sin moneda fija</option>
+          @for (m of monedas; track m.valor) {
+            <option [ngValue]="m.valor">{{ m.etiqueta }}</option>
+          }
+        </select>
+      </div>
+    </div>
+    <p class="ayuda" id="moneda-ayuda">
+      Si la lista tiene una columna con la moneda de cada fila, elegila arriba. Si no la tiene, elegí una moneda para
+      todas las filas. Se usa una o la otra, no las dos.
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>{{ iva.leyenda }}</legend>
+    <div class="fila">
+      @for (s of iva.selectores; track s.control) {
+        <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+      }
+    </div>
+    @if (ivaIncompleto()) {
+      <p id="iva-par-error" class="campo-error">
+        Elegí las dos columnas: el precio sin IVA y el precio con IVA, o ninguna de las dos.
+      </p>
     }
-  </div>
-  <p class="ayuda" id="otros-ayuda">
-    El código de barras, la unidad y el rubro se cargan solo en los artículos nuevos: los que ya existen no cambian.
-    Si el rubro de una fila no existe, el artículo entra en el rubro elegido para los nuevos.
-  </p>
-</fieldset>
+    <p class="ayuda" id="iva-ayuda">
+      Si la lista trae el % de IVA, se toma tal cual (tiene que ser 0, 2,5, 5, 10,5, 21 o 27). Si trae el precio sin IVA
+      y el precio con IVA, el sistema calcula la alícuota más cercana; las dos columnas tienen que estar en la misma
+      base. El precio sin IVA solo sirve para calcular el IVA: el costo sale de la columna del costo.
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>{{ ajustes.leyenda }}</legend>
+    <div class="fila">
+      @for (s of ajustes.selectores; track s.control) {
+        <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+      }
+    </div>
+    <p class="ayuda" id="ajustes-ayuda">
+      El número lleva signo: negativo es descuento (−5 es un descuento del 5 %) y positivo es recargo (+3 es un recargo
+      del 3 %). Se aplican en orden, uno sobre otro, después de las bonificaciones del proveedor. Si la columna está
+      elegida y la celda de un artículo viene vacía, se le borra ese descuento o recargo; si no elegís la columna, se
+      conservan los que ya tiene.
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>{{ otros.leyenda }}</legend>
+    <div class="fila">
+      @for (s of otros.selectores; track s.control) {
+        <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+      }
+    </div>
+    <p class="ayuda" id="otros-ayuda">
+      El código de barras, la unidad y el rubro se cargan solo en los artículos nuevos: los que ya existen no cambian.
+      Si el rubro de una fila no existe, el artículo entra en el rubro elegido para los nuevos.
+    </p>
+  </fieldset>
+}
+
+@if (hojaAbierta(); as s) {
+  <app-hoja-inferior
+    [titulo]="s.etiqueta"
+    subtitulo="Tocá la columna donde está. Se muestran las primeras filas de datos."
+    (cerrar)="cerrarHoja()"
+  >
+    <div role="radiogroup" class="opciones-columna" [attr.aria-label]="s.etiqueta">
+      @if (!esObligatorio(s.control)) {
+        <button
+          type="button"
+          role="radio"
+          class="accion-hoja opcion-columna opcion-columna-ninguna"
+          [attr.aria-checked]="control(s.control).value === null"
+          (click)="elegirColumna(s, null)"
+        >
+          <span class="opcion-columna-texto"><b>No usar esta columna</b></span>
+          @if (control(s.control).value === null) {
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m5 12 5 5 9-10" />
+            </svg>
+          }
+        </button>
+      }
+      @for (o of opciones(); track o.indice) {
+        <button
+          type="button"
+          role="radio"
+          class="accion-hoja opcion-columna"
+          [attr.aria-checked]="control(s.control).value === o.indice"
+          (click)="elegirColumna(s, o.indice)"
+        >
+          <span class="opcion-columna-letra">{{ letra(o.indice) }}</span>
+          <span class="opcion-columna-texto">
+            <b>{{ o.encabezado || 'Columna ' + letra(o.indice) }}</b>
+            @if (o.ejemplos?.length) {
+              <small>{{ o.ejemplos!.join(' · ') }}</small>
+            }
+          </span>
+          @if (control(s.control).value === o.indice) {
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m5 12 5 5 9-10" />
+            </svg>
+          }
+        </button>
+      }
+    </div>
+  </app-hoja-inferior>
+}

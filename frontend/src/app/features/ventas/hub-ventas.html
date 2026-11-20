@@ -1,0 +1,18 @@
+<h1 class="titulo-hub">Ventas</h1>
+<ul class="grupo-hub">
+  @for (fila of filas(); track fila.ruta) {
+    <li>
+      <a class="fila-hub" [routerLink]="fila.ruta">
+        <span class="icono-hub"><app-icono-menu [nombre]="fila.icono" /></span>
+        <span>
+          <b>{{ fila.rotulo }}</b>
+          <small>{{ fila.aclaracion }}</small>
+        </span>
+        @if (fila.ruta === '/ventas' && paraRevisar() > 0) {
+          <span class="pastilla-hub" [attr.aria-label]="avisoDeFacturas(paraRevisar())">{{ paraRevisar() }}</span>
+        }
+        <svg class="chevron-hub" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+      </a>
+    </li>
+  }
+</ul>

@@ -67,7 +67,8 @@
         </div>
       </fieldset>
 
-      <div class="acciones-form">
+      <!-- En el celular «Guardar» queda fijo abajo, sobre la barra de destinos (S7). -->
+      <div class="acciones-form" [class.ficha-pie]="celular" [class.en-pagina]="celular">
         <button type="submit" [disabled]="guardando()">Guardar</button>
       </div>
     </form>

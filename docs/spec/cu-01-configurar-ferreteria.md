@@ -24,3 +24,12 @@
    - Alternativo: **sin facturación** (decidido por Luca el 2026-10-28, D5 del plan de facturación). Mientras la ferretería no puede facturar, la venta facturable se cobra igual y queda «sin factura»: no nace registro fiscal y la respuesta de la venta es la de siempre, sin el campo `fiscal` (CU-07 paso 5). Esa venta **nunca entra en la cola de reintentos**: no se factura sola cuando la facturación se destraba. La cola es solo para cuando ARCA está caída o no responde a tiempo (ver Integración ARCA → Contingencias). Hoy no puede facturar la ferretería con ARCA sin configurar o sin la facturación habilitada (paso 2); el certificado vencido o inválido y la credencial bloqueada se suman con el certificado y la conexión real (ramas 5 y 6 del plan de facturación), igual que el certificado que rechaza ARCA. El aviso de facturación bloqueada en el mostrador llega con la rama 7.
 <!-- fin payload: spec.md:41-61 -->
 
+**Agregado móvil: Configuración** (≤639.98 px, solo Dueño).
+Datos de la ferretería separa Emisor y Local, con «Guardar» fijo al pie; Consumidor Final
+conserva su formulario con «Guardar» sobre la barra de destinos. Formas de pago tiene «Nuevo» flotante
+y fichas a pantalla completa con «Agregar» o «Guardar cambios» al pie.
+Facturación agrupa los datos en tarjetas; el certificado se abre a pantalla completa en tres pasos
+(generar, ver el pedido, subir el certificado), con la acción de cada paso al pie.
+No cambian reglas de negocio, roles ni mensajes de validación; las ayudas de Formas de pago se adaptan al celular.
+Pendiente (L9): «Cancelar» y «Volver» en Emisor usan `Location.back()`; con acceso directo «no hay a dónde volver».
+

@@ -1,5 +1,6 @@
 import { Component, ElementRef, afterNextRender, effect, input, output, signal, viewChild } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
+import { esCelular } from '../../shared/es-celular';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
   CLIENTE_MAXIMO,
@@ -24,14 +25,28 @@ const MENSAJE_VALIDEZ = `La validez va de 1 a ${DIAS_VALIDEZ_MAXIMOS} días.`;
     <div class="dialogo-fondo">
       <div
         class="dialogo presupuesto"
+        [class.presupuesto-celular]="celular"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-presupuesto-titulo"
         appTrampaFoco
         (keydown)="alTeclear($event)"
       >
+        @if (celular) {
+          <!-- movil-sectores T10: en el celular es una pantalla completa: la flecha «Volver» arriba (hace de «Cancelar») y la acción fija abajo. -->
+          <div class="ficha-barra">
+            <button type="button" class="ficha-volver" aria-label="Volver" (click)="cancelar.emit()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
+            <h2 id="dialogo-presupuesto-titulo">Guardar presupuesto</h2>
+          </div>
+        }
         <div class="cabecera">
-          <h2 id="dialogo-presupuesto-titulo">Guardar presupuesto</h2>
+          @if (!celular) {
+            <h2 id="dialogo-presupuesto-titulo">Guardar presupuesto</h2>
+          }
           <p class="resumen">
             @if (renglones(); as n) {
               {{ n }} {{ n === 1 ? 'renglón' : 'renglones' }} ·
@@ -88,7 +103,7 @@ const MENSAJE_VALIDEZ = `La validez va de 1 a ${DIAS_VALIDEZ_MAXIMOS} días.`;
         @if (error(); as mensaje) {
           <p id="dialogo-presupuesto-error" class="error" role="alert">{{ mensaje }}</p>
         }
-        <div class="dialogo-acciones">
+        <div class="dialogo-acciones" [class.ficha-pie]="celular">
           <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
             Cancelar
           </button>
@@ -165,6 +180,13 @@ export class DialogoPresupuesto {
   readonly cancelar = output<void>();
   /** Un escaneo llegó con el diálogo abierto: se ignora y el contenedor avisa. */
   readonly escaneoDescartado = output<void>();
+
+  /**
+   * En el celular es una pantalla completa (movil-sectores T10); en el escritorio y la tablet, el diálogo centrado de
+   * siempre. Se lee al abrir: no sigue la rotación, como el cobro y el selector de cliente. Es sólo cómo se ve: el estado, la
+   * validación y lo que se confirma son los mismos.
+   */
+  protected readonly celular = esCelular();
 
   protected readonly clienteMaximo = CLIENTE_MAXIMO;
   protected readonly observacionesMaximo = OBSERVACIONES_MAXIMO;

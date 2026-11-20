@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,6 +8,7 @@ import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
+import { esCelular } from '../../shared/es-celular';
 import { ImporteInput } from '../../shared/importe-input';
 import { MotivoDeAccion, Motivos, ariaDe } from '../../shared/motivo-de-accion';
 import { SelectorArchivo } from '../../shared/selector-archivo';
@@ -34,12 +35,16 @@ const MENSAJE_BUSQUEDA = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_VISTA_PREVIA = 'No se pudo armar la vista previa. Probá de nuevo.';
 const MENSAJE_LEER_FACTURA = 'No se pudo leer la factura. Probá de nuevo o cargá la compra a mano.';
 const MENSAJE_SIN_ARTICULO = 'Resolvé los renglones sin artículo.';
+const MOTIVO_SIN_COMPROBANTE = 'Completá el comprobante para ver la vista previa.';
+const MOTIVO_SIN_RENGLONES = 'Agregá al menos un artículo.';
 const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la factura.';
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
 /** Lo que valida el backend: hasta 5 recargos del costo por compra. */
 const MAXIMO_RECARGOS = 5;
 /** S5: lo que se explica al intentar agregar un recargo con la lista llena. */
 const MOTIVO_TOPE_RECARGOS = `Ya cargaste el máximo de recargos (${MAXIMO_RECARGOS}).`;
+
+type PasoDeCompra = 'comprobante' | 'articulos' | 'recargos';
 
 /** Un renglón mientras se carga: la cantidad y el costo son el texto de los campos. */
 interface RenglonEnCarga {
@@ -88,6 +93,7 @@ interface LecturaDeFactura {
   imports: [BarraAcciones, DecimalPipe, CampoMoneda, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
+  host: { '(window:resize)': 'ajustarPresentacion()' },
 })
 export class NuevaCompra implements OnInit {
   protected readonly cantidadConUnidad = cantidadConUnidad;
@@ -97,6 +103,9 @@ export class NuevaCompra implements OnInit {
   private readonly proveedoresApi = inject(ProveedoresService);
   private readonly generarClave = inject(GENERAR_CLAVE);
   protected readonly auth = inject(AuthService);
+
+  protected readonly celular = signal(esCelular());
+  protected readonly pasosAbiertos = signal<ReadonlySet<PasoDeCompra>>(new Set(['comprobante']));
 
   protected readonly tipos = TIPOS_COMPRA;
   protected readonly etiqueta = ETIQUETA_TIPO_COMPRA;
@@ -134,6 +143,14 @@ export class NuevaCompra implements OnInit {
   }));
   /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
   protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /**
+   * «Ver vista previa» en el celular (S5): apagado con su motivo hasta que el comprobante está completo y hay artículos
+   * resueltos. Sólo adelanta lo que `pedido()` pide igual: en escritorio el botón sigue prendido y valida al tocarlo.
+   */
+  protected readonly motivosPrevia = computed<Motivos<'vistaPrevia'>>(() => ({
+    vistaPrevia: this.celular() ? this.motivoDeLaPrevia() : null,
+  }));
+  protected readonly motivoPrevia = new MotivoDeAccion(() => this.motivosPrevia());
   /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
   protected readonly ariaDe = ariaDe;
 
@@ -153,11 +170,21 @@ export class NuevaCompra implements OnInit {
       : `No encontramos un proveedor con el CUIT ${cuits.join(', ')}. Elegilo de la lista.`;
   });
   private readonly proveedorSelect = viewChild<ElementRef<HTMLSelectElement>>('proveedorSelect');
+  private readonly injector = inject(Injector);
+  private readonly cabeceraComprobante = viewChild<ElementRef<HTMLButtonElement>>('cabeceraComprobante');
+  private readonly tituloPrevia = viewChild<ElementRef<HTMLElement>>('tituloPrevia');
+  private readonly mensajeError = viewChild<ElementRef<HTMLElement>>('mensajeError');
+  private readonly mensajeRecargos = viewChild<ElementRef<HTMLElement>>('mensajeRecargos');
+  private readonly mensajeExito = viewChild<ElementRef<HTMLElement>>('mensajeExito');
   protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
   /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
   protected readonly resolviendo = signal<RenglonSinArticulo | null>(null);
 
   protected readonly plan = signal<PlanCompra | null>(null);
+  private readonly renglonesAbiertos = signal<{ plan: PlanCompra | null; ids: ReadonlySet<number> }>({
+    plan: null,
+    ids: new Set(),
+  });
   protected readonly trabajando = signal(false);
   protected readonly errores = signal<string[]>([]);
   protected readonly aviso = signal<string | null>(null);
@@ -168,12 +195,70 @@ export class NuevaCompra implements OnInit {
   /** Sube con cada edición: una vista previa pedida antes de la última edición ya no describe lo que se ve. */
   private version = 0;
 
+  constructor() {
+    afterRenderEffect(() => {
+      if (!this.celular()) return;
+      const mensaje = this.mensajeError() ?? this.mensajeRecargos() ?? this.mensajeExito();
+      const destino = (mensaje ?? this.tituloPrevia())?.nativeElement;
+      // El pie fijo puede cubrir un aviso aunque el navegador lo considere dentro del viewport.
+      destino?.scrollIntoView?.({ block: mensaje ? 'center' : 'start' });
+      destino?.focus({ preventScroll: true });
+    });
+  }
+
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
     this.proveedoresApi.listar().subscribe({
       next: (lista) => this.proveedores.set(lista),
       error: () => this.errores.set([MENSAJE_PROVEEDORES]),
     });
+  }
+
+  protected ajustarPresentacion(): void {
+    this.celular.set(esCelular());
+  }
+
+  /** Abierta por el usuario, o porque su error del servidor sólo se muestra ahí adentro (el de los recargos). */
+  protected pasoAbierto(paso: PasoDeCompra): boolean {
+    return this.pasosAbiertos().has(paso) || (paso === 'recargos' && this.errorRecargos() !== null);
+  }
+
+  protected alternarPaso(paso: PasoDeCompra): void {
+    this.pasosAbiertos.update((abiertos) => {
+      const siguientes = new Set(abiertos);
+      if (siguientes.has(paso)) siguientes.delete(paso);
+      else siguientes.add(paso);
+      return siguientes;
+    });
+  }
+
+  protected comprobante(): string {
+    return `${this.etiqueta[this.tipo()]} ${this.puntoVenta().trim().padStart(5, '0')}-${this.numero().trim().padStart(8, '0')}`;
+  }
+
+  protected renglonPreviaAbierto(articuloId: number): boolean {
+    const { plan, ids } = this.renglonesAbiertos();
+    return plan === this.plan() && ids.has(articuloId);
+  }
+
+  protected alternarRenglonPrevia(articuloId: number): void {
+    const plan = this.plan();
+    if (!plan) return;
+    this.renglonesAbiertos.update((abiertos) => {
+      const ids = new Set(abiertos.plan === plan ? abiertos.ids : undefined);
+      if (ids.has(articuloId)) ids.delete(articuloId);
+      else ids.add(articuloId);
+      return { plan, ids };
+    });
+  }
+
+  protected volverDeLaPrevia(): void {
+    this.descartarVistaPrevia();
+    afterNextRender(() => {
+      const cabecera = this.cabeceraComprobante()?.nativeElement;
+      cabecera?.scrollIntoView?.({ block: 'start' });
+      cabecera?.focus({ preventScroll: true });
+    }, { injector: this.injector });
   }
 
   protected cambiar<T>(campo: { set(valor: T): void }, valor: T): void {
@@ -426,7 +511,17 @@ export class NuevaCompra implements OnInit {
     this.descartarVistaPrevia();
   }
 
+  private motivoDeLaPrevia(): string | null {
+    const comprobanteCompleto =
+      this.proveedorId() !== '' && entero(this.puntoVenta()) !== null && entero(this.numero()) !== null && this.fecha() !== '';
+    if (!comprobanteCompleto) return MOTIVO_SIN_COMPROBANTE;
+    if (this.sinArticulo().length > 0) return MENSAJE_SIN_ARTICULO;
+    return this.renglones().length === 0 ? MOTIVO_SIN_RENGLONES : null;
+  }
+
   protected verVistaPrevia(): void {
+    // S5: apagado, el botón explica por qué en vez de validar a ciegas.
+    if (this.motivoPrevia.mostrar('vistaPrevia')) return;
     const pedido = this.pedido();
     if (!pedido || this.trabajando()) return;
     this.trabajando.set(true);

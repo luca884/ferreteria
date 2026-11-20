@@ -11,7 +11,7 @@ import { AvisosALaVista } from '../shared/avisos-a-la-vista';
 import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
-import { MOSTRADOR, OpcionMenu, Seccion, gruposPara, seccionDe } from './menu';
+import { HUB_VENTAS, MOSTRADOR, OpcionMenu, Seccion, gruposPara, seccionDe } from './menu';
 
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
@@ -20,7 +20,7 @@ export const INTERVALO_COTIZACION_MS = 5 * 60_000;
  * Los destinos de la barra inferior del celular, en orden (móvil-pulgar, T1): las pantallas del día, siempre a un pulgar
  * de distancia. «Más» no está acá: es el botón que abre el cajón con el resto del menú.
  */
-const DESTINOS_AL_PULGAR = ['/mostrador', '/ventas', '/articulos'] as const;
+const DESTINOS_AL_PULGAR = ['/mostrador', HUB_VENTAS.ruta, '/articulos'] as const;
 
 /** «Juan Pérez» → «JP», «ana» → «A». */
 export function iniciales(nombre: string): string {
@@ -76,19 +76,25 @@ export class Shell {
   protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
   /**
    * Los destinos de la barra inferior del celular (móvil-pulgar, T1), sacados del mismo menú que se renderiza y
-   * filtrados por el rol: si el rol no puede abrir una pantalla (el Vendedor y «Ventas»), la barra no la ofrece, así no
-   * queda un enlace que rebota. Al super admin no le toca ninguna: el panel no es de una ferretería y la barra solo le
+   * filtrados por el rol: si el rol no puede abrir una pantalla, la barra no la ofrece, así no queda un enlace que
+   * rebota. «Ventas» es el hub (`HUB_VENTAS`, movil-sectores T2), que tienen los dos roles y lista sólo lo que cada uno
+   * puede abrir; el Vendedor no tiene la consulta de ventas, y por eso la barra nunca apunta a `/ventas`. Al super admin no le toca ninguna: el panel no es de una ferretería y la barra solo le
    * deja «Más» para abrir el menú.
    */
   protected readonly destinos = computed<readonly OpcionMenu[]>(() => {
     if (this.auth.esSuperAdmin()) return [];
-    const opciones = [MOSTRADOR, ...this.grupos().flatMap((grupo) => grupo.opciones)];
+    const opciones = [MOSTRADOR, HUB_VENTAS, ...this.grupos().flatMap((grupo) => grupo.opciones)];
     return DESTINOS_AL_PULGAR.map((ruta) => opciones.find((opcion) => opcion.ruta === ruta)).filter(
       (opcion): opcion is OpcionMenu => !!opcion,
     );
   });
   private readonly url = signal(this.router.url);
   protected readonly seccion = computed(() => seccionDe(this.url()));
+  /** El destino de la barra de la pantalla abierta: el de su sección, así «Ventas» queda marcado en Caja o en Clientes. */
+  protected esDestinoActual(destino: OpcionMenu): boolean {
+    const seccion = this.seccion();
+    return seccion !== null && seccion === seccionDe(destino.ruta);
+  }
   private readonly abiertos = signal<ReadonlySet<Seccion>>(new Set());
 
   /** El cajón del menú (por debajo de 1024 px). Arranca cerrado y el corte lo resuelve el CSS. */

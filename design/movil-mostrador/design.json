@@ -1,0 +1,55 @@
+{
+  "title": "Móvil · Mostrador",
+  "brief": "Mostrador en el celular (barra al pulgar): buscar y armar el ticket, renglón, descuento, cliente, cobro (medios, recargo, vuelto, mixto, cuenta corriente, factura con ARCA), presupuesto y remito. Sólo visual; reglas y textos de hoy.",
+  "artboards": [
+    {
+      "file": "01-vender-buscar-y-armar-el-ticket.html",
+      "title": "Vender: buscar y armar el ticket",
+      "tradeoff": "Buscador fijo arriba y TOTAL con «Cobrar» fijo abajo, al alcance del pulgar",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "02-renglon-cantidad-y-descuento.html",
+      "title": "Renglón: cantidad, descuento y quitar",
+      "tradeoff": "Tocar el renglón abre una hoja con las tres acciones; el descuento valida con los mensajes de hoy",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "03-mas-acciones-descuento-total-y-vaciar.html",
+      "title": "Más acciones: descuento total y vaciar",
+      "tradeoff": "Las acciones de ticket completo en una hoja; apagadas con su motivo a la vista",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "04-cliente.html",
+      "title": "Cliente: elegir, crear y quitar",
+      "tradeoff": "Pantalla de búsqueda con alta rápida; el error de Consumidor Final lleva directo a elegir cliente",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "05-cobrar-efectivo-y-facturar.html",
+      "title": "Cobrar: medio, recargo, vuelto y factura",
+      "tradeoff": "Cobro a pantalla completa con TOTAL grande arriba y las dos salidas (con o sin factura) fijas abajo",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "06-cobrar-mixto-y-cuenta-corriente.html",
+      "title": "Cobrar: pago mixto y cuenta corriente",
+      "tradeoff": "Una fila por medio con lo que falta sugerido; la cuenta corriente muestra el límite según el rol",
+      "width": 1300,
+      "height": 1010
+    },
+    {
+      "file": "07-presupuesto-y-remito.html",
+      "title": "Presupuesto y remito desde el mostrador",
+      "tradeoff": "Dos formularios cortos en pantalla completa, con el resumen del ticket arriba",
+      "width": 1300,
+      "height": 1010
+    }
+  ]
+}
