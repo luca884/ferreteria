@@ -5256,14 +5256,12 @@ app-cuenta-cliente .acciones-cuenta {
     min-height: var(--alto-tactil);
     padding: 0 var(--e-3);
   }
-  /* El estado a la vista: chips de 44 px, en una fila que se desliza si no entran. */
+  /* El estado a la vista: chips de 44 px que bajan a una segunda fila si no entran (ninguno queda fuera de pantalla). */
   :is(app-presupuestos, app-remitos) .chips-estado {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--e-2);
-    margin: 0 calc(-1 * var(--pantalla-x)) var(--e-3);
-    padding: 0 var(--pantalla-x) 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    margin: 0 0 var(--e-3);
   }
   :is(app-presupuestos, app-remitos) .chip-estado {
     display: inline-flex;
