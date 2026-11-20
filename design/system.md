@@ -110,24 +110,32 @@ Fuente: `frontend/src/styles.css`.
 - Densidad: `--alto-control` **36px**, `--celda-y` 10px, `--celda-x` 12px.
 
 **Nota de móvil**: `--alto-control` 36px y las celdas de 10px son densidad de escritorio.
-En pantalla táctil el objetivo es ~44×44 px, así que el móvil necesita su propia densidad
-en vez de heredar estos valores.
+En móvil `--alto-tactil` vale **44px** en `:root`; el objetivo táctil es 44×44 px.
 
 ## Móvil (≤ 639.98px)
 
-Fuente: `frontend/src/styles.css` (bloques `@media screen and (max-width: 639.98px)`, T1-T8 de
-`odd/tasks/movil-pulgar.md`). Es lo que ya está implementado; las reglas de diseño nuevas de la
-dirección A (barra al pulgar) se marcan *propuesta* hasta que se implementan.
+Fuente: `frontend/src/styles.css` y los componentes de `frontend/src/app/` (`movil-pulgar` y
+`movil-sectores`). Los patrones de abajo están implementados hasta 639.98px. El helper
+`shared/es-celular.ts` usa el mismo corte para elegir el marcado cuando hace falta.
 
 - **Objetivo táctil**: botones y controles `min-height` **44px**; casillas y radios dibujados a
   20px dentro de una etiqueta de 44px; el número que abre una ficha en una tabla mide 44×44.
 - **Paginador** (`.paginas`): una sola línea, botones de 44px de alto.
 - **Fila apilada** (`tabla-tarjetas` + `data-etiqueta`): cada fila de tabla pasa a tarjeta con la
   etiqueta de cada dato.
-- **Barra inferior** (T1): 4 destinos — Mostrador, Ventas, Artículos, Más (abre el cajón).
-- **Propuesta (dirección A)**: filas de lista de 56-64px con el importe a la derecha en mono
-  tabular; botón primario flotante «Nuevo» a 56px; filtros detrás de un botón «Filtros» con
-  cuenta; ficha y formularios a pantalla completa con la acción principal fija abajo.
+- **Barra inferior**: 4 destinos para ambos roles — Mostrador, Ventas, Artículos y Más.
+  Ventas abre el hub `/area-ventas` con las opciones del menú filtradas por rol; Más abre
+  el cajón. `/ventas` sigue siendo la consulta de ventas del Dueño.
+- **Alta** (`.boton-flotante`): botón «Nuevo» de 56px de alto, a la derecha, sobre la barra
+  de destinos (por ejemplo, en Artículos, Clientes y Proveedores según el rol).
+- **Pantalla completa**: las altas, fichas y formularios largos que cambian en el celular
+  llevan la acción principal abajo (`.ficha-pie`). En un formulario que sigue dentro de la
+  página, `.ficha-pie.en-pagina` fija la acción sobre la barra de destinos.
+- **Hoja inferior**: acciones de un renglón o del ticket (⋯); también se usa para filtros
+  de listas como Compras y Ventas. No todos los filtros llevan contador.
+- **Tarjetas plegables**: Nueva compra separa Comprobante, Artículos y Recargos sin
+  desmontar los campos al plegarlos. En la vista previa, el botón de renglón `.acc-b`
+  despliega el detalle de costo, precio y stock; pueden quedar varios abiertos.
 
 ## Componentes observados
 
@@ -142,16 +150,20 @@ Fuente: los templates de `frontend/src/app/` y `frontend/src/styles.css`.
   `exito`, `error`, `advertencia`.
 - **Diálogo** (`shared/dialogo-detalle.*`): overlay con `--velo` y `--sombra-3`, cierra con
   Esc y con ✕, trampa de foco y foco inicial.
-- **Motivo de acción** (`shared/motivo-de-accion.ts`): un botón apagado por regla de
-  negocio lleva `aria-disabled="true"` (no `disabled`) + `aria-describedby` a un texto con
-  `role="status"`; el clic explica el motivo en vez de ejecutar.
+- **Hoja inferior** (`shared/hoja-inferior.ts`): diálogo con velo, asa y título; toma el
+  foco al abrir, lo retiene y cierra con Esc o al tocar el velo.
+- **Detalle a pantalla completa** (`shared/detalle-pantalla.ts`): barra con «Volver», cuerpo
+  con scroll propio y acciones al pie cuando las hay; el foco inicial va a «Volver» y Esc cierra.
+- **Motivo de acción** (`shared/motivo-de-accion.ts`): en los botones que usan este patrón,
+  `aria-disabled="true"` (no `disabled`) permite explicar por qué están apagados en vez de
+  ejecutar la acción. El control se vincula al mensaje con `aria-describedby`.
 - **Botón primario**: fondo `--acento`, texto `--acento-texto`, borde `--acento-fuerte`;
   secundario: fondo `--superficie` con borde `--borde-fuerte`.
 
 ## Huecos conocidos del sistema
 
-- No hay tokens con nombre para la densidad móvil: los 44px viven dentro de la regla `@media`,
-  no en `:root` (los artboards los declaran como `--alto-tactil`).
-- La barra de acciones se desliza horizontalmente sin indicación en pantalla angosta; el menú
-  lateral es un cajón (la barra inferior de T1 lo reusa para «Más»).
-- Quedan sin patrón de fila apilada: reportes, actualización masiva e importaciones.
+- La barra de acciones que se conserva en algunas pantallas se desliza horizontalmente
+  sin indicación en pantalla angosta.
+- El mínimo táctil y el motivo de apagado son el objetivo del patrón, no una garantía de
+  toda la app: quedan controles heredados por debajo del mínimo y botones de acciones
+  de la cuenta corriente que se apagan sin motivo visible.

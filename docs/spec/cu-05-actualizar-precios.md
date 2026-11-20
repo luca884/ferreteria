@@ -10,3 +10,9 @@
 3. Ve la vista previa y confirma. El resultado se muestra en un **pop-up**, no apilado abajo del formulario: el resumen («Se actualizaron N artículos») y el detalle de qué cambió en cada artículo, con código, descripción y precio anterior → precio nuevo, hasta 1.000 filas (si hay más, el pop-up avisa que muestra solo las primeras). «Cerrar» o Esc lo cierran y el foco vuelve al botón que genera la vista previa.
 <!-- fin payload: spec.md:92-98 -->
 
+**Agregado móvil: actualización masiva** (≤639.98 px, solo Dueño).
+El formulario apila filtros y cambio; «Operación» abre una hoja inferior y «Ver vista previa» queda fijo al pie.
+La previa muestra una tarjeta por artículo. El resultado «Antes → ahora» ocupa la pantalla completa.
+No cambian las reglas de negocio, el rol, los límites ni los avisos y motivos de validación.
+Pendientes (L54): «no hay pantalla de previa aparte ni botón “Cambiar”»; la confirmación «queda en línea, sin velo», y «Artículos que no se van a actualizar» arranca plegado.
+

@@ -18,3 +18,9 @@
 5. **API.** `GET /api/reportes/ventas/{resumen, por-usuario, por-medio-pago, por-periodo, por-articulo, por-rubro, con-descuento}` con `desde` y `hasta` (ISO; sin fechas, hoy; falta una, se usa la otra) y `agrupar=DIA|MES` en `por-periodo`. El Vendedor recibe 403. «Hasta» antes de «Desde» es 400 «La fecha «Hasta» no puede ser anterior a «Desde».» y más de 366 días, 400 «El reporte admite hasta 366 días.». Otra ferretería no ve ni suma estas ventas.
 <!-- fin payload: spec.md:308-322 -->
 
+**Agregado móvil: Reportes** (≤639.98 px, solo Dueño).
+Desde el hub Ventas, «Reporte» abre una hoja inferior para elegir el tipo; la consulta se hace con «Ver» en el formulario.
+Los resultados se ven como renglones de resumen y tarjetas, con «Imprimir» en la barra de acciones cuando corresponde.
+No cambian las reglas de negocio, los roles, los cálculos ni los mensajes.
+Pendientes (L37): «No hay “Volver” en Reportes» y «Agrupar por» y «Tipo» siguen siendo «select nativos».
+

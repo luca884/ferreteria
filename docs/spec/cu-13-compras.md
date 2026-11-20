@@ -45,3 +45,14 @@
 > **Fuera del tramo 1:** el pago de la compra (efectivo, cheque, cuenta corriente, G36), la cuenta corriente y el pago a proveedores (G39, G40), la anulación de una compra, la devolución al proveedor (G37), el cálculo del costo desde la lista menos 3 bonificaciones en el renglón (G86), el IVA y el total de la factura, el alta rápida de un artículo desde la compra (G94), la fecha de última compra (G19) y el libro IVA Compras (G87). El precio manual y los ajustes sobre el precio final son una feature aparte, posterior (2026-10-21, Luca).
 <!-- fin payload: spec.md:257-298 -->
 
+**Agregado móvil: Compras y Proveedores** (≤639.98 px).
+Proveedores muestra tarjetas; el Dueño tiene «Nuevo» flotante, ficha a pantalla completa con «Guardar cambios» al pie al editar
+y baja o reactivación en la hoja del ⋯. El Vendedor conserva la lista de solo lectura, sin ficha ni «Nuevo».
+Compras muestra tarjetas y una hoja de filtros; el detalle es de pantalla completa con renglones plegables. «Nueva compra» sigue en la barra.
+Nueva compra pliega Comprobante, Artículos y Recargos y fija «Ver vista previa» al pie. La previa es una pantalla aparte:
+los renglones desplegables muestran costo, precio y stock, y «Volver» y «Confirmar compra» quedan fijos al pie.
+No cambian las reglas de negocio, los roles, los textos de validación ni la escritura de stock y costos.
+Pendientes: la baja tiene botones «lado a lado» y «Lista de precios» no es tarjeta aparte (L62); el paginador «queda arriba de la lista» (L64).
+«Ver vista previa» sigue habilitado con datos incompletos; no hay «Elegir PDF» ni grilla de campos (L67), ni «escáner por cámara» (L69).
+En la previa «Volver» está «sólo en el pie», la advertencia va «dentro del detalle» y no hay «indicador de progreso» (L71).
+

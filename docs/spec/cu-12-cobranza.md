@@ -52,3 +52,10 @@
     - **Concurrencia.** El ajuste toma al cliente con lock antes de cualquier lectura, después el numerador de ajustes y recién entonces las partidas y créditos del cliente: el mismo prefijo que la venta, la cobranza y la anulación (sin la caja), así que no hay deadlock por orden de locks. La lectura actual del crédito (sobre `ix_imputacion_cliente`, como la de lo imputado en la cobranza desde el tramo 3a) deja en REPEATABLE READ un gap residual que llega al cliente siguiente: dos clientes vecinos de la misma ferretería pueden chocar y InnoDB elige una víctima, que la venta, la cobranza y el ajuste reintentan solos. Ningún pedido falla por eso y la cuenta siempre cierra.
 <!-- fin payload: spec.md:209-257 -->
 
+**Agregado móvil: cuenta corriente y cobranza** (≤639.98 px, solo Dueño).
+«Cobrar», «Recargo» y «Descuento» están debajo del saldo; los movimientos son tarjetas de la misma página.
+Cobrar, ajustar y anular recibo abren a pantalla completa con la acción principal al pie; la imputación se apila en filas.
+No cambian las reglas de negocio, la imputación, los roles ni los mensajes de validación.
+Pendientes: los botones de la cuenta pueden quedar «apagados sin motivo escrito» (L39); «Anular» sigue en cada tarjeta, no en un ⋯,
+y en la confirmación de recibo «Cancelar» y «Anular recibo» van «lado a lado» (L41).
+

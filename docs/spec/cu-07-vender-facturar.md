@@ -47,3 +47,13 @@
    - **Imprimir el remito** (cu-07-remito-presupuesto-imprimible). El detalle de `Remitos` tiene «Imprimir» para el Vendedor y el Dueño, en cualquier estado, con la misma hoja no fiscal del presupuesto (letra **X**, «DOCUMENTO NO VALIDO COMO FACTURA», sin CAE ni QR, emisor con los datos actuales de la ferretería vía `GET /api/emisor`) pero con «Remito N.º n» y sin «Válido hasta». El remito **facturado** dice cuál venta lo facturó: `GET /api/remitos/{id}` trae `facturadoPor` (`ventaId`, `numero` y, solo si esa venta tiene una factura válida, `factura`: «Factura B 00001-00000012»), y el detalle y la hoja dicen «Facturado en la venta N.º n» y, con factura, «· Factura B 00001-00000012». Un remito emitido o anulado no trae `facturadoPor`, y el listado tampoco. La leyenda y si un remito sin CAI sirve para acompañar la mercadería son **provisorios**: los confirma el contador antes de cerrar la rama.
 <!-- fin payload: spec.md:105-147 -->
 
+**Agregado móvil: Mostrador, Presupuestos y Remitos** (≤639.98 px).
+En el ticket, TOTAL y «Cobrar» quedan fijos sobre la barra de destinos; las acciones de un renglón
+y «Más acciones del ticket» van en hojas inferiores. Cantidad abre una segunda hoja; Descuento y Quitar conservan sus diálogos.
+Cliente, cobro (también mixto, cuenta corriente y ARCA), presupuesto y remito abren a pantalla completa con su acción al pie.
+Desde el hub Ventas, Presupuestos y Remitos muestran tarjetas, chips y una hoja de filtros; el detalle fija «Imprimir»
+y «Pasar a venta» cuando corresponde, con cambios de estado o anulación en la hoja del ⋯ según permisos.
+No cambian las reglas de negocio, los roles ni los textos de cobro, emisión o validación.
+Pendientes: el orden de Tab «sigue el DOM» aunque el cobro cambie el orden visual (L27, L29); no están los subtextos «No toca stock ni caja» ni «Descuenta el stock ahora» (L31).
+Los chips «se desplazan en horizontal» sin pista visual y la lista y los filtros pueden desaparecer al girar hasta recargar (L43).
+
