@@ -9,7 +9,8 @@ import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { ArticulosService } from '../articulos/articulos.service';
 import { ProveedoresService } from '../proveedores/proveedores.service';
-import { BorradorDeFactura, PlanCompra } from './compra.models';
+import { GENERAR_CLAVE } from '../mostrador/ticket.store';
+import { BorradorDeFactura, CompraRegistrada, PlanCompra } from './compra.models';
 import { ComprasService } from './compras.service';
 import { NuevaCompra } from './nueva-compra';
 
@@ -19,6 +20,22 @@ describe('Nueva compra en el celular (T16)', () => {
   let fixture: ComponentFixture<NuevaCompra>;
   const vistaPrevia = vi.fn();
   const leerFactura = vi.fn();
+  const registrar = vi.fn();
+  const pedido = {
+    proveedorId: 4, tipo: 'FA' as const, puntoVenta: 1, numero: 4512, fecha: '2026-11-15',
+    renglones: [{ articuloId: 1, cantidad: 2, costoUnitario: 50 }], recargos: [{ nombre: 'Embalaje', porcentaje: 2 }],
+  };
+  const renglon: PlanCompra['renglones'][number] = {
+    articuloId: 1, codigoInterno: 'TOR-1', descripcion: 'Tornillo', unidad: 'KILO', cantidad: 2,
+    costoAnterior: 25, costoNuevo: 50, costoRealAnterior: 26, costoRealNuevo: 51,
+    precioAnterior: 35, precioNuevo: 65, stockAnterior: 10.5, stockNuevo: 12.5,
+    subtotal: 100, advertencia: 'El costo cambia más de 50 %: revisalo.', alicuotaIva: 21,
+  };
+  const filasPrevia = () => [...q('.vista-previa')!.querySelectorAll<HTMLButtonElement>('.acc-b')];
+  const confirmar = () => q<HTMLButtonElement>('.vista-previa button.primario')!;
+  const totales = () => [...q('.vista-previa')!.querySelectorAll('.totales p')].map((fila) =>
+    [...fila.children].map((celda) => celda.textContent?.trim()),
+  );
   const listar = vi.fn(() => of([{ id: 4, nombre: 'Bulonera Sur', activo: true }]));
   const q = <T extends HTMLElement>(selector: string) =>
     (fixture.nativeElement as HTMLElement).querySelector<T>(selector);
@@ -35,6 +52,7 @@ describe('Nueva compra en el celular (T16)', () => {
     if (celular) simularPantalla(true);
     vistaPrevia.mockReset();
     leerFactura.mockReset();
+    registrar.mockReset();
     listar.mockClear();
     await TestBed.configureTestingModule({
       imports: [NuevaCompra],
@@ -43,7 +61,8 @@ describe('Nueva compra en el celular (T16)', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: AuthService, useValue: { esDueno: () => true } },
         { provide: ArticulosService, useValue: {} },
-        { provide: ComprasService, useValue: { vistaPrevia, leerFactura } },
+        { provide: ComprasService, useValue: { vistaPrevia, leerFactura, registrar } },
+        { provide: GENERAR_CLAVE, useValue: vi.fn().mockReturnValueOnce('clave-1').mockReturnValue('clave-2') },
         { provide: ProveedoresService, useValue: { listar } },
       ],
     }).compileComponents();
@@ -84,7 +103,178 @@ describe('Nueva compra en el celular (T16)', () => {
     expect(leerFactura).toHaveBeenCalledExactlyOnceWith(archivo);
   }
 
+  async function abrirPrevia(conRecargos = true) {
+    await cargarPorPdf();
+    if (!conRecargos) {
+      await tocar(secciones()[2]);
+      await tocar(q<HTMLButtonElement>('button[aria-label="Quitar el recargo 1"]')!);
+    }
+    const plan: PlanCompra = {
+      proveedorNombre: 'Bulonera Sur', moneda: 'ARS', suben: 1, bajan: 1, iguales: 0,
+      renglones: [renglon, { ...renglon, articuloId: 2, codigoInterno: 'TUE-2', descripcion: 'Tuerca', advertencia: null }],
+      recargos: conRecargos ? pedido.recargos : [], neto: 200, recargosImporte: conRecargos ? 4 : 0,
+      subtotalSinIva: conRecargos ? 204 : 200,
+      iva: [{ porcentaje: 10.5, base: 100, importe: 10.5 }, { porcentaje: 21, base: 100, importe: 21 }],
+      total: conRecargos ? 235.5 : 231.5,
+    };
+    vistaPrevia.mockReturnValue(of(plan));
+    await tocar(ver());
+  }
+
   afterEach(() => vi.unstubAllGlobals());
+
+  it('muestra el comprobante, los contadores y cada renglón cerrado, con cantidad y subtotal', async () => {
+    await crear();
+    await abrirPrevia();
+    expect(q('.vista-previa .datos')?.textContent).toContain('Bulonera Sur · Factura A 00001-00004512');
+    expect(q('.vista-previa .datos')?.textContent).toContain('1 sube · 1 baja · 0 iguales');
+    expect(filasPrevia().map((b) => b.getAttribute('aria-expanded'))).toEqual(['false', 'false']);
+    for (const [i, boton] of filasPrevia().entries()) {
+      expect(boton.textContent).toContain(i === 0 ? 'Tornillo' : 'Tuerca');
+      expect(boton.textContent).toContain('2 kilos');
+      expect(boton.textContent).toContain('$\u00a0100,00');
+      expect(q(`#${boton.getAttribute('aria-controls')}`)?.hidden).toBe(true);
+    }
+  });
+
+  it('permite abrir dos renglones juntos y cerrar uno sin cerrar el otro', async () => {
+    await crear();
+    await abrirPrevia();
+    const [primero, segundo] = filasPrevia();
+    await tocar(primero);
+    await tocar(segundo);
+    expect(filasPrevia().map((b) => b.getAttribute('aria-expanded'))).toEqual(['true', 'true']);
+    await tocar(primero);
+    expect(filasPrevia().map((b) => b.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+  });
+
+  it.each([true, false])('muestra los valores anteriores y nuevos del renglón (recargos: %s)', async (conRecargos) => {
+    await crear();
+    await abrirPrevia(conRecargos);
+    const [primero, segundo] = filasPrevia();
+    await tocar(primero);
+    const detalle = q(`#${primero.getAttribute('aria-controls')}`)!;
+    expect(detalle.hidden).toBe(false);
+    expect([...detalle.querySelectorAll('dt, dd')].map((e) => e.textContent?.trim())).toEqual([
+      'Costo antes', '$\u00a025,00 / kg', 'Costo nuevo', '$\u00a050,00 / kg',
+      ...(conRecargos ? ['Costo real antes', '$\u00a026,00 / kg', 'Costo real nuevo', '$\u00a051,00 / kg'] : []),
+      'Precio antes', '$\u00a035,00 / kg', 'Precio nuevo', '$\u00a065,00 / kg',
+      'Stock antes', '10,5', 'Stock después', '12,5 kilos',
+    ]);
+    expect(detalle.querySelector('.aviso-fila')?.textContent).toBe(renglon.advertencia);
+    expect(q(`#${segundo.getAttribute('aria-controls')} .aviso-fila`)).toBeNull();
+  });
+
+  it.each([true, false])('muestra los mismos totales y el mismo orden que en escritorio (recargos: %s)', async (conRecargos) => {
+    await crear();
+    await abrirPrevia(conRecargos);
+    expect(filasPrevia()).toHaveLength(2);
+    const celular = totales();
+    simularPantalla(false);
+    window.dispatchEvent(new Event('resize'));
+    await refrescar();
+    expect(q('.vista-previa table')).not.toBeNull();
+    expect(celular).toEqual(totales());
+    expect(celular.map(([rotulo]) => rotulo)).toEqual([
+      'Neto', ...(conRecargos ? ['Recargos'] : []), 'Subtotal sin IVA', 'IVA 10,5 %', 'IVA 21 %', 'Total',
+    ]);
+  });
+
+  it('confirma con el pedido y la clave una sola vez y se deshabilita hasta terminar', async () => {
+    await crear();
+    await abrirPrevia();
+    const respuesta = new Subject<CompraRegistrada>();
+    registrar.mockReturnValue(respuesta);
+    const boton = confirmar();
+    expect(boton.parentElement?.matches('.ficha-pie.en-pagina')).toBe(true);
+    expect(boton.disabled).toBe(false);
+    await tocar(boton);
+    expect(confirmar().disabled).toBe(true);
+    await tocar(confirmar());
+    expect(registrar).toHaveBeenCalledExactlyOnceWith({ ...pedido, clave: 'clave-1' });
+    respuesta.next({ repetida: false, compra: {
+      id: 9, ...pedido, comprobante: 'Factura A 00001-00004512', proveedorNombre: 'Bulonera Sur',
+      moneda: 'ARS', neto: 100, registrada: '2026-11-15T12:00:00', renglones: [],
+    } });
+    respuesta.complete();
+    await refrescar();
+    expect(q('.vista-previa')).toBeNull();
+    expect(q('.exito[role="status"]')?.textContent).toContain('Compra registrada: Factura A 00001-00004512 de Bulonera Sur.');
+  });
+
+  it('«Volver» descarta la vista previa sin perder los datos ni registrar', async () => {
+    await crear();
+    await abrirPrevia();
+    const numero = q<HTMLInputElement>('input[name="numero"]')!;
+    const volver = q<HTMLButtonElement>('.vista-previa .ficha-pie button.secundario')!;
+    expect(volver.textContent?.trim()).toBe('Volver');
+    await tocar(volver);
+    expect(q('.vista-previa')).toBeNull();
+    expect(ver().disabled).toBe(false);
+    expect(q('input[name="numero"]')).toBe(numero);
+    expect(numero.value).toBe('4512');
+    expect(numero.disabled).toBe(false);
+    expect(vistaPrevia).toHaveBeenCalledTimes(1);
+    expect(registrar).not.toHaveBeenCalled();
+  });
+
+  it('editar el número descarta la vista previa móvil y exige revisar un nuevo pedido', async () => {
+    await crear();
+    await abrirPrevia();
+    expect(filasPrevia()).toHaveLength(2);
+    const numero = q<HTMLInputElement>('input[name="numero"]')!;
+    numero.value = '4513';
+    numero.dispatchEvent(new Event('input'));
+    await refrescar();
+    expect(q('.vista-previa')).toBeNull();
+    expect(registrar).not.toHaveBeenCalled();
+    await tocar(ver());
+    expect(vistaPrevia).toHaveBeenLastCalledWith({ ...pedido, numero: 4513 });
+    expect(filasPrevia().every((b) => b.getAttribute('aria-expanded') === 'false')).toBe(true);
+  });
+
+  it('un rechazo de vista previa deja el formulario editable y permite pedirla de nuevo', async () => {
+    await crear();
+    await cargarPorPdf();
+    vistaPrevia.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+    await tocar(ver());
+    expect(q('.vista-previa')).toBeNull();
+    expect(q('[role="alert"]')?.textContent).toContain('No se pudo armar la vista previa. Probá de nuevo.');
+    expect(ver().disabled).toBe(false);
+    const numero = q<HTMLInputElement>('input[name="numero"]')!;
+    expect(numero.disabled).toBe(false);
+    numero.value = '4513';
+    numero.dispatchEvent(new Event('input'));
+    vistaPrevia.mockReturnValueOnce(new Subject<PlanCompra>());
+    await tocar(ver());
+    expect(vistaPrevia).toHaveBeenLastCalledWith({ ...pedido, numero: 4513 });
+  });
+
+  it.each([true, false])('conserva el mensaje y la clave al reintentar un 409 (celular: %s)', async (celular) => {
+    await crear(celular);
+    await abrirPrevia();
+    const mensaje = 'Esa compra ya está cargada: Factura A 00001-00004512 de Bulonera Sur.';
+    registrar.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { message: mensaje } })));
+    await tocar(confirmar());
+    expect(q('[role="alert"]')?.textContent).toContain(mensaje);
+    expect(confirmar().disabled).toBe(false);
+    await tocar(confirmar());
+    expect(registrar.mock.calls).toEqual([[{ ...pedido, clave: 'clave-1' }], [{ ...pedido, clave: 'clave-1' }]]);
+    expect(q('app-nueva-compra > .exito[role="status"]')?.textContent).toBeUndefined();
+  });
+
+  it('mantiene en escritorio la tabla con recargos, los datos y la confirmación en línea', async () => {
+    await crear(false);
+    await abrirPrevia();
+    expect(q('.acc-b, .ficha-pie')).toBeNull();
+    expect(q('.vista-previa .datos')?.textContent?.trim().replace(/\s+/g, ' ')).toBe('Bulonera Sur · 1 sube · 1 baja · 0 iguales');
+    expect([...q('.vista-previa table')!.querySelectorAll('th')].map((e) => e.textContent?.trim())).toEqual([
+      'Artículo', 'Cantidad', 'Costo antes', 'Costo nuevo', 'Costo real antes', 'Costo real nuevo',
+      'Precio antes', 'Precio nuevo', 'Stock antes → después', 'Subtotal',
+    ]);
+    expect(q('.vista-previa tbody tr.advertencia .aviso-fila')?.textContent).toBe(renglon.advertencia);
+    expect(confirmar().parentElement?.className).toBe('acciones');
+  });
 
   it('abre sólo Comprobante al entrar y pliega cada tarjeta sin perder los campos', async () => {
     await crear();

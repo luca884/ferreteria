@@ -342,63 +342,114 @@
     </div>
   }
 
-  <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
-    <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
-  </div>
+  @if (!celular() || !plan()) {
+    <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
+      <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
+    </div>
+  }
 
   @if (plan(); as p) {
     <section class="vista-previa" aria-label="Vista previa de la compra">
       <h2>Vista previa</h2>
-      <p class="datos">
-        {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} ·
-        {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
-        {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
-      </p>
-      <div class="tabla-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Artículo</th>
-              <th scope="col" class="num">Cantidad</th>
-              <th scope="col" class="num">Costo antes</th>
-              <th scope="col" class="num">Costo nuevo</th>
-              @if (p.recargos.length > 0) {
-                <th scope="col" class="num">Costo real antes</th>
-                <th scope="col" class="num">Costo real nuevo</th>
-              }
-              <th scope="col" class="num">Precio antes</th>
-              <th scope="col" class="num">Precio nuevo</th>
-              <th scope="col" class="num">Stock antes → después</th>
-              <th scope="col" class="num">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (r of p.renglones; track r.articuloId) {
-              <tr [class.advertencia]="r.advertencia">
-                <td>
+      @if (celular()) {
+        <p class="datos">
+          {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} · {{ comprobante() }} ·
+          {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
+          {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
+        </p>
+      } @else {
+        <p class="datos">
+          {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} ·
+          {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
+          {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
+        </p>
+      }
+      @if (celular()) {
+        <ul class="previa-renglones" role="list">
+          @for (r of p.renglones; track r.articuloId; let i = $index) {
+            @let abierto = renglonPreviaAbierto(r.articuloId);
+            <li [class.advertencia]="r.advertencia">
+              <button
+                type="button"
+                class="acc-b"
+                [attr.aria-expanded]="abierto"
+                [attr.aria-controls]="'previa-renglon-' + i"
+                (click)="alternarRenglonPrevia(r.articuloId)"
+              >
+                <span>
                   {{ r.codigoInterno }} · {{ r.descripcion }}
-                  @if (r.advertencia) {
-                    <span class="aviso-fila">{{ r.advertencia }}</span>
+                  <span class="previa-cantidad">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</span>
+                </span>
+                <strong class="previa-subtotal">{{ r.subtotal | monto }}</strong>
+                <span class="compra-paso-flecha" aria-hidden="true"></span>
+              </button>
+              <div [id]="'previa-renglon-' + i" [hidden]="!abierto">
+                <dl>
+                  <dt>Costo antes</dt><dd>{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Costo nuevo</dt><dd class="previa-nuevo">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  @if (p.recargos.length > 0) {
+                    <dt>Costo real antes</dt><dd>{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                    <dt>Costo real nuevo</dt><dd class="previa-nuevo">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
                   }
-                </td>
-                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-                <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                @if (p.recargos.length > 0) {
-                  <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <dt>Precio antes</dt><dd>{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Precio nuevo</dt><dd class="previa-nuevo">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</dd>
+                  <dt>Stock antes</dt><dd>{{ r.stockAnterior | number: '1.0-3' }}</dd>
+                  <dt>Stock después</dt><dd class="previa-nuevo">{{ cantidadConUnidad(r.stockNuevo, r.unidad) }}</dd>
+                </dl>
+                @if (r.advertencia) {
+                  <span class="aviso-fila">{{ r.advertencia }}</span>
                 }
-                <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num stock">
-                  {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
-                </td>
-                <td class="num">{{ r.subtotal | monto }}</td>
+              </div>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div class="tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Artículo</th>
+                <th scope="col" class="num">Cantidad</th>
+                <th scope="col" class="num">Costo antes</th>
+                <th scope="col" class="num">Costo nuevo</th>
+                @if (p.recargos.length > 0) {
+                  <th scope="col" class="num">Costo real antes</th>
+                  <th scope="col" class="num">Costo real nuevo</th>
+                }
+                <th scope="col" class="num">Precio antes</th>
+                <th scope="col" class="num">Precio nuevo</th>
+                <th scope="col" class="num">Stock antes → después</th>
+                <th scope="col" class="num">Subtotal</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (r of p.renglones; track r.articuloId) {
+                <tr [class.advertencia]="r.advertencia">
+                  <td>
+                    {{ r.codigoInterno }} · {{ r.descripcion }}
+                    @if (r.advertencia) {
+                      <span class="aviso-fila">{{ r.advertencia }}</span>
+                    }
+                  </td>
+                  <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                  <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  @if (p.recargos.length > 0) {
+                    <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  }
+                  <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num stock">
+                    {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
+                  </td>
+                  <td class="num">{{ r.subtotal | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
       <div class="totales">
         <p>
           <span>Neto</span><span>{{ p.neto | monto }}</span>
@@ -420,9 +471,16 @@
           <span>Total</span><span>{{ p.total | monto }}</span>
         </p>
       </div>
-      <div class="acciones">
-        <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
-      </div>
+      @if (celular()) {
+        <div class="acciones ficha-pie en-pagina">
+          <button type="button" class="secundario" (click)="volverDeLaPrevia()">Volver</button>
+          <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
+        </div>
+      } @else {
+        <div class="acciones">
+          <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
+        </div>
+      }
     </section>
   }
 }

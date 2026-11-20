@@ -165,6 +165,10 @@ export class NuevaCompra implements OnInit {
   protected readonly resolviendo = signal<RenglonSinArticulo | null>(null);
 
   protected readonly plan = signal<PlanCompra | null>(null);
+  private readonly renglonesAbiertos = signal<{ plan: PlanCompra | null; ids: ReadonlySet<number> }>({
+    plan: null,
+    ids: new Set(),
+  });
   protected readonly trabajando = signal(false);
   protected readonly errores = signal<string[]>([]);
   protected readonly aviso = signal<string | null>(null);
@@ -199,6 +203,30 @@ export class NuevaCompra implements OnInit {
       else siguientes.add(paso);
       return siguientes;
     });
+  }
+
+  protected comprobante(): string {
+    return `${this.etiqueta[this.tipo()]} ${this.puntoVenta().padStart(5, '0')}-${this.numero().padStart(8, '0')}`;
+  }
+
+  protected renglonPreviaAbierto(articuloId: number): boolean {
+    const { plan, ids } = this.renglonesAbiertos();
+    return plan === this.plan() && ids.has(articuloId);
+  }
+
+  protected alternarRenglonPrevia(articuloId: number): void {
+    const plan = this.plan();
+    if (!plan) return;
+    this.renglonesAbiertos.update((abiertos) => {
+      const ids = new Set(abiertos.plan === plan ? abiertos.ids : undefined);
+      if (ids.has(articuloId)) ids.delete(articuloId);
+      else ids.add(articuloId);
+      return { plan, ids };
+    });
+  }
+
+  protected volverDeLaPrevia(): void {
+    this.descartarVistaPrevia();
   }
 
   protected cambiar<T>(campo: { set(valor: T): void }, valor: T): void {

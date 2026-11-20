@@ -7354,7 +7354,8 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
 /* ---------- Nueva compra en el celular (movil-sectores T16) ---------- */
 
 @media (max-width: 639.98px) {
-  app-nueva-compra:has(> .ficha-pie.en-pagina) {
+  app-nueva-compra:has(> .ficha-pie.en-pagina),
+  app-nueva-compra:has(> .vista-previa > .ficha-pie.en-pagina) {
     --alto-pie-compra: calc(52px + 2 * var(--e-3) + 1px);
     padding-bottom: calc(var(--alto-pie-compra) + var(--e-4));
   }
@@ -7619,12 +7620,128 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
     width: 100%;
   }
 
-  /* Las tres clases ganan sobre .acciones y :host > :not(app-barra-acciones) encapsulados. */
-  app-nueva-compra > .acciones.ficha-pie.en-pagina {
+  /* Pantalla aparte sin desmontar los campos. (0,2,2) supera a .recargos-costo encapsulado (0,2,0). */
+  app-nueva-compra:has(> .vista-previa) > :is(.paso, p.ayuda, .acciones, .motivo-accion) {
+    display: none;
+  }
+  /* Si falla la confirmación por recargos, se conserva su aviso (no los campos). */
+  app-nueva-compra:has(> .vista-previa) > .recargos-costo:has(> .campo-error) {
+    display: block;
+    padding: var(--e-3);
+  }
+  app-nueva-compra:has(> .vista-previa) > .recargos-costo > :not(.campo-error) {
+    display: none;
+  }
+
+  /* (0,2,1) supera a .vista-previa encapsulado (0,2,0). */
+  app-nueva-compra:has(> .vista-previa) > .vista-previa {
+    margin-top: 0;
+  }
+  app-nueva-compra > .vista-previa > p.datos {
+    margin: 0 0 var(--e-3);
+    color: var(--texto-tenue);
+    font-size: var(--texto-sm);
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra .previa-renglones {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-nueva-compra .previa-renglones > li {
+    padding-inline: var(--e-3);
+    border-radius: inherit;
+  }
+  app-nueva-compra .previa-renglones > li + li {
+    border-top: 1px solid var(--borde);
+  }
+  app-nueva-compra .previa-renglones > li.advertencia {
+    background: var(--advertencia-fondo, #fff7e0);
+  }
+  app-nueva-compra .previa-renglones .acc-b {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content) auto;
+    align-items: center;
+    gap: var(--e-2);
+    width: 100%;
+    min-height: 56px;
+    padding: var(--e-2) 0;
+    border: 0;
+    background: transparent;
+    color: var(--texto);
+    text-align: left;
+    overflow-wrap: anywhere;
+    scroll-margin-bottom: calc(var(--alto-pie-compra) + var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px) + var(--e-4));
+  }
+  app-nueva-compra .previa-cantidad {
+    display: block;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+  }
+  app-nueva-compra .previa-renglones dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+    margin: 0;
+    font-size: var(--texto-sm);
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra .previa-renglones :is(dt, dd) {
+    margin: 0;
+    padding-block: var(--e-2);
+    border-top: 1px solid var(--borde-suave);
+  }
+  app-nueva-compra .previa-renglones dt {
+    padding-inline-end: var(--e-2);
+    color: var(--texto-suave);
+  }
+  app-nueva-compra .previa-renglones .previa-nuevo {
+    font-weight: 700;
+  }
+  app-nueva-compra .vista-previa .previa-renglones .aviso-fila {
+    padding-block: var(--e-2);
+    border-top: 1px solid var(--advertencia-borde);
+    font-size: var(--texto-sm);
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra > .vista-previa > .totales {
+    min-width: 0;
+    max-width: none;
+    margin: var(--e-3) 0 0;
+    padding: var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-xl);
+    background: var(--superficie);
+  }
+  app-nueva-compra .vista-previa .totales > p {
+    padding-block: var(--e-1);
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra .vista-previa .totales > .total {
+    border-top: 1px solid var(--borde);
+  }
+  app-nueva-compra .previa-subtotal,
+  app-nueva-compra .previa-renglones dd,
+  app-nueva-compra .vista-previa .totales > p > span:last-child {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* (0,3,1) y (0,4,1) ganan sobre .acciones (0,2,0) y :host > :not(app-barra-acciones) (0,2,1). */
+  app-nueva-compra > .acciones.ficha-pie.en-pagina,
+  app-nueva-compra > .vista-previa > .acciones.ficha-pie.en-pagina {
     max-width: none;
     margin: 0;
   }
-  app-nueva-compra > .ficha-pie.en-pagina > button {
+  app-nueva-compra > .ficha-pie.en-pagina > button,
+  app-nueva-compra > .vista-previa > .ficha-pie.en-pagina > button {
     min-height: 52px;
+  }
+  app-nueva-compra > .vista-previa > .ficha-pie.en-pagina {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   }
 }
