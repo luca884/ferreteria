@@ -7472,9 +7472,9 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
   app-nueva-compra .resultados > .resultados-encabezado {
     display: none;
   }
-  /* (0,2,3) desempata con .resultados li encapsulado (0,2,1). */
-  app-nueva-compra .resultados > ul > li[role='option'] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  /* (0,3,3) desempata con .resultados li encapsulado (0,3,1). */
+  app-nueva-compra .paso .resultados > ul > li[role='option'] {
+    grid-template-columns: minmax(0, 1fr) max-content;
     grid-template-areas: 'descripcion costo' 'codigo stock';
     gap: 0 var(--e-2);
     min-height: 56px;
@@ -7513,8 +7513,13 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
   app-nueva-compra .renglones {
     display: block;
   }
+  /* Oculta la cabecera visualmente, sin sacar los encabezados del árbol accesible. */
   app-nueva-compra .renglones > thead {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   app-nueva-compra .renglones > tbody {
     display: grid;
@@ -7579,6 +7584,9 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
   }
   app-nueva-compra > .recargos-costo > button.secundario {
     width: 100%;
+  }
+  app-nueva-compra > .recargos-costo > .motivo-accion {
+    margin-bottom: var(--e-2);
   }
   app-nueva-compra .paso :is(.buscador, .recargo-costo) > label {
     display: grid;

@@ -226,7 +226,9 @@ describe('Nueva compra en el celular (T16)', () => {
     }
     expect(agregar.getAttribute('aria-disabled')).toBe('true');
     await tocar(agregar);
-    expect(q('[role="status"].motivo-accion')?.textContent?.trim()).toBe('Ya cargaste el máximo de recargos (5).');
+    const aviso = q('[role="status"].motivo-accion');
+    expect(aviso?.textContent?.trim()).toBe('Ya cargaste el máximo de recargos (5).');
+    expect(agregar.previousElementSibling).toBe(aviso);
     expect(q('input[name="recargo-nombre-5"]')).toBeNull();
     await tocar(q<HTMLButtonElement>('button[aria-label="Quitar el recargo 5"]')!);
     expect(agregar.getAttribute('aria-disabled')).not.toBe('true');

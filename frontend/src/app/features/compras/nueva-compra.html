@@ -3,8 +3,10 @@
   <a routerLink="/compras" class="btn accion-barra">Ver compras</a>
 </app-barra-acciones>
 
-@if (motivo.visible(); as texto) {
-  <p class="motivo-accion" role="status">{{ texto }}</p>
+@if (!celular()) {
+  @if (motivo.visible(); as texto) {
+    <p class="motivo-accion" role="status">{{ texto }}</p>
+  }
 }
 
 @if (!auth.esDueno()) {
@@ -314,6 +316,11 @@
     }
     @if (errorRecargos(); as mensaje) {
       <span class="campo-error" role="alert">{{ mensaje }}</span>
+    }
+    @if (celular()) {
+      @if (motivo.visible(); as texto) {
+        <p class="motivo-accion" role="status">{{ texto }}</p>
+      }
     }
     <button
       type="button"
