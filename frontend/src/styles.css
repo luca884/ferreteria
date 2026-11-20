@@ -7673,6 +7673,7 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
     background: transparent;
     color: var(--texto);
     text-align: left;
+    white-space: normal;
     overflow-wrap: anywhere;
     scroll-margin-bottom: calc(var(--alto-pie-compra) + var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px) + var(--e-4));
   }

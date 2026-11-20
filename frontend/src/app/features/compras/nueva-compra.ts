@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -160,6 +160,12 @@ export class NuevaCompra implements OnInit {
       : `No encontramos un proveedor con el CUIT ${cuits.join(', ')}. Elegilo de la lista.`;
   });
   private readonly proveedorSelect = viewChild<ElementRef<HTMLSelectElement>>('proveedorSelect');
+  private readonly injector = inject(Injector);
+  private readonly cabeceraComprobante = viewChild<ElementRef<HTMLButtonElement>>('cabeceraComprobante');
+  private readonly tituloPrevia = viewChild<ElementRef<HTMLElement>>('tituloPrevia');
+  private readonly mensajeError = viewChild<ElementRef<HTMLElement>>('mensajeError');
+  private readonly mensajeRecargos = viewChild<ElementRef<HTMLElement>>('mensajeRecargos');
+  private readonly mensajeExito = viewChild<ElementRef<HTMLElement>>('mensajeExito');
   protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
   /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
   protected readonly resolviendo = signal<RenglonSinArticulo | null>(null);
@@ -178,6 +184,17 @@ export class NuevaCompra implements OnInit {
   private clave = '';
   /** Sube con cada edición: una vista previa pedida antes de la última edición ya no describe lo que se ve. */
   private version = 0;
+
+  constructor() {
+    afterRenderEffect(() => {
+      if (!this.celular()) return;
+      const mensaje = this.mensajeError() ?? this.mensajeRecargos() ?? this.mensajeExito();
+      const destino = (mensaje ?? this.tituloPrevia())?.nativeElement;
+      // El pie fijo puede cubrir un aviso aunque el navegador lo considere dentro del viewport.
+      destino?.scrollIntoView?.({ block: mensaje ? 'center' : 'start' });
+      destino?.focus({ preventScroll: true });
+    });
+  }
 
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
@@ -227,6 +244,11 @@ export class NuevaCompra implements OnInit {
 
   protected volverDeLaPrevia(): void {
     this.descartarVistaPrevia();
+    afterNextRender(() => {
+      const cabecera = this.cabeceraComprobante()?.nativeElement;
+      cabecera?.scrollIntoView?.({ block: 'start' });
+      cabecera?.focus({ preventScroll: true });
+    }, { injector: this.injector });
   }
 
   protected cambiar<T>(campo: { set(valor: T): void }, valor: T): void {

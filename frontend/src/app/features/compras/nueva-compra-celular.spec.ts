@@ -200,6 +200,7 @@ describe('Nueva compra en el celular (T16)', () => {
     await refrescar();
     expect(q('.vista-previa')).toBeNull();
     expect(q('.exito[role="status"]')?.textContent).toContain('Compra registrada: Factura A 00001-00004512 de Bulonera Sur.');
+    expect(document.activeElement).toBe(q('.exito[role="status"]'));
   });
 
   it('«Volver» descarta la vista previa sin perder los datos ni registrar', async () => {
@@ -208,8 +209,10 @@ describe('Nueva compra en el celular (T16)', () => {
     const numero = q<HTMLInputElement>('input[name="numero"]')!;
     const volver = q<HTMLButtonElement>('.vista-previa .ficha-pie button.secundario')!;
     expect(volver.textContent?.trim()).toBe('Volver');
+    expect(document.activeElement).toBe(q('.vista-previa h2'));
     await tocar(volver);
     expect(q('.vista-previa')).toBeNull();
+    expect(document.activeElement).toBe(secciones()[0]);
     expect(ver().disabled).toBe(false);
     expect(q('input[name="numero"]')).toBe(numero);
     expect(numero.value).toBe('4512');
@@ -257,6 +260,8 @@ describe('Nueva compra en el celular (T16)', () => {
     registrar.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { message: mensaje } })));
     await tocar(confirmar());
     expect(q('[role="alert"]')?.textContent).toContain(mensaje);
+    if (celular) expect(document.activeElement).toBe(q('[role="alert"]'));
+    else expect(q('[role="alert"]')?.hasAttribute('tabindex')).toBe(false);
     expect(confirmar().disabled).toBe(false);
     await tocar(confirmar());
     expect(registrar.mock.calls).toEqual([[{ ...pedido, clave: 'clave-1' }], [{ ...pedido, clave: 'clave-1' }]]);
@@ -331,6 +336,7 @@ describe('Nueva compra en el celular (T16)', () => {
     await tocar(ver());
     expect(expansion()).toEqual(['true', 'false', 'true']);
     expect(q('.recargos-costo .campo-error')?.textContent).toContain('Un recargo no puede ser 0 %.');
+    expect(document.activeElement).toBe(q('.recargos-costo .campo-error'));
   });
 
   it('en escritorio conserva los títulos, las secciones abiertas y la validación en línea', async () => {

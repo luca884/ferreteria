@@ -18,7 +18,7 @@
   </p>
 
   @if (registrada(); as compra) {
-    <p class="exito" role="status">
+    <p #mensajeExito class="exito" role="status" [attr.tabindex]="celular() ? -1 : null">
       Compra registrada: {{ compra.comprobante }} de {{ compra.proveedorNombre }}.
       <a routerLink="/compras">Ver compras</a>
     </p>
@@ -27,7 +27,7 @@
   <section class="paso panel">
     @if (celular()) {
       <h2 class="compra-paso-titulo">
-        <button type="button" [attr.aria-expanded]="pasoAbierto('comprobante')" (click)="alternarPaso('comprobante')">
+        <button #cabeceraComprobante type="button" [attr.aria-expanded]="pasoAbierto('comprobante')" (click)="alternarPaso('comprobante')">
           <span>Comprobante</span>
           <span class="compra-paso-flecha" aria-hidden="true"></span>
         </button>
@@ -315,7 +315,7 @@
       </div>
     }
     @if (errorRecargos(); as mensaje) {
-      <span class="campo-error" role="alert">{{ mensaje }}</span>
+      <span #mensajeRecargos class="campo-error" role="alert" [attr.tabindex]="celular() ? -1 : null">{{ mensaje }}</span>
     }
     @if (celular()) {
       @if (motivo.visible(); as texto) {
@@ -333,7 +333,7 @@
   </section>
 
   @if (errores().length > 0) {
-    <div class="error" role="alert">
+    <div #mensajeError class="error" role="alert" [attr.tabindex]="celular() ? -1 : null">
       <ul>
         @for (e of errores(); track e) {
           <li>{{ e }}</li>
@@ -350,7 +350,7 @@
 
   @if (plan(); as p) {
     <section class="vista-previa" aria-label="Vista previa de la compra">
-      <h2>Vista previa</h2>
+      <h2 #tituloPrevia [attr.tabindex]="celular() ? -1 : null">Vista previa</h2>
       @if (celular()) {
         <p class="datos">
           {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} · {{ comprobante() }} ·
