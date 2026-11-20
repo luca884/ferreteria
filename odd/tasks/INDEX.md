@@ -5,7 +5,7 @@
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 93 documentos suman 1,5 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~22 KB; los 93 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
 - **90 cerradas · 3 abiertas**
 
@@ -15,7 +15,7 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
-| [`movil-sectores.md`](movil-sectores.md) | abierta (14✓/3✗) | — | — | — | 81 |
+| [`movil-sectores.md`](movil-sectores.md) | abierta (15✓/2✗) | — | — | — | 90 |
 
 ## Cerradas
 
