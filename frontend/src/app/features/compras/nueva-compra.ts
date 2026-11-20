@@ -223,7 +223,7 @@ export class NuevaCompra implements OnInit {
   }
 
   protected comprobante(): string {
-    return `${this.etiqueta[this.tipo()]} ${this.puntoVenta().padStart(5, '0')}-${this.numero().padStart(8, '0')}`;
+    return `${this.etiqueta[this.tipo()]} ${this.puntoVenta().trim().padStart(5, '0')}-${this.numero().trim().padStart(8, '0')}`;
   }
 
   protected renglonPreviaAbierto(articuloId: number): boolean {

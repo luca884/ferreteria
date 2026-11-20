@@ -473,7 +473,7 @@
       </div>
       @if (celular()) {
         <div class="acciones ficha-pie en-pagina">
-          <button type="button" class="secundario" (click)="volverDeLaPrevia()">Volver</button>
+          <button type="button" class="secundario" [disabled]="trabajando()" (click)="volverDeLaPrevia()">Volver</button>
           <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
         </div>
       } @else {

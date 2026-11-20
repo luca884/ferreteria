@@ -203,6 +203,46 @@ describe('Nueva compra en el celular (T16)', () => {
     expect(document.activeElement).toBe(q('.exito[role="status"]'));
   });
 
+  it('un doble toque sin render sobre «Confirmar compra» registra una sola vez', async () => {
+    await crear();
+    await abrirPrevia();
+    registrar.mockReturnValue(new Subject<CompraRegistrada>());
+    const boton = confirmar();
+    boton.click();
+    boton.click();
+    boton.click();
+    expect(registrar).toHaveBeenCalledExactlyOnceWith({ ...pedido, clave: 'clave-1' });
+  });
+
+  it('«Volver» se apaga mientras se registra: no se puede pedir otra vista previa con otra clave a mitad de camino', async () => {
+    await crear();
+    await abrirPrevia();
+    const volver = () => q<HTMLButtonElement>('.vista-previa .ficha-pie button.secundario')!;
+    expect(volver().disabled).toBe(false);
+    registrar.mockReturnValue(new Subject<CompraRegistrada>());
+    await tocar(confirmar());
+    expect(volver().disabled).toBe(true);
+    volver().click();
+    await refrescar();
+    expect(q('.vista-previa')).not.toBeNull();
+    expect(registrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('el comprobante de la vista previa es el que se envía, aunque el punto de venta lleve espacios', async () => {
+    await crear();
+    await cargarPorPdf();
+    const puntoVenta = q<HTMLInputElement>('input[name="puntoVenta"]')!;
+    puntoVenta.value = ' 5 ';
+    puntoVenta.dispatchEvent(new Event('input'));
+    vistaPrevia.mockReturnValue(of({
+      proveedorNombre: 'Bulonera Sur', moneda: 'ARS', suben: 1, bajan: 0, iguales: 0, renglones: [renglon],
+      recargos: [], neto: 100, recargosImporte: 0, subtotalSinIva: 100, iva: [], total: 100,
+    } as PlanCompra));
+    await tocar(ver());
+    expect(vistaPrevia).toHaveBeenLastCalledWith({ ...pedido, puntoVenta: 5 });
+    expect(q('.vista-previa .datos')?.textContent).toContain('Factura A 00005-00004512');
+  });
+
   it('«Volver» descarta la vista previa sin perder los datos ni registrar', async () => {
     await crear();
     await abrirPrevia();
