@@ -395,6 +395,28 @@ describe('DialogoAjuste (GDS-20, G59: Recargo y Descuento de la cuenta del clien
   });
 
   describe('teclado', () => {
+    it.each(['datos', 'confirmación'])('en vuelo, «Cancelar» queda deshabilitado en %s', async (paso) => {
+      await abrir('RECARGO');
+      if (paso === 'confirmación') await hastaConfirmar('500');
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+
+      expect(boton('Cancelar').disabled).toBe(true);
+      boton('Cancelar').click();
+      expect(cancelados).toBe(0);
+    });
+
+    it('en vuelo, Esc no emite cancelar', async () => {
+      await abrir('DESCUENTO');
+      await hastaConfirmar('500');
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+
+      const esc = tecla('Escape', el().querySelector('[role="dialog"]')!);
+      expect(esc.defaultPrevented).toBe(true);
+      expect(cancelados).toBe(0);
+    });
+
     it('Esc cierra desde cualquier paso', async () => {
       await abrir('RECARGO');
       const evento = tecla('Escape');

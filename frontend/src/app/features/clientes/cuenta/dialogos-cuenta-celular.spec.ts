@@ -346,6 +346,26 @@ describe('Cobranza, ajustes y anular recibo en el celular: pantalla completa (T1
     });
   });
 
+  it.each(['Cobrar', 'Recargo', 'Descuento'] as const)('%s en el celular: la flecha «Volver» se deshabilita solo durante el envío', async (accionCuenta) => {
+    const cobro = accionCuenta === 'Cobrar';
+    const selector = cobro ? 'app-dialogo-cobranza' : 'app-dialogo-ajuste';
+    const respuestaCobro = new Subject<ReciboCobrado>();
+    const respuestaAjuste = new Subject<AjusteCobrado>();
+    await crear('celular', { cobrar: () => respuestaCobro, ajustar: () => respuestaAjuste });
+    if (cobro) await cobrarCon('celular', '600');
+    else await ajustarCon('celular', accionCuenta, '500');
+
+    expect(volver(selector)!.disabled).toBe(true);
+    await pulsar(volver(selector));
+    expect(el().querySelector(selector)).not.toBeNull();
+
+    (cobro ? respuestaCobro : respuestaAjuste).error(errorHttp(422, { status: 422, message: 'El cliente está desactivado.' }));
+    await refrescar();
+    expect(volver(selector)!.disabled).toBe(false);
+    await pulsar(volver(selector));
+    expect(el().querySelector(selector)).toBeNull();
+  });
+
   describe('Cobrar sin deudas en el celular', () => {
     it('el adelanto no tiene el marco de la imputación pero sí la barra y el pie', async () => {
       await crear('celular', { pendientes: () => of(sinDeuda) });

@@ -239,6 +239,7 @@ export class CuentaCliente implements OnInit {
   }
 
   protected cerrarCobro(): void {
+    if (this.cobrando()) return;
     this.dialogoAbierto.set(false);
     this.avisoDialogo.set(null);
     this.errorDialogo.set(null);
@@ -292,6 +293,7 @@ export class CuentaCliente implements OnInit {
   }
 
   protected cerrarAjuste(): void {
+    if (this.ajustandoEnVuelo()) return;
     this.ajustando.set(null);
     this.avisoAjuste.set(null);
     this.errorAjuste.set(null);
