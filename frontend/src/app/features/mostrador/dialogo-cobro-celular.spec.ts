@@ -214,6 +214,57 @@ describe('DialogoCobro en el celular (movil-sectores T9a)', () => {
     });
   });
 
+  describe.each([
+    ['celular', '639.98px', true],
+    ['escritorio', '__ninguna__', false],
+    ['tablet', '1023.98px', false],
+  ] as const)('orden de lectura y Tab en %s', (_modo, consulta, movil) => {
+    // jsdom no navega con Tab: los controles del diálogo usan el orden del DOM y tabindex 0/-1.
+    const ordenTab = () => Array.from(dialogo().querySelectorAll<HTMLElement>('button, input'))
+      .filter((control) => control.tabIndex >= 0 && !control.matches(':disabled'));
+    const casilla = () => el().querySelector('.no-facturable input');
+    const antesDe = (primero: string, segundo: string) => {
+      const origen = dialogo().querySelector(primero)!;
+      const destino = dialogo().querySelector(segundo)!;
+      expect(origen.compareDocumentPosition(destino) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    };
+
+    it('mantiene el foco inicial en Recibido y ordena el efectivo, el vuelto y los medios', async () => {
+      await abrir(consulta);
+
+      expect(document.activeElement).toBe(importe());
+      expect(ordenTab()).toEqual(movil
+        ? [volver(), importe(), medio('Efectivo'), casilla(), cobrar()]
+        : [medio('Efectivo'), importe(), casilla(), el().querySelector('.cancelar'), cobrar()]);
+      if (movil) antesDe('.vuelto', '.medios');
+      else antesDe('.medios', '.vuelto');
+    });
+
+    it('ordena todos los importes habilitados del mixto respecto de los medios', async () => {
+      await abrir(consulta);
+      medio('Mixto').click();
+      await estabilizar();
+
+      const importes = ['1', '2', '3', '4'].map((id) => dialogo().querySelector(`.mixto input[data-forma="${id}"]`));
+      expect(ordenTab()).toEqual(movil
+        ? [volver(), ...importes, medio('Mixto'), casilla(), cobrar()]
+        : [medio('Mixto'), ...importes, casilla(), el().querySelector('.cancelar'), cobrar()]);
+    });
+
+    it('ordena la línea de cuenta corriente respecto de los medios', async () => {
+      await abrir(consulta);
+      fixture.componentRef.setInput('clienteNombre', 'Ferretería Norte SRL');
+      fixture.componentRef.setInput('cuenta', { estado: 'listo', cuenta: { habilitada: true, alcanza: true } });
+      await estabilizar();
+      medio('Cuenta corriente').click();
+      await estabilizar();
+
+      expect(texto('.cuenta-corriente')).toBe('Alcanza');
+      if (movil) antesDe('.cuenta-corriente', '.medios');
+      else antesDe('.medios', '.cuenta-corriente');
+    });
+  });
+
   /**
    * La plata: lo que se manda al servicio, lo que se ve y lo que se rechaza, idéntico en el celular y en el escritorio.
    */
