@@ -47,8 +47,8 @@ type Paso = 'datos' | 'confirmar';
  * Recargo o Descuento de la cuenta corriente de un cliente (CU-12, GDS-20, G59). Presentacional, en dos pasos: los datos
  * (importe y motivo de 5 a 200 caracteres; el Descuento además reparte el importe en orden FIFO entre las partidas con deuda,
  * ventas y Recargos, editable, y lo que no se imputa queda «a cuenta») y una confirmación explícita que dice el efecto en
- * el saldo («El saldo pasa de $ X a $ Y.»). Enter avanza o confirma, Esc cierra; mientras `enVuelo` ignora Enter. Si el
- * envío quedó sin confirmar (`congelado`: red o 5xx) el contenido no se puede tocar —el reintento lleva la misma clave— y
+ * el saldo («El saldo pasa de $ X a $ Y.»). Enter avanza o confirma, Esc cierra; mientras `enVuelo` no permite confirmar
+ * ni cancelar. Si el envío quedó sin confirmar (`congelado`: red o 5xx) el contenido no se puede tocar —el reintento lleva la misma clave— y
  * la única salida para cambiarlo es `reiniciar`. Un 400 por campo (`errores`) o una deuda que cambió (`pendientes` nuevos)
  * devuelven a los datos para corregir.
  */
@@ -248,12 +248,16 @@ export class DialogoAjuste {
     if (evento.target === evento.currentTarget) evento.preventDefault();
   }
 
+  protected cancelarAjuste(): void {
+    if (!this.enVuelo()) this.cancelar.emit();
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     switch (evento.key) {
       case 'Escape':
         evento.preventDefault();
         evento.stopPropagation();
-        this.cancelar.emit();
+        this.cancelarAjuste();
         return;
       case 'Enter':
         // En un botón, Enter es su clic: Cancelar cancela y «Volver» vuelve, no se avanza ni se confirma el ajuste.

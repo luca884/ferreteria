@@ -2061,8 +2061,10 @@ describe('Articulos', () => {
     let porLeer: string[];
 
     /** Simula el navegador del celular: `BarcodeDetector` y `getUserMedia` (que concede o niega el permiso). */
-    function instalarNavegador(opciones: { detector?: boolean; camara?: boolean; denegar?: boolean } = {}) {
-      const { detector = true, camara = true, denegar = false } = opciones;
+    function instalarNavegador(
+      opciones: { detector?: boolean; camara?: boolean; denegar?: boolean; formatos?: string[] } = {},
+    ) {
+      const { detector = true, camara = true, denegar = false, formatos } = opciones;
       pista = { stop: vi.fn(), getCapabilities: () => ({}), applyConstraints: async () => undefined };
       porLeer = [];
       getUserMedia = vi.fn(async () => {
@@ -2073,6 +2075,7 @@ describe('Articulos', () => {
         vi.stubGlobal(
           'BarcodeDetector',
           class {
+            static getSupportedFormats = formatos ? async () => formatos : undefined;
             detect = async () => (porLeer.length > 0 ? [{ rawValue: porLeer.shift()! }] : []);
           },
         );
@@ -2098,6 +2101,7 @@ describe('Articulos', () => {
         (b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === nombre,
       )!;
     async function abrirEscaner() {
+      await tras(); // El navegador primero confirma qué formatos puede leer.
       botonEscanear()!.click();
       await tras();
     }
@@ -2131,6 +2135,7 @@ describe('Articulos', () => {
         enElCelular();
         instalarNavegador();
         await crearComponente(dueno, con());
+        await tras();
 
         const boton = botonEscanear()!;
         expect(boton).not.toBeNull();
@@ -2145,20 +2150,34 @@ describe('Articulos', () => {
       enElCelular();
       instalarNavegador({ detector: false });
       await crearComponente(true, con());
+      await tras();
       expect(botonEscanear()).toBeNull();
       expect(el().querySelector('#q-movil')).not.toBeNull();
+    });
+
+    it('sin formatos compatibles no ofrece el escáner y sigue disponible la búsqueda a mano', async () => {
+      enElCelular();
+      instalarNavegador({ formatos: ['qr_code'] });
+      await crearComponente(true, con());
+      await tras();
+
+      expect(botonEscanear()).toBeNull();
+      expect(el().querySelector('#q-movil')).not.toBeNull();
+      expect(getUserMedia).not.toHaveBeenCalled();
     });
 
     it('sin getUserMedia no hay botón', async () => {
       enElCelular();
       instalarNavegador({ camara: false });
       await crearComponente(true, con());
+      await tras();
       expect(botonEscanear()).toBeNull();
     });
 
     it('en el escritorio (no es el celular) no hay botón aunque el navegador tenga todo', async () => {
       instalarNavegador();
       await crearComponente(true, con());
+      await tras();
       expect(botonEscanear()).toBeNull();
       expect(el().querySelector('app-escaner-camara')).toBeNull();
       expect(getUserMedia).not.toHaveBeenCalled();
@@ -2207,9 +2226,9 @@ describe('Articulos', () => {
       expect(localStorage.length).toBe(0);
     });
 
-    it('lee un código, apaga la cámara y «Abrir ficha» navega como abrirFicha, con elegido', async () => {
+    it('con un formato compatible lee un código, apaga la cámara y «Abrir ficha» navega con elegido', async () => {
       enElCelular();
-      instalarNavegador();
+      instalarNavegador({ formatos: ['ean_13', 'qr_code'] });
       await crearComponente(true, con());
       await abrirEscaner();
       navegar.mockClear();
@@ -2290,6 +2309,7 @@ describe('Articulos', () => {
       enElCelular();
       instalarNavegador();
       await crearComponente(true, con());
+      await tras();
       botonEscanear()!.focus();
       await abrirEscaner();
 

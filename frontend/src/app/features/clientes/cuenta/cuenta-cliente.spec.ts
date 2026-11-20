@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -11,6 +12,8 @@ import { AjusteCobrado, AjusteRequest, AjusteResponse } from './ajuste.models';
 import { CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO } from './cobranza.service';
 import { CuentaCliente } from './cuenta-cliente';
+import { DialogoAjuste } from './dialogo-ajuste';
+import { DialogoCobranza } from './dialogo-cobranza';
 import { Extracto, LineaExtracto } from './extracto.models';
 import { ExtractoService } from './extracto.service';
 import { cargarEstilosGlobales } from './estilos-globales.testing';
@@ -1017,6 +1020,17 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(total().value).toBe('600');
     });
 
+    it('«Cancelar» sin un envío en curso cierra sin hacer ningún cobro', async () => {
+      await crear();
+      await f4();
+
+      boton('Cancelar')!.click();
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
+      expect(cobranza.cobrar).not.toHaveBeenCalled();
+    });
+
     it('Esc en el diálogo lo cierra sin hacer ningún cobro', async () => {
       await crear();
       await f4();
@@ -1123,6 +1137,37 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
   });
 
   describe('rechazos', () => {
+    it.each(['clic en Cancelar', 'Esc', 'evento cancelar del hijo'])('cobro pendiente: %s no cierra y el rechazo queda visible', async (salida) => {
+      const respuesta = new Subject<ReciboCobrado>();
+      await crear({ cobrar: () => respuesta });
+      await cobrar('600');
+      expect(cobranza.cobrar).toHaveBeenCalledTimes(1);
+
+      if (salida === 'clic en Cancelar') {
+        boton('Cancelar')!.click();
+      } else if (salida === 'Esc') {
+        total().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }));
+      } else {
+        const hijo: DialogoCobranza = fixture.debugElement.query(By.directive(DialogoCobranza)).componentInstance;
+        hijo.cancelar.emit();
+      }
+      await refrescar();
+      expect(dialogo()).not.toBeNull();
+
+      boton('Recargo')!.click();
+      await refrescar();
+      expect(el().querySelector('app-dialogo-ajuste')).toBeNull();
+
+      const mensaje = 'Abrí la caja para cobrar.';
+      respuesta.error(rechazo(422, 'CAJA_CERRADA', mensaje));
+      await refrescar();
+      expect(texto('app-dialogo-cobranza .error-servidor')).toBe(mensaje);
+
+      boton('Cancelar')!.click();
+      await refrescar();
+      expect(dialogo()).toBeNull();
+    });
+
     it('409: el diálogo sigue abierto, los pendientes se refrescan, se re-sugiere FIFO, se avisa y la clave cambia', async () => {
       const despues: PendientesCuenta = { saldo: 900, aCuenta: 0, comprobantes: [comprobante(32, 8, 500), comprobante(33, 9, 400)] };
       let llamada = 0;
@@ -1856,7 +1901,47 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       });
     });
 
+    it.each(['Recargo', 'Descuento'] as const)('«Cancelar» sin un envío en curso cierra %s sin ajustar', async (tipo) => {
+      await crear();
+      await pulsar(tipo);
+      await pulsar('Cancelar');
+
+      expect(dialogoAjuste()).toBeNull();
+      expect(cobranza.ajustar).not.toHaveBeenCalled();
+    });
+
     describe('rechazos', () => {
+      it.each(['clic en Cancelar', 'Esc', 'evento cancelar del hijo'])('ajuste pendiente: %s no cierra y el rechazo queda visible', async (salida) => {
+        const respuesta = new Subject<AjusteCobrado>();
+        await crear({ ajustar: () => respuesta });
+        await ajustarCon('Recargo', '500');
+        expect(cobranza.ajustar).toHaveBeenCalledTimes(1);
+
+        if (salida === 'clic en Cancelar') {
+          boton('Cancelar')!.click();
+        } else if (salida === 'Esc') {
+          dialogoAjuste()!.querySelector('[role="dialog"]')!.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }),
+          );
+        } else {
+          const hijo: DialogoAjuste = fixture.debugElement.query(By.directive(DialogoAjuste)).componentInstance;
+          hijo.cancelar.emit();
+        }
+        await refrescar();
+        expect(dialogoAjuste()).not.toBeNull();
+
+        await f4();
+        expect(dialogo()).toBeNull();
+
+        const mensaje = 'El cliente está desactivado.';
+        respuesta.error(errorHttp(422, { status: 422, message: mensaje }));
+        await refrescar();
+        expect(texto('app-dialogo-ajuste .error-servidor')).toBe(mensaje);
+
+        await pulsar('Cancelar');
+        expect(dialogoAjuste()).toBeNull();
+      });
+
       it('409 IMPUTACION_EXCEDE_DEUDA: el diálogo sigue, vuelve a los datos con las deudas actuales, avisa y la clave cambia', async () => {
         const despues: PendientesCuenta = { saldo: 800, aCuenta: 0, comprobantes: [comprobante(32, 8, 500), recargoPartida(3, 300)] };
         let llamada = 0;

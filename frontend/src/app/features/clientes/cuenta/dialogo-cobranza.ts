@@ -42,7 +42,7 @@ const TOTAL_MAXIMO_CENTAVOS = 999_999_999_999_999;
  * Cobranza de cuenta corriente (F4 en la pantalla de cuenta). Presentacional: arranca con el total vacío (no precarga la
  * deuda) y, al tipearlo, sugiere repartirlo en orden FIFO entre las partidas con deuda (ventas y Recargos); la tabla se puede editar a
  * mano (importe vacío = desmarcar) y lo que no se imputa queda «a cuenta». Sin deuda es un adelanto: no hay tabla y el
- * cobro queda todo a cuenta. Con el foco en el medio, ← y → (o ↑ y ↓) lo cambian; Enter confirma, Esc cierra. Mientras `enVuelo` ignora Enter.
+ * cobro queda todo a cuenta. Con el foco en el medio, ← y → (o ↑ y ↓) lo cambian; Enter confirma, Esc cierra. Mientras `enVuelo` no permite confirmar ni cancelar.
  * Si el envío quedó sin confirmar (`congelado`: red o 5xx) el contenido no se puede tocar —el reintento lleva la misma clave—
  * y la única salida para cambiarlo es `reiniciar`.
  */
@@ -198,12 +198,16 @@ export class DialogoCobranza {
     if (evento.target === evento.currentTarget) evento.preventDefault();
   }
 
+  protected cancelarCobro(): void {
+    if (!this.enVuelo()) this.cancelar.emit();
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     switch (evento.key) {
       case 'Escape':
         evento.preventDefault();
         evento.stopPropagation();
-        this.cancelar.emit();
+        this.cancelarCobro();
         return;
       case 'ArrowRight':
       case 'ArrowDown':
