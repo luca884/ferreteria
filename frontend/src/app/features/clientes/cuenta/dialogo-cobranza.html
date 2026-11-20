@@ -13,7 +13,7 @@
     @if (celular) {
       <!-- movil-sectores T12b: en el celular es una pantalla completa: la flecha «Volver» arriba (cierra, como «Cancelar») y la acción fija abajo. -->
       <div class="ficha-barra">
-        <button type="button" class="ficha-volver" aria-label="Volver" (click)="cancelar.emit()">
+        <button type="button" class="ficha-volver" aria-label="Volver" [disabled]="enVuelo()" (click)="cancelarCobro()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m15 6-6 6 6 6" />
           </svg>
@@ -147,7 +147,7 @@
       @if (congelado()) {
         <button type="button" class="secundario reiniciar" (click)="reiniciar.emit()">Cancelar y empezar de nuevo</button>
       }
-      <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+      <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" [disabled]="enVuelo()" (click)="cancelarCobro()">
         Cancelar
       </button>
       <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">

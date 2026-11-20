@@ -275,6 +275,26 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(canceladas).toBe(1);
     });
 
+    it('en vuelo, «Cancelar» queda deshabilitado', async () => {
+      await abrir();
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+
+      expect(boton('Cancelar').disabled).toBe(true);
+      boton('Cancelar').click();
+      expect(canceladas).toBe(0);
+    });
+
+    it('en vuelo, Esc no emite cancelar', async () => {
+      await abrir();
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+
+      const esc = tecla('Escape', total());
+      expect(esc.defaultPrevented).toBe(true);
+      expect(canceladas).toBe(0);
+    });
+
     it('Esc cierra (emite cancelar) sin confirmar nada', async () => {
       await abrir();
 
