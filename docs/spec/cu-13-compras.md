@@ -49,7 +49,8 @@
 Proveedores muestra tarjetas; el Dueño tiene «Nuevo» flotante, ficha a pantalla completa con «Guardar cambios» al pie al editar
 y baja o reactivación en la hoja del ⋯. El Vendedor conserva la lista de solo lectura, sin ficha ni «Nuevo».
 Compras muestra tarjetas y una hoja de filtros; el detalle es de pantalla completa con renglones plegables. «Nueva compra» sigue en la barra.
-Nueva compra pliega Comprobante, Artículos y Recargos y fija «Ver vista previa» al pie. La previa es una pantalla aparte:
+Nueva compra pliega Comprobante, Artículos y Recargos y fija «Ver vista previa» al pie, apagado con su motivo (comprobante incompleto,
+sin artículos o con renglones sin artículo) hasta que se puede pedir. La previa es una pantalla aparte:
 los renglones desplegables muestran costo, precio y stock, y «Volver» y «Confirmar compra» quedan fijos al pie.
 No cambian las reglas de negocio, los roles, los textos de validación ni la escritura de stock y costos.
 Pendientes: la baja tiene botones «lado a lado» y «Lista de precios» no es tarjeta aparte (L62); el paginador «queda arriba de la lista» (L64).

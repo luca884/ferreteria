@@ -7609,6 +7609,16 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
   app-nueva-compra > .recargos-costo > .motivo-accion {
     margin-bottom: var(--e-2);
   }
+  /* Por qué «Ver vista previa» está apagado: flotando justo arriba del pie fijo, a la vista aunque la pantalla esté scrolleada. */
+  app-nueva-compra > .motivo-accion.motivo-previa {
+    position: fixed;
+    inset-inline: var(--e-3);
+    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px) + var(--alto-pie-compra, 69px) + var(--e-2));
+    z-index: calc(var(--z-barra) - 1);
+    margin: 0;
+    font-size: var(--texto-sm);
+    box-shadow: var(--sombra-2);
+  }
   app-nueva-compra .paso :is(.buscador, .recargo-costo) > label {
     display: grid;
     gap: var(--e-1);

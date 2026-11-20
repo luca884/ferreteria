@@ -344,15 +344,44 @@ describe('Nueva compra en el celular (T16)', () => {
     expect(numero.value).toBe('4512');
   });
 
-  it('el pie sigue validando al tocarlo vacío y pide la misma vista previa con el PDF cargado', async () => {
+  it('«Ver vista previa» sale apagado con su motivo hasta que hay comprobante y artículos', async () => {
     await crear();
     expect(ver().parentElement?.matches('.ficha-pie.en-pagina')).toBe(true);
     expect(ver().disabled).toBe(false);
+    expect(ver().getAttribute('aria-disabled')).toBe('true');
+    expect(q('.motivo-previa')).toBeNull();
     await tocar(ver());
-    expect(q('[role="alert"]')?.textContent).toContain('Elegí el proveedor.');
+    expect(q('.motivo-previa[role="status"]')?.textContent?.trim()).toBe('Completá el comprobante para ver la vista previa.');
+    expect(q('[role="alert"]')).toBeNull();
     expect(vistaPrevia).not.toHaveBeenCalled();
+  });
 
+  it('con el comprobante completo pero sin artículos, el motivo es agregar uno', async () => {
+    await crear();
+    await cargarPorPdf([]);
+    expect(ver().getAttribute('aria-disabled')).toBe('true');
+    await tocar(ver());
+    expect(q('.motivo-previa')?.textContent?.trim()).toBe('Agregá al menos un artículo.');
+    expect(vistaPrevia).not.toHaveBeenCalled();
+  });
+
+  it('un renglón sin artículo apaga la vista previa con el motivo de siempre', async () => {
+    await crear();
+    await cargarPorPdf([{
+      codigo: 'X-9', descripcion: 'Sin match', cantidad: 1, costoUnitario: 10, neto: 10, articuloId: null,
+      articuloDescripcion: null, articuloCodigoInterno: null, articuloMoneda: null, cantidadNoEntera: false,
+    }]);
+    expect(ver().getAttribute('aria-disabled')).toBe('true');
+    await tocar(ver());
+    expect(q('.motivo-previa')?.textContent?.trim()).toBe('Resolvé los renglones sin artículo.');
+    expect(vistaPrevia).not.toHaveBeenCalled();
+  });
+
+  it('con el comprobante y los renglones, el pie se prende y pide la misma vista previa', async () => {
+    await crear();
     await cargarPorPdf();
+    expect(ver().getAttribute('aria-disabled')).toBeNull();
+    expect(q('.motivo-previa')).toBeNull();
     expect(q('.compra-paso-titulo .compra-paso-resumen')?.textContent?.trim()).toBe('1');
     expect(q('.recargos-costo .compra-paso-resumen')?.textContent?.trim()).toBe('1');
     expect(expansion()).toEqual(['true', 'false', 'false']);
@@ -391,7 +420,9 @@ describe('Nueva compra en el celular (T16)', () => {
     expect(q('.paso.recargos-costo > button')).not.toBeNull();
     expect(ver().parentElement?.className).toBe('acciones');
     expect(ver().disabled).toBe(false);
+    expect(ver().getAttribute('aria-disabled')).toBeNull();
     await tocar(ver());
+    expect(q('.motivo-previa')).toBeNull();
     expect(q('[role="alert"]')?.textContent).toContain('Elegí el proveedor.');
     expect(vistaPrevia).not.toHaveBeenCalled();
   });

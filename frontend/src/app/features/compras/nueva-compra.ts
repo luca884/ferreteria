@@ -35,6 +35,8 @@ const MENSAJE_BUSQUEDA = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_VISTA_PREVIA = 'No se pudo armar la vista previa. Probá de nuevo.';
 const MENSAJE_LEER_FACTURA = 'No se pudo leer la factura. Probá de nuevo o cargá la compra a mano.';
 const MENSAJE_SIN_ARTICULO = 'Resolvé los renglones sin artículo.';
+const MOTIVO_SIN_COMPROBANTE = 'Completá el comprobante para ver la vista previa.';
+const MOTIVO_SIN_RENGLONES = 'Agregá al menos un artículo.';
 const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la factura.';
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
 /** Lo que valida el backend: hasta 5 recargos del costo por compra. */
@@ -141,6 +143,14 @@ export class NuevaCompra implements OnInit {
   }));
   /** El motivo a la vista de la última acción que no se pudo usar, o null. Se anuncia con role="status" (S5). */
   protected readonly motivo = new MotivoDeAccion(() => this.motivos());
+  /**
+   * «Ver vista previa» en el celular (S5): apagado con su motivo hasta que el comprobante está completo y hay artículos
+   * resueltos. Sólo adelanta lo que `pedido()` pide igual: en escritorio el botón sigue prendido y valida al tocarlo.
+   */
+  protected readonly motivosPrevia = computed<Motivos<'vistaPrevia'>>(() => ({
+    vistaPrevia: this.celular() ? this.motivoDeLaPrevia() : null,
+  }));
+  protected readonly motivoPrevia = new MotivoDeAccion(() => this.motivosPrevia());
   /** Para la plantilla: 'true' apaga el botón, null lo deja prendido. */
   protected readonly ariaDe = ariaDe;
 
@@ -501,7 +511,17 @@ export class NuevaCompra implements OnInit {
     this.descartarVistaPrevia();
   }
 
+  private motivoDeLaPrevia(): string | null {
+    const comprobanteCompleto =
+      this.proveedorId() !== '' && entero(this.puntoVenta()) !== null && entero(this.numero()) !== null && this.fecha() !== '';
+    if (!comprobanteCompleto) return MOTIVO_SIN_COMPROBANTE;
+    if (this.sinArticulo().length > 0) return MENSAJE_SIN_ARTICULO;
+    return this.renglones().length === 0 ? MOTIVO_SIN_RENGLONES : null;
+  }
+
   protected verVistaPrevia(): void {
+    // S5: apagado, el botón explica por qué en vez de validar a ciegas.
+    if (this.motivoPrevia.mostrar('vistaPrevia')) return;
     const pedido = this.pedido();
     if (!pedido || this.trabajando()) return;
     this.trabajando.set(true);

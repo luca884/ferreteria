@@ -343,8 +343,19 @@
   }
 
   @if (!celular() || !plan()) {
+    @if (motivoPrevia.visible(); as texto) {
+      <p class="motivo-accion motivo-previa" role="status">{{ texto }}</p>
+    }
     <div class="acciones" [class.ficha-pie]="celular()" [class.en-pagina]="celular()">
-      <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
+      <button
+        type="button"
+        class="primario"
+        [disabled]="trabajando()"
+        [attr.aria-disabled]="ariaDe(motivosPrevia().vistaPrevia)"
+        (click)="verVistaPrevia()"
+      >
+        Ver vista previa
+      </button>
     </div>
   }
 
