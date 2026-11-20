@@ -42,22 +42,22 @@ describe('CamaraEscaner', () => {
   });
 
   describe('disponible()', () => {
-    it('es true sólo con BarcodeDetector y getUserMedia', () => {
+    it('es true sólo con BarcodeDetector y getUserMedia', async () => {
       instalarDetector();
       instalarCamara(async () => flujo());
-      expect(new CamaraEscaner().disponible()).toBe(true);
+      await expect(new CamaraEscaner().disponible()).resolves.toBe(true);
     });
 
-    it('es false sin BarcodeDetector (iPhone/Safari, Firefox)', () => {
+    it('es false sin BarcodeDetector (iPhone/Safari, Firefox)', async () => {
       instalarCamara(async () => flujo());
-      expect(new CamaraEscaner().disponible()).toBe(false);
+      await expect(new CamaraEscaner().disponible()).resolves.toBe(false);
     });
 
-    it('es false sin getUserMedia', () => {
+    it('es false sin getUserMedia', async () => {
       instalarDetector();
-      expect(new CamaraEscaner().disponible()).toBe(false);
+      await expect(new CamaraEscaner().disponible()).resolves.toBe(false);
       Object.defineProperty(navigator, 'mediaDevices', { value: {}, configurable: true });
-      expect(new CamaraEscaner().disponible()).toBe(false);
+      await expect(new CamaraEscaner().disponible()).resolves.toBe(false);
     });
   });
 

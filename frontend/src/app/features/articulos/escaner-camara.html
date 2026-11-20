@@ -48,7 +48,9 @@
     <div class="tarjeta">
       <p class="mensaje" role="alert">{{ textosFalla[e.causa] }}</p>
       <div class="acciones">
-        <button type="button" class="primario" (click)="iniciar()">Intentar de nuevo</button>
+        @if (e.causa !== 'sin-lector') {
+          <button type="button" class="primario" (click)="iniciar()">Intentar de nuevo</button>
+        }
         <button type="button" class="a-mano" (click)="aMano()">
           <ng-container *ngTemplateOutlet="aManoIcono" />
           <span>Escribir el código a mano</span>

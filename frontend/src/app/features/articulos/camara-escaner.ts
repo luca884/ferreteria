@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 
-/** Por qué no se pudo usar la cámara: el permiso negado, que no hay cámara, o cualquier otra cosa. */
-export type CausaFalla = 'denegada' | 'sin-camara' | 'otra';
+/** Por qué no se pudo abrir una sesión del escáner. */
+export type CausaFalla = 'denegada' | 'sin-camara' | 'sin-lector' | 'otra';
+
+class LectorNoDisponible extends Error {}
 
 /** Una cámara abierta: el video para mostrar, el lector de códigos y la linterna. `detener()` la apaga del todo. */
 export interface SesionCamara {
@@ -32,8 +34,9 @@ const detectorNativo = (): DetectorNativo | undefined =>
 /** HAVE_CURRENT_DATA: el video ya tiene un cuadro para leer. */
 const CON_IMAGEN = 2;
 
-/** Distingue la falla de `getUserMedia` por el nombre del error (los que define el estándar). */
+/** Distingue la falta de lector y las fallas de `getUserMedia` por el nombre que define el estándar. */
 export function causaDeFalla(error: unknown): CausaFalla {
+  if (error instanceof LectorNoDisponible) return 'sin-lector';
   const nombre = typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : undefined;
   if (nombre === 'NotAllowedError' || nombre === 'SecurityError') return 'denegada';
   if (nombre === 'NotFoundError' || nombre === 'OverconstrainedError') return 'sin-camara';
@@ -43,26 +46,40 @@ export function causaDeFalla(error: unknown): CausaFalla {
 /**
  * movil-sectores T7: la cámara y el lector nativo de códigos de barras detrás de un servicio, para que Vitest pueda
  * simularlos. Regla de Luca (L18): un permiso negado NO se recuerda. Acá no se guarda ni se lee nada del permiso
- * (ni `localStorage` ni `navigator.permissions`): cada `abrir()` vuelve a llamar a `getUserMedia` y el navegador decide.
+ * (ni `localStorage` ni `navigator.permissions`): si hay lector, cada `abrir()` vuelve a llamar a `getUserMedia`.
  */
 @Injectable({ providedIn: 'root' })
 export class CamaraEscaner {
-  /** Hay lector nativo y cámara en este navegador. Sin alguno de los dos no se ofrece el escáner (S1: se escribe a mano). */
-  disponible(): boolean {
-    return detectorNativo() !== undefined && typeof navigator.mediaDevices?.getUserMedia === 'function';
+  // Se comparte sólo la capacidad del lector, nunca el permiso de la cámara.
+  private formatos?: Promise<string[]>;
+
+  /** Hay cámara y un lector nativo compatible. Sin alguno de los dos se escribe a mano. */
+  async disponible(): Promise<boolean> {
+    const nativo = detectorNativo();
+    if (!nativo || typeof navigator.mediaDevices?.getUserMedia !== 'function') return false;
+    return (await this.formatosDe(nativo)).length > 0;
   }
 
-  /** Pide la cámara trasera (cada vez) y arma el lector. Rechaza con el error del navegador si no se pudo. */
+  private formatosDe(nativo: DetectorNativo): Promise<string[]> {
+    return this.formatos ??= Promise.resolve()
+      .then(() => nativo.getSupportedFormats?.())
+      .then((soportados) => soportados ? FORMATOS.filter((formato) => soportados.includes(formato)) : FORMATOS)
+      .catch(() => []);
+  }
+
+  /** Comprueba el lector y pide la cámara trasera de nuevo en cada intento. */
   async abrir(): Promise<SesionCamara> {
+    const Nativo = detectorNativo();
+    if (!Nativo) throw new LectorNoDisponible();
+    const formats = await this.formatosDe(Nativo);
+    if (formats.length === 0) throw new LectorNoDisponible();
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
     });
     const detener = () => stream.getTracks().forEach((pista) => pista.stop());
     try {
-      const Nativo = detectorNativo()!;
-      const soportados = await Nativo.getSupportedFormats?.();
-      const formats = soportados ? FORMATOS.filter((formato) => soportados.includes(formato)) : FORMATOS;
       const detector = new Nativo({ formats });
       const pista = stream.getVideoTracks()[0];
       const capacidades = (pista?.getCapabilities?.() ?? {}) as { torch?: boolean };
