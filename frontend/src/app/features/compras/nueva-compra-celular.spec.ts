@@ -15,7 +15,7 @@ import { NuevaCompra } from './nueva-compra';
 
 registerLocaleData(localeEsAr);
 
-describe('Nueva compra en el celular (T16a)', () => {
+describe('Nueva compra en el celular (T16)', () => {
   let fixture: ComponentFixture<NuevaCompra>;
   const vistaPrevia = vi.fn();
   const leerFactura = vi.fn();
@@ -62,11 +62,11 @@ describe('Nueva compra en el celular (T16a)', () => {
     await refrescar();
   }
 
-  async function cargarPorPdf() {
+  async function cargarPorPdf(renglones?: BorradorDeFactura['renglones']) {
     const borrador: BorradorDeFactura = {
       proveedorId: 4, proveedorNombre: 'Bulonera Sur', cuits: [], tipo: 'FA', puntoVenta: 1, numero: 4512,
       fecha: '2026-11-15', recargos: [{ nombre: 'Embalaje', porcentaje: 2, importe: 2 }],
-      renglones: [{
+      renglones: renglones ?? [{
         codigo: 'TOR-1', descripcion: 'Tornillo', cantidad: 2, costoUnitario: 50, neto: 100, articuloId: 1,
         articuloDescripcion: 'Tornillo', articuloCodigoInterno: 'TOR-1', articuloMoneda: 'ARS', cantidadNoEntera: false,
       }],
@@ -158,6 +158,79 @@ describe('Nueva compra en el celular (T16a)', () => {
     await tocar(ver());
     expect(q('[role="alert"]')?.textContent).toContain('Elegí el proveedor.');
     expect(vistaPrevia).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('mantiene la tabla y la edición de renglones (celular: %s)', async (celular) => {
+    await crear(celular);
+    await cargarPorPdf([{
+      codigo: 'PROV-1', descripcion: 'Tornillo', cantidad: 2, costoUnitario: 50, neto: 100, articuloId: 1,
+      articuloDescripcion: 'Tornillo', articuloCodigoInterno: 'TOR-1', articuloMoneda: 'USD', cantidadNoEntera: true,
+    }]);
+    if (celular) await tocar(secciones()[1]);
+    const tabla = q('table.renglones')!;
+    const fila = tabla.querySelector<HTMLTableRowElement>('tbody tr')!;
+    expect(tabla.querySelector('caption')?.textContent).toBe('Renglones de la compra');
+    expect(tabla.querySelector('thead th[scope="col"]')?.textContent).toBe('Artículo');
+    expect(fila.getAttribute('aria-label')).toBe(celular ? 'Tornillo (USD)' : null);
+    expect(fila.cells[0].textContent).toContain('TOR-1 · Tornillo (USD)');
+    expect(fila.querySelector('.codigo-proveedor')?.textContent).toBe('Cód. proveedor PROV-1');
+    expect(fila.querySelector('.aviso-fila')?.textContent).toContain('La cantidad no es entera');
+    expect([...fila.querySelectorAll('.compra-renglon-etiqueta')].map((e) => e.textContent)).toEqual(
+      celular ? ['Cantidad', 'Costo unitario sin IVA'] : [],
+    );
+    const cantidad = q<HTMLInputElement>('input[name="cantidad-0"][aria-label="Cantidad de Tornillo"]')!;
+    const costo = q<HTMLInputElement>('input[name="costo-0"][aria-label="Costo de Tornillo"]')!;
+    for (const [campo, valor] of [[cantidad, '3'], [costo, '55,25']] as const) {
+      campo.value = valor;
+      campo.dispatchEvent(new Event('input'));
+      await refrescar();
+    }
+    vistaPrevia.mockReturnValue(new Subject<PlanCompra>());
+    await tocar(ver());
+    expect(vistaPrevia).toHaveBeenCalledExactlyOnceWith({
+      proveedorId: 4, tipo: 'FA', puntoVenta: 1, numero: 4512, fecha: '2026-11-15',
+      renglones: [{ articuloId: 1, cantidad: 3, costoUnitario: 55.25 }], recargos: [{ nombre: 'Embalaje', porcentaje: 2 }],
+    });
+    await tocar(fila.querySelector('button')!);
+    expect(tabla.querySelector('tbody tr')).toBeNull();
+    expect(q('.estado-vacio')?.textContent).toBe('Todavía no agregaste artículos.');
+  });
+
+  it('mantiene las tres acciones y el aviso de un renglón sin artículo', async () => {
+    await crear();
+    await cargarPorPdf([{
+      codigo: 'PROV-2', descripcion: 'Tuerca', cantidad: 2.5, costoUnitario: 40, neto: 100, articuloId: null,
+      articuloDescripcion: null, articuloCodigoInterno: null, articuloMoneda: null, cantidadNoEntera: true,
+    }]);
+    await tocar(secciones()[1]);
+    const fila = q('ul[aria-label="Renglones sin artículo"] li')!;
+    expect(fila.textContent).toContain('Sin artículo: PROV-2 — Tuerca');
+    expect(fila.querySelector('.aviso-fila')?.textContent).toContain('La cantidad no es entera');
+    const botones = [...fila.querySelectorAll('button')];
+    expect(botones.map((b) => b.textContent?.trim())).toEqual(['Elegir artículo', 'Crear artículo', 'Quitar']);
+    await tocar(botones[0]);
+    expect(fila.classList.contains('resolviendo')).toBe(true);
+    expect(botones[2].getAttribute('aria-label')).toBe('Quitar sin artículo PROV-2');
+    await tocar(botones[2]);
+    expect(q('.sin-articulo')).toBeNull();
+  });
+
+  it('mantiene los nombres de los campos de recargo y explica el tope de 5', async () => {
+    await crear();
+    await tocar(secciones()[2]);
+    const agregar = q<HTMLButtonElement>('.recargos-costo > button')!;
+    for (let i = 0; i < 5; i++) {
+      await tocar(agregar);
+      expect(q(`input[name="recargo-nombre-${i}"]`)).not.toBeNull();
+      expect(q(`input[name="recargo-porcentaje-${i}"]`)).not.toBeNull();
+    }
+    expect(agregar.getAttribute('aria-disabled')).toBe('true');
+    await tocar(agregar);
+    expect(q('[role="status"].motivo-accion')?.textContent?.trim()).toBe('Ya cargaste el máximo de recargos (5).');
+    expect(q('input[name="recargo-nombre-5"]')).toBeNull();
+    await tocar(q<HTMLButtonElement>('button[aria-label="Quitar el recargo 5"]')!);
+    expect(agregar.getAttribute('aria-disabled')).not.toBe('true');
+    expect(q('input[name="recargo-nombre-4"]')).toBeNull();
   });
 
   it('al cruzar el corte cambia la presentación sin reiniciar los datos', async () => {

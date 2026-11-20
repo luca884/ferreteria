@@ -187,7 +187,7 @@
         </thead>
         <tbody>
           @for (r of renglones(); track r.articuloId; let i = $index) {
-            <tr>
+            <tr [attr.aria-label]="celular() ? r.descripcion + (r.moneda === 'USD' ? ' (USD)' : '') : null">
               <td>
                 {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
                 @if (r.codigoProveedor && r.codigoProveedor !== r.codigoInterno) {
@@ -198,6 +198,9 @@
                 }
               </td>
               <td class="num">
+                @if (celular()) {
+                  <span class="compra-renglon-etiqueta" aria-hidden="true">Cantidad</span>
+                }
                 <input
                   [name]="'cantidad-' + i"
                   type="text"
@@ -209,6 +212,9 @@
                 />
               </td>
               <td class="num">
+                @if (celular()) {
+                  <span class="compra-renglon-etiqueta" aria-hidden="true">Costo unitario sin IVA</span>
+                }
                 <app-campo-moneda [moneda]="r.moneda === 'USD' ? 'USD' : 'ARS'">
                   <input
                     [name]="'costo-' + i"

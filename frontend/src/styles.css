@@ -7463,6 +7463,154 @@ app-compras :is(.abrir-filtros-compras, .compras-celular) {
   app-nueva-compra .factura-pdf .pista-teclado {
     display: none;
   }
+  app-nueva-compra > .paso > .buscador {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--e-2);
+    margin-bottom: var(--e-2);
+  }
+  app-nueva-compra .resultados > .resultados-encabezado {
+    display: none;
+  }
+  /* (0,2,3) desempata con .resultados li encapsulado (0,2,1). */
+  app-nueva-compra .resultados > ul > li[role='option'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    grid-template-areas: 'descripcion costo' 'codigo stock';
+    gap: 0 var(--e-2);
+    min-height: 56px;
+    padding: var(--e-1) var(--e-2);
+    align-content: center;
+  }
+  app-nueva-compra .resultados [role='option'] > .descripcion {
+    grid-area: descripcion;
+    font-weight: 600;
+  }
+  app-nueva-compra .resultados [role='option'] > .codigo {
+    grid-area: codigo;
+  }
+  app-nueva-compra .resultados [role='option'] > .num:nth-child(3) {
+    grid-area: costo;
+    font-weight: 600;
+  }
+  app-nueva-compra .resultados [role='option'] > .num:last-child {
+    grid-area: stock;
+  }
+  app-nueva-compra .resultados [role='option'] > :is(.codigo, .num:last-child) {
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+  }
+  app-nueva-compra .resultados [role='option'] > :is(.descripcion, .num) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-nueva-compra > .paso > .tabla-scroll:has(> .renglones) {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  app-nueva-compra .renglones {
+    display: block;
+  }
+  app-nueva-compra .renglones > thead {
+    display: none;
+  }
+  app-nueva-compra .renglones > tbody {
+    display: grid;
+    gap: var(--e-2);
+  }
+  app-nueva-compra .renglones > tbody > tr,
+  app-nueva-compra > .recargos-costo > .recargo-costo {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    gap: var(--e-2);
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  app-nueva-compra .renglones > tbody > tr > td {
+    display: block;
+    position: static;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra .renglones > tbody > tr > td:is(:first-child, :last-child) {
+    grid-column: 1 / -1;
+  }
+  app-nueva-compra .renglones td:first-child {
+    font-weight: 600;
+  }
+  app-nueva-compra .renglones td > :is(.codigo-proveedor, .aviso-fila) {
+    display: block;
+    margin: var(--e-1) 0 0;
+    font-weight: 400;
+  }
+  app-nueva-compra .compra-renglon-etiqueta {
+    display: block;
+    margin-bottom: var(--e-1);
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+    text-align: left;
+  }
+  app-nueva-compra .renglones app-campo-moneda {
+    width: 100%;
+  }
+
+  app-nueva-compra > .paso > .sin-articulo {
+    margin: var(--e-2) 0 0;
+  }
+  app-nueva-compra .paso .sin-articulo > li {
+    display: grid;
+    gap: var(--e-2);
+    min-width: 0;
+    border: 1px solid var(--advertencia-borde);
+    color: var(--advertencia-texto);
+    overflow-wrap: anywhere;
+  }
+  app-nueva-compra .recargo-costo > button {
+    grid-column: 1 / -1;
+  }
+  app-nueva-compra > .recargos-costo > button.secundario {
+    width: 100%;
+  }
+  app-nueva-compra .paso :is(.buscador, .recargo-costo) > label {
+    display: grid;
+    gap: var(--e-1);
+    min-width: 0;
+  }
+  /* :is() toma .recargo-costo o .renglones (0,1,0); con .paso supera a .renglones input (0,2,1). */
+  app-nueva-compra .paso :is(.buscador, .renglones, .recargo-costo) input {
+    width: 100%;
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+  }
+  app-nueva-compra .paso :is(.buscador, .renglones, .sin-articulo, .recargo-costo) button,
+  app-nueva-compra > .recargos-costo > button.secundario {
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+  }
+  app-nueva-compra .paso :is(.buscador, .renglones, .sin-articulo, .recargo-costo) :is(input, button),
+  app-nueva-compra > .recargos-costo > button.secundario {
+    scroll-margin-bottom: calc(var(--alto-pie-compra) + var(--alto-destinos, 0px) + env(safe-area-inset-bottom, 0px) + var(--e-4));
+  }
+  app-nueva-compra :is(.renglones td, .recargo-costo) > button.chico,
+  app-nueva-compra .sin-articulo button[aria-label] {
+    justify-self: start;
+    border-color: transparent;
+    background: transparent;
+    color: var(--error);
+  }
+  app-nueva-compra .sin-articulo button.chico {
+    width: 100%;
+  }
+
   /* Las tres clases ganan sobre .acciones y :host > :not(app-barra-acciones) encapsulados. */
   app-nueva-compra > .acciones.ficha-pie.en-pagina {
     max-width: none;
