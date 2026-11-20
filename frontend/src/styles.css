@@ -3058,7 +3058,7 @@ ul.error {
     box-shadow: none;
     overscroll-behavior: contain;
     /* La barra, el TOTAL y el pie son fijos: al enfocar «Recibido» el campo queda entre ellos, no atrás del pie. */
-    scroll-padding: 152px 0 96px;
+    scroll-padding: 152px 0 calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   /* La cabecera azul del cobro, a lo ancho: el rótulo y el comprobante arriba y el TOTAL grande debajo, a la izquierda. */
@@ -3107,6 +3107,10 @@ ul.error {
   app-dialogo-cobro .cobro-celular > :not(.ficha-barra, .ficha-pie, .cabecera, .recargo, .descuento-forma, .dialogo-acciones) {
     flex: none;
     margin: var(--e-3) var(--pantalla-x) 0;
+  }
+  /* El pie sticky ya reserva su alto real (incluida la zona segura); dejá aire antes de él al final del scroll. */
+  app-dialogo-cobro .cobro-celular > :is(.pista-factura, .no-facturable) {
+    margin-bottom: var(--e-4);
   }
 
   /* Los medios, como la lista de opciones del artboard: filas de 64 px con el nombre y su ajuste a la izquierda y la marca a la derecha. */
@@ -3344,7 +3348,7 @@ ul.error {
    * deja más lugar abajo para que al enfocar un campo no quede tapado.
    */
   app-dialogo-cobro .dialogo.cobro.cobro-celular.cobro-exceso {
-    scroll-padding-bottom: 168px;
+    scroll-padding-bottom: calc(168px + env(safe-area-inset-bottom, 0px));
   }
   app-dialogo-cobro .dialogo.cobro-exceso .ficha-pie .formas-de-cobrar {
     flex-direction: column;
