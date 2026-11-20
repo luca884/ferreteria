@@ -2037,18 +2037,18 @@ ul.error {
  * del archivo del componente no cambia (S5). Va acá y no en articulo-form.css por su presupuesto de 8 kB.
  */
 @media screen and (max-width: 639.98px) {
-  /* La ficha scrollea por dentro, sin cubrir la barra de destinos; un diálogo queda encima. */
+  /* Cubre toda la pantalla (también la barra de destinos) y scrollea por dentro; un diálogo (z-dialogo) queda encima. */
   app-articulo-form.ficha-celular {
     position: fixed;
-    inset: 0 0 calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+    inset: 0;
     z-index: calc(var(--z-dialogo) - 1);
     display: flex;
     flex-direction: column;
     gap: var(--e-3);
     width: auto;
-    /* El pie queda por encima de la barra (que ya reserva la zona segura). */
-    padding-bottom: calc(69px + var(--e-4));
-    scroll-padding-bottom: calc(69px + var(--e-4));
+    /* El pie fijo (68 px) no tapa el último campo. */
+    padding-bottom: calc(68px + var(--e-4) + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(68px + var(--e-4) + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--fondo);
@@ -2250,10 +2250,11 @@ ul.error {
   app-articulo-form.ficha-celular .acciones-form.ficha-pie {
     position: fixed;
     inset-inline: 0;
-    bottom: calc(var(--alto-destinos, 0px) + 1px + env(safe-area-inset-bottom, 0px));
+    bottom: 0;
     z-index: var(--z-fijo);
     margin: 0;
-    padding: var(--e-3) var(--pantalla-x);
+    /* El del componente (`.acciones-form`) le ganaría al de `.ficha-pie`: se repite con la zona segura del teléfono. */
+    padding: var(--e-3) var(--pantalla-x) calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
   }
   app-articulo-form.ficha-celular .acciones-form.ficha-pie > .cancelar {
     display: inline-flex;

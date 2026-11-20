@@ -131,6 +131,7 @@ Fuente: `frontend/src/styles.css` y los componentes de `frontend/src/app/` (`mov
 - **Pantalla completa**: las altas, fichas y formularios largos que cambian en el celular
   llevan la acción principal abajo (`.ficha-pie`). En un formulario que sigue dentro de la
   página, `.ficha-pie.en-pagina` fija la acción sobre la barra de destinos.
+  La ficha y el alta de Artículos cubren la pantalla entera, también la barra de destinos (es el artboard aprobado).
 - **Hoja inferior**: acciones de un renglón o del ticket (⋯); también se usa para filtros
   de listas como Compras y Ventas. No todos los filtros llevan contador.
 - **Tarjetas plegables**: Nueva compra separa Comprobante, Artículos y Recargos sin
