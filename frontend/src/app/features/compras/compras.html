@@ -8,30 +8,64 @@
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede ver las compras.</p>
 } @else {
-  <form class="filtros" (submit)="buscar($event)">
-    <label>
-      Proveedor
-      <select name="proveedor" [value]="proveedorId()" (change)="proveedorId.set($any($event.target).value)">
-        <option value="">Todos</option>
-        @for (p of proveedores(); track p.id) {
-          <option [value]="p.id">{{ p.nombre }}</option>
-        }
-      </select>
-    </label>
-    <label>
-      Desde
-      <input name="desde" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
-    </label>
-    <label>
-      Hasta
-      <input #campoHasta name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
-    </label>
-    <button type="submit" class="primario">Buscar</button>
-    <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
-  </form>
-  @if (errorFiltros(); as texto) {
-    <p class="error" role="alert">{{ texto }}</p>
+  @if (celular()) {
+    <button type="button" class="secundario abrir-filtros-compras" aria-haspopup="dialog" (click)="filtrosAbiertos.set(true)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 6h16M7 12h10M10 18h4" />
+      </svg>
+      Filtros
+    </button>
+    @if (filtrosAbiertos()) {
+      <app-hoja-inferior titulo="Filtros" (cerrar)="filtrosAbiertos.set(false)">
+        <ng-container *ngTemplateOutlet="formFiltros" />
+      </app-hoja-inferior>
+    }
+  } @else {
+    <ng-container *ngTemplateOutlet="formFiltros" />
+    <ng-container *ngTemplateOutlet="avisoFiltros" />
   }
+
+  <ng-template #formFiltros>
+    <form class="filtros" (submit)="buscar($event)">
+      <label>
+        Proveedor
+        <select name="proveedor" [value]="proveedorId()" (change)="proveedorId.set($any($event.target).value)">
+          <option value="">Todos</option>
+          @for (p of proveedores(); track p.id) {
+            <!-- Al reabrir la hoja, las opciones se crean después de escribir el valor en el select. -->
+            <option [value]="p.id" [attr.selected]="celular() && proveedorId() === p.id.toString() ? '' : null">{{ p.nombre }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Desde
+        <input name="desde" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
+      </label>
+      <label>
+        Hasta
+        <input
+          #campoHasta name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)"
+          [attr.aria-describedby]="celular() && errorFiltros() ? 'compras-error-rango' : null"
+          [attr.aria-invalid]="celular() && errorFiltros() ? 'true' : null"
+        />
+      </label>
+      @if (celular()) {
+        <ng-container *ngTemplateOutlet="avisoFiltros" />
+        <div class="ficha-pie">
+          <button type="button" class="accion-hoja secundario" (click)="limpiar()">Limpiar</button>
+          <button type="submit" class="accion-hoja primario">Buscar</button>
+        </div>
+      } @else {
+        <button type="submit" class="primario">Buscar</button>
+        <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
+      }
+    </form>
+  </ng-template>
+  <ng-template #avisoFiltros>
+    @if (errorFiltros(); as texto) {
+      <p class="error" role="alert" [attr.id]="celular() ? 'compras-error-rango' : null">{{ texto }}</p>
+    }
+  </ng-template>
 
   @if (error(); as texto) {
     <div class="error con-accion" role="alert">
@@ -46,108 +80,166 @@
         {{ filtrada() ? 'No hay compras con esos filtros.' : 'Todavía no hay compras.' }}
       </p>
     } @else {
+      @if (celular()) {
+        <ul class="compras-celular" aria-label="Compras, las más nuevas primero. Elegí una para ver su detalle.">
+          @for (fila of actual.items; track fila.id) {
+            <li>
+              <button type="button" class="compra-tarjeta" [attr.aria-pressed]="elegida() === fila.id" (click)="elegir(fila)">
+                <span class="compra-comprobante">{{ fila.comprobante }}</span>
+                <span class="compra-meta">{{ fila.proveedorNombre }} · {{ fecha(fila.fecha) }} · {{ fila.renglones }} renglones</span>
+                <span class="compra-neto">{{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
       @if (actual.totalPages > 1) {
         <nav class="paginas" aria-label="Páginas de compras">
-          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)"
+            [attr.aria-describedby]="celular() && actual.page === 0 ? 'compras-numero-pagina' : null">
             Anterior
           </button>
-          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <span [attr.id]="celular() ? 'compras-numero-pagina' : null">Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
           <button
             type="button"
             class="secundario chico"
             [disabled]="actual.page + 1 >= actual.totalPages"
+            [attr.aria-describedby]="celular() && actual.page + 1 >= actual.totalPages ? 'compras-numero-pagina' : null"
             (click)="cargar(actual.page + 1)"
           >
             Siguiente
           </button>
         </nav>
       }
-      <div class="tabla-scroll">
-        <table class="compras tabla-tarjetas">
-          <caption class="sr-only">
-            Compras, las más nuevas primero. Elegí una para ver su detalle.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Fecha</th>
-              <th scope="col">Comprobante</th>
-              <th scope="col">Proveedor</th>
-              <th scope="col" class="num">Renglones</th>
-              <th scope="col" class="num">Neto</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (fila of actual.items; track fila.id) {
-              <tr [class.elegida]="elegida() === fila.id" (click)="elegir(fila)">
-                <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
-                <td class="comprobante" data-etiqueta="Comprobante">
-                  <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.id">
-                    {{ fila.comprobante }}
-                  </button>
-                </td>
-                <td class="proveedor" data-etiqueta="Proveedor">{{ fila.proveedorNombre }}</td>
-                <td class="num renglones" data-etiqueta="Renglones">{{ fila.renglones }}</td>
-                <td class="num neto" data-etiqueta="Neto">
-                  {{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}
-                </td>
+      @if (!celular()) {
+        <div class="tabla-scroll">
+          <table class="compras tabla-tarjetas">
+            <caption class="sr-only">
+              Compras, las más nuevas primero. Elegí una para ver su detalle.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Comprobante</th>
+                <th scope="col">Proveedor</th>
+                <th scope="col" class="num">Renglones</th>
+                <th scope="col" class="num">Neto</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (fila of actual.items; track fila.id) {
+                <tr [class.elegida]="elegida() === fila.id" (click)="elegir(fila)">
+                  <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
+                  <td class="comprobante" data-etiqueta="Comprobante">
+                    <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.id">
+                      {{ fila.comprobante }}
+                    </button>
+                  </td>
+                  <td class="proveedor" data-etiqueta="Proveedor">{{ fila.proveedorNombre }}</td>
+                  <td class="num renglones" data-etiqueta="Renglones">{{ fila.renglones }}</td>
+                  <td class="num neto" data-etiqueta="Neto">
+                    {{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>
   }
 
   @if (elegida() !== null) {
-    <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+    @if (celular()) {
+      <app-detalle-pantalla [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+        <ng-container *ngTemplateOutlet="cuerpoDetalle" />
+      </app-detalle-pantalla>
+    } @else {
+      <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+        <ng-container *ngTemplateOutlet="cuerpoDetalle" />
+      </app-dialogo-detalle>
+    }
+  }
+  <ng-template #cuerpoDetalle>
       @if (errorDetalle(); as texto) {
         <p class="error" role="alert">{{ texto }}</p>
       }
       @if (detalle(); as c) {
-        <p class="datos">
-          {{ c.proveedorNombre }} · {{ fecha(c.fecha) }} · Neto {{ c.neto | monto
-          }}{{ c.moneda === 'USD' ? ' (USD)' : '' }}
-        </p>
-        @if (c.recargos.length > 0) {
-          <ul class="recargos" aria-label="Recargos del costo">
-            @for (recargo of c.recargos; track $index) {
-              <li>{{ recargo.nombre }} {{ recargo.porcentaje | number: '1.0-2' }} %</li>
-            }
-          </ul>
-        }
-        <div class="tabla-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Artículo</th>
-                <th scope="col" class="num">Cantidad</th>
-                <th scope="col" class="num">Costo antes</th>
-                <th scope="col" class="num">Costo de la compra</th>
-                <th scope="col" class="num">Precio antes</th>
-                <th scope="col" class="num">Precio después</th>
-                <th scope="col" class="num">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (r of c.renglones; track r.renglon) {
+        @if (celular()) {
+          <div class="compra-encabezado">
+            <ng-container *ngTemplateOutlet="cabeceraCompra; context: { $implicit: c }" />
+          </div>
+          @for (r of c.renglones; track r.renglon) {
+            <details class="compra-renglon" [open]="$first">
+              <summary tabindex="0">
+                <span class="compra-articulo">{{ r.codigoInterno }} · {{ r.descripcion }}</span>
+                <span class="compra-meta">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</span>
+                <span class="compra-neto">{{ r.subtotal | monto }}</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </summary>
+              <dl class="compra-costos">
+                <div>
+                  <dt>Costo antes</dt>
+                  <dd>{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}<span class="compra-flecha" aria-hidden="true">→</span></dd>
+                </div>
+                <div><dt>Costo de la compra</dt> <dd>{{ r.costoUnitario | monto }}{{ porUnidad(r.unidad) }}</dd></div>
+              </dl>
+              <dl class="compra-precios">
+                <div><dt>Precio antes</dt> <dd>{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</dd></div>
+                <div><dt>Precio después</dt> <dd>{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</dd></div>
+              </dl>
+            </details>
+          }
+        } @else {
+          <ng-container *ngTemplateOutlet="cabeceraCompra; context: { $implicit: c }" />
+          <div class="tabla-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <td>{{ r.codigoInterno }} · {{ r.descripcion }}</td>
-                  <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-                  <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.costoUnitario | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                  <td class="num">{{ r.subtotal | monto }}</td>
+                  <th scope="col">Artículo</th>
+                  <th scope="col" class="num">Cantidad</th>
+                  <th scope="col" class="num">Costo antes</th>
+                  <th scope="col" class="num">Costo de la compra</th>
+                  <th scope="col" class="num">Precio antes</th>
+                  <th scope="col" class="num">Precio después</th>
+                  <th scope="col" class="num">Subtotal</th>
                 </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                @for (r of c.renglones; track r.renglon) {
+                  <tr>
+                    <td>{{ r.codigoInterno }} · {{ r.descripcion }}</td>
+                    <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                    <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.costoUnitario | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                    <td class="num">{{ r.subtotal | monto }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       } @else if (!errorDetalle()) {
         <p class="ayuda">Cargando…</p>
       }
-    </app-dialogo-detalle>
-  }
+  </ng-template>
+  <ng-template #cabeceraCompra let-c>
+    <p class="datos">
+      {{ c.proveedorNombre }} · {{ fecha(c.fecha) }} · Neto {{ c.neto | monto
+      }}{{ c.moneda === 'USD' ? ' (USD)' : '' }}
+    </p>
+    @if (c.recargos.length > 0) {
+      <ul class="recargos" aria-label="Recargos del costo">
+        @for (recargo of c.recargos; track $index) {
+          <li>{{ recargo.nombre }} {{ recargo.porcentaje | number: '1.0-2' }} %</li>
+        }
+      </ul>
+    }
+  </ng-template>
 }

@@ -1,4 +1,4 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -7,8 +7,11 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { DetallePantalla } from '../../shared/detalle-pantalla';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { origenDeLaNavegacion } from '../../shared/documento-por-ruta';
+import { esCelular } from '../../shared/es-celular';
+import { HojaInferior } from '../../shared/hoja-inferior';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -32,9 +35,10 @@ export function fechaDeCompra(fecha: string): string {
  */
 @Component({
   selector: 'app-compras',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, DetallePantalla, DialogoDetalle, HojaInferior, MontoPipe, NgTemplateOutlet, RouterLink],
   templateUrl: './compras.html',
   styleUrl: './compras.css',
+  host: { '(window:resize)': 'ajustarPresentacion()' },
 })
 export class Compras implements OnInit {
   protected readonly cantidadConUnidad = cantidadConUnidad;
@@ -45,6 +49,8 @@ export class Compras implements OnInit {
   private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
   protected readonly fecha = fechaDeCompra;
+  protected readonly celular = signal(esCelular());
+  protected readonly filtrosAbiertos = signal(false);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly pagina = signal<PageResponse<CompraResumen> | null>(null);
@@ -92,6 +98,13 @@ export class Compras implements OnInit {
     }
   }
 
+  /** Al cruzar el corte se cambia la presentación, sin reiniciar la consulta ni sus filtros. */
+  protected ajustarPresentacion(): void {
+    const celular = esCelular();
+    this.celular.set(celular);
+    if (!celular) this.filtrosAbiertos.set(false);
+  }
+
   protected cargar(numeroDePagina: number): void {
     this.cargando.set(true);
     this.error.set(null);
@@ -121,6 +134,7 @@ export class Compras implements OnInit {
       ...(this.hasta() ? { hasta: this.hasta() } : {}),
     };
     this.filtrada.set(Object.keys(this.aplicados).length > 0);
+    this.filtrosAbiertos.set(false);
     this.cargar(0);
   }
 
@@ -131,6 +145,7 @@ export class Compras implements OnInit {
     this.errorFiltros.set(null);
     this.aplicados = {};
     this.filtrada.set(false);
+    this.filtrosAbiertos.set(false);
     this.cargar(0);
   }
 

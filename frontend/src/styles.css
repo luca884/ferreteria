@@ -7145,3 +7145,208 @@ app-proveedores app-hoja-inferior {
     border-top-color: var(--borde-suave);
   }
 }
+
+/* ---------- Compras: lista y detalle en el celular (movil-sectores T15b) ---------- */
+app-compras :is(.abrir-filtros-compras, .compras-celular) {
+  display: none;
+}
+@media screen and (max-width: 639.98px) {
+  /* El template sólo dibuja la hoja y el detalle a pantalla completa en el celular. */
+  app-compras :is(app-hoja-inferior, app-detalle-pantalla) {
+    display: contents;
+  }
+  app-compras .abrir-filtros-compras {
+    display: inline-flex;
+    min-height: var(--alto-tactil);
+    min-width: var(--alto-tactil);
+    margin-bottom: var(--e-3);
+  }
+  app-compras .compras-celular {
+    display: grid;
+    gap: var(--e-2);
+    margin-block: 0 var(--e-3);
+    padding: 0;
+    list-style: none;
+  }
+  app-compras :is(.compra-tarjeta, .compra-renglon > summary) {
+    display: grid;
+    align-content: center;
+    align-items: center;
+    gap: 2px var(--e-2);
+    width: 100%;
+    padding: var(--e-2) var(--e-3);
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  app-compras .compra-tarjeta {
+    grid-template-columns: minmax(0, 1fr) fit-content(48%);
+    min-height: 72px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    color: var(--texto);
+    font-size: var(--texto-sm);
+  }
+  app-compras .compra-tarjeta[aria-pressed='true'] {
+    border-color: var(--tono-compras);
+    background: var(--tono-compras-suave);
+  }
+  app-compras :is(.compra-comprobante, .compra-articulo, .compra-meta) {
+    grid-column: 1;
+  }
+  app-compras .compra-meta {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    font-weight: 400;
+  }
+  app-compras .compra-neto {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    text-align: right;
+  }
+  app-compras :is(.compra-neto, .compra-renglon dd) {
+    font-family: var(--fuente-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  app-compras nav.paginas[aria-label] {
+    justify-content: space-between;
+    gap: var(--e-2);
+    text-align: center;
+    font-size: var(--texto-sm);
+  }
+  app-compras :is(nav.paginas button, .reintentar, .accion-barra) {
+    min-width: var(--alto-tactil);
+    min-height: var(--alto-tactil);
+  }
+
+  app-compras .hoja-inferior .filtros {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--e-3);
+    margin: var(--e-3) 0 0;
+  }
+  app-compras .filtros > :is(label:first-child, .error, .ficha-pie) {
+    grid-column: 1 / -1;
+  }
+  app-compras .filtros label {
+    display: grid;
+    gap: var(--e-1);
+    min-width: 0;
+  }
+  app-compras .filtros :is(input, select) {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--alto-tactil);
+    padding-inline: var(--e-2);
+  }
+  app-compras .filtros input[aria-invalid='true'] {
+    border-color: var(--error-borde);
+  }
+  app-compras .filtros .error {
+    margin: 0;
+  }
+  app-compras .filtros .ficha-pie {
+    position: static;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  app-compras .filtros .accion-hoja {
+    justify-content: center;
+    min-width: var(--alto-tactil);
+    min-height: 52px;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-compras .filtros .accion-hoja.primario {
+    flex-grow: 2;
+    border-color: var(--acento-fuerte);
+  }
+
+  /* La geometría de DetallePantalla es compartida con Ventas; sólo se viste el contenido de Compras. */
+  app-compras .detalle-pantalla .ficha-barra {
+    border-top: 3px solid var(--tono-compras);
+  }
+  app-compras .detalle-pantalla-cuerpo {
+    padding-bottom: calc(var(--e-3) + env(safe-area-inset-bottom, 0px));
+  }
+  app-compras :is(.compra-encabezado, .compra-renglon) {
+    min-width: 0;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+    overflow-wrap: anywhere;
+  }
+  app-compras .compra-encabezado {
+    padding: var(--e-3);
+  }
+  app-compras .compra-encabezado :is(.datos, .recargos) {
+    margin: 0;
+  }
+  app-compras .compra-encabezado .recargos {
+    margin-top: var(--e-2);
+  }
+  app-compras .compra-renglon > summary {
+    grid-template-columns: minmax(0, 1fr) fit-content(42%) 18px;
+    min-height: 56px;
+    border-radius: inherit;
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+  }
+  app-compras .compra-renglon > summary::-webkit-details-marker {
+    display: none;
+  }
+  app-compras .compra-renglon > summary svg {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    color: var(--texto-tenue);
+  }
+  app-compras .compra-renglon[open] > summary svg {
+    transform: rotate(180deg);
+  }
+  app-compras .compra-renglon > summary:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+  app-compras .compra-renglon :is(dl, dd) {
+    margin: 0;
+  }
+  app-compras .compra-renglon dl {
+    padding: var(--e-2) var(--e-3);
+    border-top: 1px solid var(--borde-suave);
+  }
+  app-compras .compra-renglon dt {
+    color: var(--texto-suave);
+    font-size: var(--texto-xs);
+  }
+  app-compras .compra-costos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
+    background: var(--superficie-2);
+  }
+  app-compras .compra-costos > :first-child {
+    position: relative;
+  }
+  app-compras .compra-flecha {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 16px);
+    transform: translate(-50%, -50%);
+    color: var(--tono-compras);
+  }
+  app-compras .compra-precios > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    gap: var(--e-2);
+    align-items: baseline;
+  }
+  app-compras .compra-precios dd {
+    text-align: right;
+  }
+}
