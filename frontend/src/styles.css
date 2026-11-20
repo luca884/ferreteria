@@ -6953,3 +6953,195 @@ app-cuenta-cliente .acciones-cuenta {
     font-weight: 600;
   }
 }
+
+/* ---------- Compras: proveedores en el celular (movil-sectores T15a) ---------- */
+
+app-proveedores .mas-ficha,
+app-proveedores .ficha-seccion,
+app-proveedores app-hoja-inferior {
+  display: none;
+}
+
+@media screen and (max-width: 639.98px) {
+  app-proveedores:has(> .boton-flotante) {
+    /* Deja la última tarjeta libre del botón flotante. */
+    padding-bottom: calc(56px + var(--e-4) * 2);
+  }
+  app-proveedores:has(.listado.con-alta) > .ayuda,
+  app-proveedores .barra-estado .elegido {
+    display: none;
+  }
+  app-proveedores app-barra-acciones {
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+    gap: var(--e-2);
+    padding-block: var(--e-2);
+    overflow: visible;
+  }
+  app-proveedores app-barra-acciones .buscar.buscar {
+    width: 100%;
+    min-height: var(--alto-tactil);
+    padding-left: 40px;
+    border-radius: var(--radio-lg);
+    background: var(--superficie) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%235b6b82' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center;
+    font-size: 16px;
+  }
+  app-proveedores app-barra-acciones .casilla.inactivos {
+    min-height: var(--alto-tactil);
+    margin: 0;
+    padding: 0 var(--e-4);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie);
+    cursor: pointer;
+  }
+  app-proveedores app-barra-acciones .casilla.inactivos:has(input:checked) {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+    color: var(--tono);
+  }
+
+  /* Sólo contacto y teléfono dimensionan sus columnas; la tercera absorbe el sobrante. */
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) fit-content(50%) minmax(0, 1fr) auto;
+    column-gap: 0;
+    row-gap: 2px;
+    align-content: center;
+    align-items: baseline;
+    min-height: 72px;
+    padding: var(--e-2) var(--e-3);
+    background: var(--superficie);
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas > tbody > tr.elegible[aria-selected='true'] {
+    border-color: var(--tono);
+    background: var(--tono-suave);
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas > tbody > tr.elegible::after {
+    content: '';
+    grid-column: 4;
+    grid-row: 1 / 4;
+    align-self: center;
+    width: 8px;
+    height: 8px;
+    margin-inline: var(--e-1) 3px;
+    border: solid var(--tono);
+    border-width: 0 2px 2px 0;
+    transform: rotate(-45deg);
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td {
+    padding: 0;
+    background: transparent;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td::before {
+    content: none;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas :is(td.nombre, td.cuit) {
+    grid-column: 1 / 4;
+    /* Ocupan todo el renglón, pero su ancho intrínseco no se reparte entre las columnas del contacto. */
+    contain: inline-size;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.nombre {
+    grid-row: 1;
+    overflow-wrap: anywhere;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas :is(td.cuit, td.contacto, td.telefono) {
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.cuit {
+    grid-row: 2;
+    font-family: var(--fuente-mono);
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.cuit::before {
+    content: 'CUIT ';
+    font: inherit;
+    color: inherit;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas :is(td.contacto, td.telefono) {
+    grid-row: 3;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.contacto {
+    grid-column: 1;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.telefono {
+    grid-column: 2;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas td.telefono:not(.sin-telefono)::before {
+    content: '\00a0·\00a0';
+    font: inherit;
+    color: inherit;
+  }
+  app-proveedores .grilla-marco.grilla-marco .tabla-tarjetas :is(td.telefono.sin-telefono, td.whatsapp, td.correo) {
+    display: none;
+  }
+  app-proveedores .etiqueta.de-baja {
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+  }
+
+  app-proveedores .ficha-barra h2 {
+    flex: 1;
+  }
+  app-proveedores .mas-ficha {
+    display: inline-flex;
+    flex: none;
+    width: var(--alto-tactil);
+    height: var(--alto-tactil);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--texto);
+  }
+  app-proveedores .ficha-seccion {
+    display: block;
+    margin-block: var(--e-2) 0;
+    color: var(--texto-tenue);
+    font-size: var(--texto-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  app-proveedores form.alta.ficha-pantalla {
+    scroll-padding-block: 56px calc(77px + env(safe-area-inset-bottom, 0px));
+  }
+  app-proveedores form.alta .campo input {
+    min-height: var(--alto-tactil);
+  }
+  app-proveedores form.alta .lista-proveedor.lista-proveedor dl {
+    grid-template-columns: max-content minmax(0, 1fr);
+    overflow-wrap: anywhere;
+  }
+  app-proveedores form.alta .lista-proveedor a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--alto-tactil);
+  }
+  app-proveedores form.alta .ficha-pie > button {
+    min-height: 52px;
+    border-radius: var(--radio-lg);
+    font-weight: 600;
+  }
+  app-proveedores form.alta .ficha-pie > button[type='submit'] {
+    flex-grow: 2;
+  }
+  app-proveedores .error.con-accion > button {
+    min-height: var(--alto-tactil);
+  }
+
+  app-proveedores app-hoja-inferior {
+    display: contents;
+  }
+  app-proveedores app-hoja-inferior .hoja-inferior-titulo {
+    overflow-wrap: anywhere;
+  }
+  app-proveedores app-hoja-inferior .accion-hoja.alternar.peligro {
+    border-color: transparent;
+    border-top-color: var(--borde-suave);
+  }
+}
