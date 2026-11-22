@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seleccionar y mover · Personalizar menú</title>
+<style>
+:root {
+  /* frontend/src/styles.css :root, con la pila local de respaldo. */
+  --acento:#2563eb; --acento-fuerte:#1d4ed8; --acento-suave:#eff6ff; --acento-texto:#fff;
+  --fondo:#f4f6fa; --superficie:#fff; --superficie-2:#f8fafc; --superficie-3:#f1f5f9;
+  --borde:#e2e8f0; --borde-fuerte:#cbd5e1; --texto:#0f172a; --texto-menu:#334155; --texto-suave:#475569; --texto-tenue:#5b6b82;
+  --error:#b91c1c; --exito:#047857; --exito-fondo:#ecfdf5; --exito-borde:#a7f3d0;
+  --tono-ventas:#0e7490; --tono-articulos:#b45309; --tono-compras:#6d28d9; --tono-precios:#047857; --tono-configuracion:#be185d; --tono-configuracion-suave:#fdf2f8;
+  --fuente:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --texto-2xs:.6875rem; --texto-xs:.75rem; --texto-sm:.8125rem; --texto-base:.875rem; --texto-lg:1.125rem; --texto-xl:1.375rem;
+  --e-1:4px; --e-2:8px; --e-3:12px; --e-4:16px; --e-5:20px; --e-6:24px; --e-8:32px;
+  --radio-sm:4px; --radio:8px; --radio-lg:10px; --radio-xl:14px; --ancho-menu:212px; --alto-barra:58px; --alto-control:36px;
+  --sombra-1:0 1px 2px rgb(15 23 42 / .05); --sombra-2:0 8px 24px rgb(15 23 42 / .1); --sombra-3:0 24px 60px rgb(15 23 42 / .3); --velo:rgb(15 23 42 / .45); --z-fijo:1; color-scheme:light;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--fondo);color:var(--texto);font:var(--texto-base)/1.45 var(--fuente)}
+h1,h2,h3,p{margin:0} h1{font-size:var(--texto-xl);letter-spacing:-.01em} h2{font-size:var(--texto-lg)} h3{font-size:var(--texto-base);overflow-wrap:anywhere}
+button,select,input{font:inherit;color:inherit;background:var(--superficie);border:1px solid var(--texto-tenue);border-radius:var(--radio);min-height:var(--alto-control);padding:var(--e-1) var(--e-3)}
+button{font-weight:600;cursor:pointer} button:not(:disabled):not([aria-disabled=true]):hover{background:var(--acento-suave);border-color:var(--acento-fuerte)}
+button.primario{background:var(--acento);border-color:var(--acento-fuerte);color:var(--acento-texto)} button.primario:not(:disabled):hover{background:var(--acento-fuerte)}
+button:disabled,button[aria-disabled=true],select:disabled{background:var(--superficie-3);color:var(--texto-tenue);border-color:var(--borde-fuerte);cursor:not-allowed}
+:focus-visible{outline:3px solid var(--acento-fuerte);outline-offset:2px}
+.app{display:grid;grid-template-columns:var(--ancho-menu) minmax(0,1fr);min-height:100dvh}
+.lateral{position:sticky;top:0;height:100dvh;overflow:auto;background:var(--superficie);border-right:1px solid var(--borde);padding:var(--e-4) var(--e-3);display:flex;flex-direction:column;gap:var(--e-5)}
+.marca{display:flex;align-items:center;gap:var(--e-2);line-height:1.2}.marca svg{width:28px;height:28px;flex:none}
+.mock-nav{display:grid;gap:var(--e-2);color:var(--texto-menu)} .nivel,.actual,.mostrador{padding:var(--e-2) var(--e-3);border-radius:var(--radio)}
+.nivel{display:flex;align-items:center;gap:var(--e-2);font-size:var(--texto-2xs);text-transform:uppercase;letter-spacing:.06em;font-weight:700}.nivel i{width:var(--e-2);height:var(--e-2);border-radius:50%;background:var(--tono)} .nivel span{margin-left:auto}
+.ventas{--tono:var(--tono-ventas)} .articulos{--tono:var(--tono-articulos)} .compras{--tono:var(--tono-compras)} .precios{--tono:var(--tono-precios)} .configuracion{--tono:var(--tono-configuracion)}
+.actual{background:var(--tono-configuracion);color:var(--acento-texto);font-weight:600}.perfil{margin-top:auto;border-top:1px solid var(--borde);padding:var(--e-3) var(--e-2);font-size:var(--texto-sm)}
+.ayuda,.meta{color:var(--texto-tenue);font-size:var(--texto-sm)} .meta{font-size:var(--texto-xs)}
+.barra{min-height:var(--alto-barra);padding:var(--e-2) var(--e-6);background:var(--superficie);border-top:3px solid var(--tono-configuracion);border-bottom:1px solid var(--borde);display:flex;align-items:center;justify-content:space-between;gap:var(--e-3)}
+.variante{color:var(--tono-configuracion);background:var(--tono-configuracion-suave);border-radius:var(--radio-sm);padding:var(--e-1) var(--e-2);font-size:var(--texto-xs);font-weight:700}
+.editor{max-width:64rem;margin:auto;padding:var(--e-4) var(--e-4) var(--e-8)}
+.fila{display:flex;align-items:center;flex-wrap:wrap;gap:var(--e-2)} .extremos{justify-content:space-between}
+.config{padding:var(--e-3) var(--e-4);background:var(--superficie);border:1px solid var(--borde);border-radius:var(--radio-lg);box-shadow:var(--sombra-1)}
+label{font-weight:600} .config .ayuda{margin-left:var(--e-2)}
+.instrucciones{margin:var(--e-3) 0 var(--e-2)}
+.sticky{position:sticky;top:0;z-index:var(--z-fijo);background:var(--fondo);padding:var(--e-1) 0 var(--e-2)}
+.contexto{min-height:72px;padding:var(--e-2) var(--e-3);border:1px solid var(--acento-fuerte);border-left-width:4px;border-radius:var(--radio-lg);background:var(--acento-suave);box-shadow:var(--sombra-2);gap:var(--e-3)}
+.contexto button,.contexto select{font-size:var(--texto-sm)} .contexto select{max-width:10rem} .contexto .volver{border-color:transparent;background:transparent;color:var(--acento-fuerte);text-decoration:underline;text-underline-offset:2px}
+.rotulo{font-size:var(--texto-2xs);text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--acento-fuerte)} .seleccion{flex:1;min-width:13rem;overflow-wrap:anywhere}
+.estado{min-height:var(--alto-control);padding:var(--e-2) var(--e-3);margin-top:var(--e-1);background:var(--superficie-2);border:1px solid var(--borde);border-radius:var(--radio);font-size:var(--texto-sm)}
+.estado.ok{background:var(--exito-fondo);border-color:var(--exito-borde);color:var(--exito)}
+.encabezado{margin:var(--e-1) 0 var(--e-2)} .grupos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--e-3);align-items:start}
+.grupo,.ocultas{min-width:0;background:var(--superficie);border:1px solid var(--borde);border-radius:var(--radio-lg);padding:var(--e-2) var(--e-3);box-shadow:var(--sombra-1)}
+.grupo{border-inline-start:4px solid var(--tono)} .ocultas{padding:var(--e-3);margin-top:var(--e-3);background:var(--superficie-2)}
+.ocultas .opciones{grid-template-columns:repeat(3,minmax(0,1fr))}
+.opciones{list-style:none;margin:var(--e-2) 0 0;padding:0;display:grid;gap:var(--e-1)}
+.elegir{display:flex;align-items:center;text-align:left;gap:var(--e-2);width:100%;border-color:var(--borde);background:var(--superficie-2);padding-inline:var(--e-2);overflow-wrap:anywhere}
+.elegir.grupo-boton{background:var(--superficie);border-color:transparent}.elegir.grupo-boton:hover{text-decoration:underline}.elegir[aria-pressed=true]{background:var(--acento-suave);border-color:var(--acento-fuerte);color:var(--acento-fuerte)}
+.elegir .conteo{margin-left:auto;flex:none}.asa{color:var(--texto-tenue);font-size:var(--texto-lg);width:var(--e-5);text-align:center;flex:none}.marca-sel{margin-left:auto;font-weight:700;color:var(--acento-fuerte)}
+.vacio{border:1px dashed var(--borde-fuerte);border-radius:var(--radio-sm);padding:var(--e-2);margin-top:var(--e-2)}
+dialog{width:min(28rem,calc(100% - var(--e-8)));padding:var(--e-6);border:1px solid var(--borde);border-radius:var(--radio-xl);box-shadow:var(--sombra-3);color:var(--texto)} dialog::backdrop{background:var(--velo)}
+dialog form{display:grid;gap:var(--e-3)} dialog .fila{justify-content:flex-end}.error{color:var(--error)} .escritorio{display:none;padding:var(--e-6)}
+@media(max-width:1023.98px){.app{display:block}.lateral,.editor{display:none}.escritorio{display:block}.barra{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="lateral" aria-label="Menú lateral ilustrativo">
+  <div class="marca"><svg viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="var(--acento)"/><path d="M9 10h10m-5 0v9" fill="none" stroke="var(--acento-texto)" stroke-width="2.4" stroke-linecap="round"/></svg><strong>Ferretería El Tornillo</strong></div>
+  <div class="mock-nav"><div class="mostrador">⌂ &nbsp; Mostrador</div><div class="nivel ventas"><i></i>Ventas<span aria-hidden="true">›</span></div><div class="nivel articulos"><i></i>Artículos<span aria-hidden="true">›</span></div><div class="nivel compras"><i></i>Compras<span aria-hidden="true">›</span></div><div class="nivel configuracion"><i></i>Configuración</div><div class="actual">Personalizar menú</div></div>
+  <div class="perfil"><strong>Dueño</strong><p class="ayuda">Maqueta · asas ilustrativas</p></div>
+</aside>
+<main>
+  <header class="barra"><h1>Personalizar menú</h1><span class="variante">03 · Seleccionar y mover</span></header>
+  <p class="escritorio" role="status">Personalizá el menú desde la computadora.</p>
+  <div class="editor" id="editor">
+    <div class="config fila extremos">
+      <div class="fila"><label for="rol">Menú de</label><select id="rol" disabled><option>Vendedores</option></select><span id="origen" class="ayuda"></span></div>
+      <div class="fila"><button id="guardar" class="primario">Guardar</button><button id="descartar">Descartar cambios</button><button id="restaurar">Restaurar</button></div>
+    </div>
+    <p class="ayuda instrucciones">Elegí una opción o un grupo (clic, Enter o Espacio). Las acciones quedan a mano en la barra mientras recorrés la lista.</p>
+    <div class="sticky" id="sticky">
+      <section class="contexto fila extremos" id="contexto" aria-label="Acciones de la selección"></section>
+      <p class="estado" id="estado" role="status" aria-live="polite" aria-atomic="true">Sin cambios pendientes.</p>
+    </div>
+    <section aria-labelledby="titulo-grupos"><div class="fila extremos encabezado"><div class="fila"><h2 id="titulo-grupos">Grupos del menú</h2><span class="meta" id="total"></span></div><button id="agregar">+ Agregar grupo</button></div><div class="grupos" id="grupos"></div></section>
+    <section class="ocultas" aria-labelledby="titulo-ocultas"><div class="fila extremos"><div class="fila"><h2 id="titulo-ocultas">Ocultas</h2><span class="meta" id="total-ocultas"></span></div><p class="ayuda">Elegí una opción para volver a mostrarla.</p></div><div id="ocultas"></div></section>
+  </div>
+</main>
+</div>
+<dialog id="dialogo" aria-labelledby="dialogo-titulo" aria-describedby="dialogo-detalle">
+  <form id="form"><h2 id="dialogo-titulo"></h2><p id="dialogo-detalle" class="ayuda"></p>
+    <div id="campos" hidden><label for="nombre">Nombre del grupo</label><br><input id="nombre" aria-describedby="dialogo-error"><br><label for="color">Color</label><br><select id="color"></select></div>
+    <p id="dialogo-error" class="error" role="alert"></p>
+    <div class="fila"><button type="button" id="cancelar">Cancelar</button><button class="primario" id="confirmar">Aplicar</button></div>
+  </form>
+</dialog>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const e = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const tonos = {ventas:'Ventas', articulos:'Artículos', compras:'Compras', precios:'Precios', configuracion:'Configuración'};
+const catalogo = {ventas:['Presupuestos','Remitos','Caja','Clientes'], articulos:['Artículos','Rubros'], compras:['Proveedores']};
+const claves = Object.values(catalogo).flat();
+const idOpcion = item => 'o' + claves.indexOf(item);
+const original = () => ({gs:Object.entries(catalogo).map(([id,opciones]) => ({id,nombre:tonos[id],tono:id,opciones:[...opciones]})),ocultas:[],anteriores:{}});
+let d = original(), secuencia = 1, seleccion = {item:'Caja'};
+d.gs[0].opciones = ['Presupuestos','Caja','Remitos'];
+d.gs[1].opciones = ['Artículos'];
+d.gs.push({id:'g0',nombre:'Mi mostrador',tono:'precios',opciones:['Clientes']});
+d.ocultas.push('Rubros');
+let guardado = structuredClone(d);
+const grupo = id => d.gs.find(g => g.id === id);
+const lista = id => id === 'ocultas' ? d.ocultas : grupo(id).opciones;
+const nombreLista = id => id === 'ocultas' ? 'Ocultas' : grupo(id).nombre;
+const origen = item => Object.keys(catalogo).find(id => catalogo[id].includes(item));
+const propio = g => g.id.startsWith('g');
+const cambios = () => JSON.stringify(d.gs) !== JSON.stringify((guardado ?? original()).gs) || JSON.stringify(d.ocultas) !== JSON.stringify((guardado ?? original()).ocultas);
+const asa = '<span class="asa" aria-hidden="true" title="Asa de arrastre (ilustrativa)">⠿</span>';
+const estaEn = item => d.gs.find(g => g.opciones.includes(item))?.id ?? 'ocultas';
+const seleccionId = () => seleccion ? `elegir-${seleccion.item ? idOpcion(seleccion.item) : seleccion.grupo}` : '';
+const check = '<span class="marca-sel" aria-hidden="true">✓</span>';
+function opciones(id) {
+  return lista(id).length ? `<ol class="opciones" aria-label="Opciones de ${e(nombreLista(id))}">${lista(id).map(item => {
+    const activa = seleccion?.item === item;
+    return `<li><button class="elegir" id="elegir-${idOpcion(item)}" data-item="${idOpcion(item)}" aria-pressed="${activa}" aria-label="Seleccionar ${e(item)}, en ${e(nombreLista(id))}">${asa}${e(item)}${activa ? check : ''}</button></li>`;
+  }).join('')}</ol>` : `<p class="vacio ayuda">${id === 'ocultas' ? 'No hay opciones ocultas.' : 'Sin opciones. Podés mover una a este grupo.'}</p>`;
+}
+function flecha(paso,nombre,i,cantidad) {
+  const accion = paso < 0 ? 'Subir' : 'Bajar';
+  const alLimite = paso < 0 ? i === 0 : i === cantidad - 1;
+  const motivo = paso < 0 ? 'Ya está al principio de la lista.' : 'Ya está al final de la lista.';
+  return `<button id="${accion}" data-paso="${paso}" aria-label="${accion} ${e(nombre)}${alLimite ? '. ' + motivo : ''}" title="${alLimite ? motivo : accion + ' ' + e(nombre)}" ${alLimite ? 'aria-disabled="true"' : ''}><span aria-hidden="true">${paso < 0 ? '▲' : '▼'}</span> ${accion}</button>`;
+}
+function barra() {
+  if (!seleccion) {
+    $('contexto').innerHTML = '<div class="seleccion"><p class="rotulo">Acciones de la selección</p><strong>Elegí una opción o un grupo para moverlo.</strong></div>';
+    return;
+  }
+  const {item} = seleccion, g = item ? null : grupo(seleccion.grupo);
+  const desde = item ? estaEn(item) : null;
+  const cantidad = item ? lista(desde).length : d.gs.length;
+  const i = item ? lista(desde).indexOf(item) : d.gs.indexOf(g);
+  const nombre = item ?? g.nombre;
+  const rotulo = item ? 'Opción seleccionada' : 'Grupo seleccionado';
+  const destinoMostrar = item && (grupo(d.anteriores[item]) ?? grupo(origen(item)));
+  const control = item ? `<select id="destino" aria-label="Mover ${e(item)} a…"><option value="">Mover a…</option>
+    ${[...d.gs.filter(otro => otro.id !== desde), ...(desde === 'ocultas' ? [] : [{id:'ocultas',nombre:'Ocultas'}])].map(otro => `<option value="${otro.id}">${e(otro.nombre)}</option>`).join('')}</select>
+    <button id="mover" aria-label="Mover ${e(item)} al destino elegido" aria-disabled="true" title="Elegí un destino primero">Mover</button>
+    <button id="visibilidad" aria-label="${desde === 'ocultas' ? 'Mostrar ' + e(item) + ' en ' + e(destinoMostrar.nombre) : 'Ocultar ' + e(item)}" ${desde === 'ocultas' ? `title="Vuelve a ${e(destinoMostrar.nombre)}"` : ''}>${desde === 'ocultas' ? 'Mostrar' : 'Ocultar'}</button>`
+    : `<button id="editar" aria-label="Editar grupo ${e(nombre)}">Editar grupo</button>${propio(g) ? `<button id="borrar" aria-label="Borrar grupo ${e(nombre)}">Borrar grupo</button>` : ''}`;
+  $('contexto').innerHTML = `<div class="seleccion"><p class="rotulo">${rotulo}</p><strong>${e(nombre)}</strong> · posición ${i+1} de ${cantidad}${item ? ' en ' + e(nombreLista(desde)) : ''}</div>
+   <div class="fila">${flecha(-1,item ? nombre : 'grupo ' + nombre,i,cantidad)}${flecha(1,item ? nombre : 'grupo ' + nombre,i,cantidad)}${control}<button id="volver" class="volver">Volver a la selección</button></div>`;
+}
+function render(foco) {
+  barra();
+  $('grupos').innerHTML = d.gs.map((g,i) => {
+    const activo = seleccion?.grupo === g.id;
+    return `<section class="grupo ${g.tono}" aria-labelledby="titulo-${g.id}"><h3 id="titulo-${g.id}"><button class="elegir grupo-boton" id="elegir-${g.id}" data-grupo="${g.id}" aria-pressed="${activo}" aria-label="Seleccionar grupo ${e(g.nombre)}, ${propio(g) ? 'propio' : 'original'}">${asa}<span>${i+1}. ${e(g.nombre)}</span>${activo ? check : ''}<span class="meta conteo">${propio(g) ? 'Propio' : 'Original'} · ${g.opciones.length}</span></button></h3>${opciones(g.id)}</section>`;
+  }).join('');
+  $('ocultas').innerHTML = opciones('ocultas');
+  $('total').textContent = `${d.gs.length} de 10`;
+  $('total-ocultas').textContent = d.ocultas.length;
+  $('origen').textContent = guardado ? 'Menú propio de Vendedores' : 'Usa el menú original';
+  $('guardar').disabled = $('descartar').disabled = !cambios();
+  $('agregar').setAttribute('aria-disabled',String(d.gs.length >= 10));
+  $('agregar').title = d.gs.length >= 10 ? 'Podés tener hasta 10 grupos.' : '';
+  $('agregar').setAttribute('aria-label', d.gs.length >= 10 ? 'Agregar grupo. Podés tener hasta 10 grupos.' : 'Agregar grupo');
+  $(foco)?.focus();
+}
+function avisar(texto,ok=false) {$('estado').textContent = texto; $('estado').classList.toggle('ok',ok);}
+function revelarSeleccion() {
+  const elegido = $(seleccionId());
+  if (!elegido) return;
+  const caja = elegido.getBoundingClientRect();
+  if (caja.top < $('sticky').getBoundingClientRect().bottom || caja.bottom > window.innerHeight) elegido.scrollIntoView({block:'center',behavior:'instant'});
+}
+function mover(item,desde,hasta,i,verbo,foco) {
+  const fuente = lista(desde), destino = lista(hasta);
+  if (hasta === 'ocultas' && desde !== hasta) d.anteriores[item] = desde;
+  fuente.splice(fuente.indexOf(item),1); destino.splice(i,0,item);
+  render(foco);
+  avisar(desde === hasta ? `${item} ${verbo}: posición ${i+1} de ${destino.length} en ${nombreLista(hasta)}` : `${item} pasó a ${nombreLista(hasta)}${hasta === 'ocultas' ? '' : `, posición ${i+1} de ${destino.length}`}`);
+  revelarSeleccion();
+}
+// Mantiene las filas enfocadas por Tab fuera de la barra fija, incluso si la barra se envuelve.
+new ResizeObserver(() => {document.documentElement.style.scrollPaddingTop = `${$('sticky').offsetHeight + 8}px`;}).observe($('sticky'));
+const dialogo = $('dialogo');
+let resolver, retorno;
+function pedir({titulo, detalle, boton, foco, editar, aplicar}) {
+  retorno = foco; resolver = aplicar;
+  $('dialogo-titulo').textContent = titulo; $('dialogo-detalle').textContent = detalle; $('dialogo-error').textContent = '';
+  $('nombre').removeAttribute('aria-invalid'); $('confirmar').textContent = boton; $('campos').hidden = !editar;
+  if (editar) {$('nombre').value = editar.nombre; $('color').value = editar.tono;}
+  dialogo.showModal(); $(editar ? 'nombre' : 'cancelar').focus();
+}
+$('color').innerHTML = Object.entries(tonos).map(([id,n]) => `<option value="${id}">${n}</option>`).join('');
+$('cancelar').onclick = () => dialogo.close();
+dialogo.onclose = () => { ($(retorno) ?? $('agregar')).focus(); };
+$('form').onsubmit = event => {
+  event.preventDefault(); const error = resolver();
+  if (error) {$('dialogo-error').textContent = error; $('nombre').setAttribute('aria-invalid','true'); $('nombre').focus();}
+  else dialogo.close();
+};
+function editar(g) {
+  pedir({titulo:g ? 'Editar grupo' : 'Agregar grupo', detalle:'El nombre tiene de 1 a 30 caracteres. Elegí un color de la lista.', boton:g ? 'Aplicar' : 'Agregar grupo', foco:g ? 'editar' : 'agregar', editar:g ?? {nombre:'',tono:'configuracion'}, aplicar:() => {
+    const nombre = $('nombre').value.trim();
+    if (!nombre) return 'Poné un nombre para el grupo.';
+    if (nombre.length > 30) return 'El nombre del grupo puede tener hasta 30 caracteres.';
+    if (d.gs.some(otro => otro !== g && otro.nombre.toLowerCase() === nombre.toLowerCase())) return 'Ya hay un grupo con ese nombre.';
+    const tono = $('color').value;
+    if (g) Object.assign(g,{nombre,tono});
+    else {const id = 'g' + secuencia++; d.gs.push({id,nombre,tono,opciones:[]}); seleccion = {grupo:id}; retorno = seleccionId();}
+    render(); avisar(g ? `Actualizaste el grupo ${nombre}.` : `Agregaste el grupo ${nombre}.`);
+  }});
+}
+$('contexto').addEventListener('change', event => {
+  if (event.target.id === 'destino') {
+    $('mover').setAttribute('aria-disabled',String(!event.target.value)); $('mover').title = event.target.value ? '' : 'Elegí un destino primero';
+  }
+});
+$('editor').addEventListener('click', event => {
+  const b = event.target.closest('button');
+  if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
+  if (b.dataset.item || b.dataset.grupo) {
+    seleccion = b.dataset.item ? {item:claves[Number(b.dataset.item.slice(1))]} : {grupo:b.dataset.grupo};
+    render('Subir');
+    return;
+  }
+  if (!b.closest('#contexto') || !seleccion) return;
+  const {item} = seleccion, g = item ? null : grupo(seleccion.grupo);
+  const desde = item ? estaEn(item) : null;
+  if (b.id === 'volver') {$(seleccionId())?.focus(); revelarSeleccion();}
+  else if (b.hasAttribute('data-paso')) {
+    const paso = Number(b.dataset.paso), verbo = paso < 0 ? 'subió' : 'bajó';
+    if (item) mover(item,desde,desde,lista(desde).indexOf(item)+paso,verbo,b.id);
+    else {
+      const i = d.gs.indexOf(g), nuevo = i+paso;
+      d.gs.splice(i,1); d.gs.splice(nuevo,0,g);
+      render(b.id); avisar(`Grupo ${g.nombre} ${verbo}: posición ${nuevo+1} de ${d.gs.length}`); revelarSeleccion();
+    }
+  } else if (b.id === 'mover' || b.id === 'visibilidad') {
+    const hasta = b.id === 'mover' ? $('destino').value : (desde === 'ocultas' ? (grupo(d.anteriores[item])?.id ?? origen(item)) : 'ocultas');
+    if (hasta) mover(item,desde,hasta,lista(hasta).length,'',b.id);
+  } else if (b.id === 'editar') editar(g);
+  else if (b.id === 'borrar' && propio(g)) {
+    pedir({titulo:`¿Borrar «${g.nombre}»?`, detalle:'Las opciones del grupo vuelven a sus grupos originales.', boton:'Borrar', foco:b.id, aplicar:() => {
+      g.opciones.forEach(item => grupo(origen(item)).opciones.push(item));
+      d.gs = d.gs.filter(otro => otro !== g); seleccion = null; retorno = 'agregar';
+      render(); avisar(`Borraste el grupo ${g.nombre}.`);
+    }});
+  }
+});
+$('agregar').onclick = () => {if (d.gs.length < 10) editar();};
+$('guardar').onclick = () => {guardado = structuredClone(d); render('restaurar'); avisar('Guardamos el menú.',true);};
+$('descartar').onclick = () => {d = structuredClone(guardado ?? original()); seleccion = null; render('restaurar'); avisar('Descartaste los cambios.');};
+$('restaurar').onclick = () => pedir({titulo:'¿Restaurar el menú?', detalle:'Se borra la base de este rol. El rol vuelve a usar el menú original.', boton:'Restaurar', foco:'restaurar', aplicar:() => {
+  guardado = null; d = original(); seleccion = null; render(); avisar('Volvió el menú original.',true);
+}});
+render();
+</script>
+</body>
+</html>
