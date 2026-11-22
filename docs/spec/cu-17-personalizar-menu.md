@@ -85,5 +85,22 @@ Pantalla «Personalizar menú» dentro de Configuración, solo Dueño.
 
 ## Modelo de datos y API
 
-Ver «Modelo de datos → Disposición del menú (CU-17)». Los endpoints, con su aislamiento por ferretería, salen del
-feature doc y se documentan acá al cerrar la tarea de backend.
+Ver [Modelo de datos → Disposición del menú (CU-17)](11-modelo-de-datos.md#disposición-del-menú-cu-17).
+La ferretería sale del JWT, no del cuerpo ni de la ruta.
+
+| Ruta | Quién | Operaciones |
+| --- | --- | --- |
+| `/api/menu` | Dueño y Vendedor | `GET`: devuelve el menú propio resuelto (ajuste, base del rol, original). El super admin recibe `403`. |
+| `/api/menu/disposiciones/roles/{rol}` | Dueño | `GET`: devuelve la base del rol o el original. `PUT`: crea o reemplaza la base. `DELETE`: borra la base. Solo admite `DUENO` o `VENDEDOR`; otro rol da `404`. |
+| `/api/menu/disposiciones/usuarios/{usuarioId}` | Dueño | `GET`: devuelve el menú resuelto para el usuario. `PUT`: crea o reemplaza su ajuste. `DELETE`: borra solo su ajuste. Un usuario inactivo conserva su ajuste; un usuario ajeno o inexistente da el mismo `404`. |
+
+El `PUT` recibe la disposición sin envoltorio:
+
+```json
+{"grupos":[{"id":"ventas","rotulo":"Ventas","tono":"ventas","claves":["presupuestos","caja"]}],"ocultas":["remitos"]}
+```
+
+Los `GET` y `PUT` devuelven `200` con `{"origen":"USUARIO"|"ROL"|"ORIGINAL","disposicion":…}`. Para
+`ORIGINAL` la disposición es `null`: el menú original vive en el frontend. Una disposición guardada ilegible también
+devuelve `ORIGINAL`. `DELETE` devuelve `204` incluso si no había nada que borrar. Una disposición inválida da `400`;
+para un Vendedor se rechazan las claves de solo Dueño tanto en los grupos como en las ocultas.

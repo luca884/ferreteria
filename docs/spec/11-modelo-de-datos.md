@@ -63,11 +63,11 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 
 ### Disposición del menú (CU-17)
 
-- **`menu_disposicion`** (migración aditiva, sin tocar tablas existentes): guarda cómo ordena el Dueño el menú lateral.
+- **`menu_disposicion`** (V49, migración aditiva, sin tocar tablas existentes): guarda cómo ordena el Dueño el menú lateral.
   Lleva `ferreteria_id` y un alcance, `ROL` (`DUENO` o `VENDEDOR`) o `USUARIO` (con `usuario_id`), con un CHECK de
   coherencia (`ROL` ⇔ hay rol y no usuario; `USUARIO` ⇔ hay usuario y no rol), un único por (ferretería, rol) y otro por
-  (ferretería, usuario), y FK compuesta (ferretería, usuario) a `usuario`. El contenido es un JSON versionado con
-  `grupos` (id, rótulo, color y las claves de sus opciones) y `ocultas`. Guarda **solo claves** del catálogo de pantallas,
-  que vive en el código: ninguna ruta ni permiso. Lo que el JSON no menciona sigue visible (CU-17, «Qué menú ve cada usuario»).
-- **Módulo:** vive en `ferreteria`/`auth` según se resuelva en la tarea de backend (ver el feature doc). Su repositorio extiende
-  `TenantScopedRepository`.
+  (ferretería, usuario), y FK compuesta (ferretería, usuario) a `usuario`. El contenido es JSON con `grupos`
+  (`id`, `rotulo`, `tono` y `claves`) y `ocultas`; la fila lleva `creada_en` y `actualizada_en`. Guarda **solo claves**
+  del catálogo de pantallas, que vive en el código: ninguna ruta ni permiso. Lo que el JSON no menciona sigue visible
+  (CU-17, «Qué menú ve cada usuario»).
+- **Módulo:** `menu`. Su repositorio extiende `TenantScopedRepository`.

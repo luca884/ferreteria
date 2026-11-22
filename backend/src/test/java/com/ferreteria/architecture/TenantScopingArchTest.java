@@ -193,6 +193,53 @@ class TenantScopingArchTest {
                 .check(clases);
     }
 
+    // ---- Menú (CU-17, S8): las disposiciones son de una ferretería ----
+
+    @Test
+    void losRepositoriosDeMenuSonDeTenantYSusDefaultsTomanLaFerreteriaDelContexto() {
+        classes().that().resideInAPackage("com.ferreteria.menu.repository..")
+                .and().areInterfaces()
+                .should().beAssignableTo(TenantScopedRepository.class)
+                .allowEmptyShould(false)
+                .check(clases);
+
+        methods().that().areDeclaredInClassesThat().resideInAPackage("com.ferreteria.menu.repository..")
+                .and().areDeclaredInClassesThat().areInterfaces()
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                .should(new ArchCondition<JavaMethod>("llamar a TenantContext.requireFerreteriaId()") {
+                    @Override
+                    public void check(JavaMethod metodo, ConditionEvents eventos) {
+                        boolean tomaTenant = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                                c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                        && c.getName().equals("requireFerreteriaId"));
+                        if (!tomaTenant) {
+                            eventos.add(SimpleConditionEvent.violated(metodo,
+                                    metodo.getFullName() + " no toma la ferretería de TenantContext"));
+                        }
+                    }
+                })
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    @Test
+    void lasConsultasDeMenuConFerreteriaIdExplicitoSoloLasLlamaElRepositorio() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta de un repositorio de menú, llamada desde afuera de él") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                var repo = call.getTargetOwner();
+                return repo.getPackageName().equals("com.ferreteria.menu.repository")
+                        && !call.getOriginOwner().equals(repo)
+                        && call.getTarget().resolveMember().map(m -> m.getOwner().equals(repo)
+                                && m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                                .orElse(false);
+            }
+        };
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+    }
+
     // ---- Facturacion (CU-07, rama 2): todo lo fiscal es de una ferreteria, asi que todos sus repositorios son de tenant ----
 
     /**
