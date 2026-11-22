@@ -41,15 +41,13 @@
     <button type="button" class="primario" [disabled]="bloqueado() || !puedeGuardar()" (click)="guardar()">Guardar</button>
     <button type="button" class="secundario" [disabled]="bloqueado() || !hayCambios()" (click)="descartar()">Descartar cambios</button>
     <button type="button" class="secundario" [disabled]="bloqueado() || !borrador()" (click)="pedirRestaurar()">Restaurar</button>
+    <p id="errores-grupos" class="validacion-grupos" role="alert" [class.error]="errorGrupos()">{{ errorGrupos() }}</p>
   </div>
 
   @if (cargando()) {
     <p class="ayuda" role="status">Cargando el menú…</p>
   } @else if (borrador(); as menu) {
     <p class="ayuda">Arrastrá las opciones a otro grupo o a «Ocultas». Para reordenar grupos, arrastralos desde su encabezado.</p>
-    @if (errorGrupos(); as mensaje) {
-      <p id="errores-grupos" class="error" role="alert">{{ mensaje }}</p>
-    }
     <div class="tablero">
       <div class="panel" cdkScrollable role="region" tabindex="0" aria-label="Editor de grupos">
         <div class="acciones-menu">
@@ -58,7 +56,8 @@
             <span class="ayuda">{{ errorLimite }}</span>
           }
         </div>
-        <div class="grupos" cdkDropList role="list" aria-label="Grupos del menú" (cdkDropListDropped)="soltarGrupo($event)">
+        <div class="grupos" cdkDropList [cdkDropListAutoScrollStep]="14" role="list" aria-label="Grupos del menú"
+          (cdkDropListDropped)="soltarGrupo($event)">
           @for (grupo of menu.grupos; track grupo.id) {
             <section class="grupo" cdkDrag role="listitem" [cdkDragDisabled]="bloqueado()" [attr.data-seccion]="grupo.tono">
               <header class="cabecera-grupo">
@@ -81,7 +80,7 @@
                   <button type="button" class="secundario" [disabled]="bloqueado()" (click)="pedirBorrar(grupo)">Borrar grupo</button>
                 }
               </header>
-              <ul class="opciones" cdkDropList [id]="listaDe(grupo.id)" [cdkDropListData]="grupo.id"
+              <ul class="opciones" cdkDropList [cdkDropListAutoScrollStep]="14" [id]="listaDe(grupo.id)" [cdkDropListData]="grupo.id"
                 [cdkDropListConnectedTo]="listas()" [attr.aria-label]="'Opciones de ' + (grupo.rotulo || 'grupo sin nombre')"
                 (cdkDropListDropped)="soltarOpcion($event)">
                 <ng-container *ngTemplateOutlet="opciones; context: { $implicit: grupo.claves }; injector: 'outlet'" />
@@ -94,7 +93,7 @@
       <section class="panel ocultas" cdkScrollable tabindex="0" aria-labelledby="titulo-ocultas">
         <h2 id="titulo-ocultas">Ocultas</h2>
         <p class="ayuda">Para volver a mostrar una opción, arrastrala a un grupo.</p>
-        <ul class="opciones" cdkDropList [id]="listaDe(null)" [cdkDropListData]="null" aria-label="Ocultas"
+        <ul class="opciones" cdkDropList [cdkDropListAutoScrollStep]="14" [id]="listaDe(null)" [cdkDropListData]="null" aria-label="Ocultas"
           [cdkDropListConnectedTo]="listas()" [cdkDropListEnterPredicate]="entrarEnOcultas"
           (cdkDropListDropped)="soltarOpcion($event)">
           <ng-container *ngTemplateOutlet="opciones; context: { $implicit: menu.ocultas }; injector: 'outlet'" />
@@ -105,9 +104,9 @@
 
   <ng-template #opciones let-claves>
     @for (clave of claves; track clave) {
-      <li class="opcion" cdkDrag [cdkDragData]="clave" [cdkDragDisabled]="bloqueado()">
+      <li class="opcion" cdkDrag cdkDragPreviewClass="opcion-preview" [cdkDragData]="clave" [cdkDragDisabled]="bloqueado()">
         <button type="button" class="asa opcion-asa" cdkDragHandle [disabled]="bloqueado()"
-          [attr.aria-label]="'Arrastrar ' + rotulos().get(clave)">{{ rotulos().get(clave) }}</button>
+          [attr.aria-label]="'Arrastrar ' + rotulos().get(clave)"><span class="opcion-rotulo">{{ rotulos().get(clave) }}</span></button>
         @if (!sePuedeOcultar(clave)) {
           <small class="ayuda">No se puede ocultar</small>
         }

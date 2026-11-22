@@ -9,6 +9,16 @@
   gap: var(--e-3);
 }
 
+.validacion-grupos {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--alto-control);
+  margin: 0;
+  padding-block: var(--e-1);
+}
+
 .tablero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; gap: var(--e-4); }
 /* Cada columna se puede desplazar durante el arrastre sin mover la otra. */
 .panel { max-height: max(14rem, calc(100dvh - 17rem)); overflow: auto; }
@@ -46,6 +56,7 @@
 .asa:active { cursor: grabbing; }
 .opcion-asa {
   flex: 1;
+  justify-content: flex-start;
   padding: var(--e-1) var(--e-2);
   border: 0;
   background: transparent;
@@ -56,6 +67,11 @@
 .opcion small { margin-inline-end: var(--e-2); }
 .cdk-drag-placeholder { opacity: 0.35; }
 .cdk-drag-preview { box-shadow: var(--sombra-1); }
+/* El máximo limita el ancho exacto que CDK copia al preview como estilo inline. */
+.opcion-preview { max-width: 12rem; }
+.opcion-preview .opcion-asa { min-width: 0; }
+.opcion-preview .opcion-asa::before { flex-shrink: 0; }
+.opcion-preview .opcion-rotulo { overflow: hidden; text-overflow: ellipsis; }
 
 @media screen and (max-width: 1023.98px) {
   .editor { display: none; }

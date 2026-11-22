@@ -1,5 +1,5 @@
-import { CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
-import { ScrollDispatcher } from '@angular/cdk/scrolling';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkScrollable, ScrollDispatcher } from '@angular/cdk/scrolling';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -120,6 +120,63 @@ describe('Personalizar menú', () => {
     fixture.detectChanges();
     expect(texto('#origen-menu')).toBe('Menú propio de Juan');
     expect(opciones('configuracion').at(-1)).toBe('Personalizar menú');
+  });
+
+  it('usa un paso de auto-scroll de 14 en todas las listas de arrastre', () => {
+    iniciar();
+    const listas = fixture.debugElement.queryAll(By.directive(CdkDropList));
+    expect(listas.map((lista) => lista.injector.get(CdkDropList).autoScrollStep))
+      .toEqual(Array(DISPOSICION_ORIGINAL.grupos.length + 2).fill(14));
+  });
+
+  it('registra ambos paneles desplazables como ancestros de sus listas', () => {
+    iniciar();
+    const scroll = TestBed.inject(ScrollDispatcher);
+    for (const lista of fixture.debugElement.queryAll(By.directive(CdkDropList))) {
+      const panel = lista.nativeElement.closest('.panel');
+      const directiva = fixture.debugElement.query(By.css(lista.nativeElement.closest('.ocultas')
+        ? '.panel.ocultas' : '.panel:not(.ocultas)')).injector.get(CdkScrollable);
+      expect(directiva.getElementRef().nativeElement).toBe(panel);
+      expect(scroll.getAncestorScrollContainers(lista.injector.get(CdkDropList).element)).toContain(directiva);
+    }
+  });
+
+  it('aplica la clase de vista previa solo a las opciones, incluidas las ocultas', () => {
+    iniciar();
+    soltar('remitos', 'ventas', null, 0);
+    const arrastres = fixture.debugElement.queryAll(By.directive(CdkDrag));
+    expect(opciones('ocultas')).toEqual(['Remitos']);
+    for (const arrastre of arrastres) {
+      const drag = arrastre.injector.get(CdkDrag);
+      if (arrastre.nativeElement.matches('.opcion')) {
+        expect(drag.previewClass).toBe('opcion-preview');
+        expect(arrastre.nativeElement.querySelector('.opcion-rotulo')?.textContent.trim()).not.toBeFalsy();
+      } else {
+        expect(drag.previewClass).toBeUndefined();
+      }
+    }
+  });
+
+  it('mantiene la misma alerta de validación vacía en la barra y la llena sin habilitar Guardar', () => {
+    iniciar();
+    const alerta = buscar('#errores-grupos');
+    expect(alerta).not.toBeNull();
+    expect(alerta.closest('.acciones-menu')).toBe(boton('Guardar').closest('.acciones-menu'));
+    expect(alerta.getAttribute('role')).toBe('alert');
+    expect(alerta.textContent?.trim()).toBe('');
+
+    click('Agregar grupo');
+    expect(buscar('#errores-grupos')).toBe(alerta);
+    expect(alerta.getAttribute('role')).toBe('alert');
+    expect(alerta.textContent?.trim()).toBe('Poné un nombre para el grupo.');
+    expect(boton('Guardar').disabled).toBe(true);
+    click('Guardar');
+    http.expectNone((req) => req.method === 'PUT');
+    expect(recargar).not.toHaveBeenCalled();
+
+    click('Descartar cambios');
+    expect(buscar('#errores-grupos')).toBe(alerta);
+    expect(alerta.textContent?.trim()).toBe('');
   });
 
   it('arrastra opciones y grupos y guarda el cuerpo exacto; no oculta «Personalizar menú»', () => {
