@@ -27,7 +27,8 @@ export type IconoMenu =
   | 'consumidor-final'
   | 'datos-fiscales'
   | 'facturacion'
-  | 'usuarios';
+  | 'usuarios'
+  | 'menu';
 
 export interface OpcionMenu {
   /** Identificador estable de la pantalla: es lo que guarda una disposición, nunca la ruta ni el rótulo. */
@@ -79,6 +80,8 @@ export function rutaHub(id: string): string {
   return id === ID_GRUPO_VENTAS ? HUB_VENTAS.ruta : `/area/${encodeURIComponent(id)}`;
 }
 
+export const CLAVE_PERSONALIZAR_MENU = 'personalizar-menu';
+
 /** Las pantallas del sistema que pueden estar en el menú. Se agregan acá; la disposición solo las ordena. */
 export const CATALOGO: readonly OpcionMenu[] = [
   { clave: 'presupuestos', ruta: '/presupuestos', rotulo: 'Presupuestos', icono: 'presupuestos' },
@@ -103,6 +106,7 @@ export const CATALOGO: readonly OpcionMenu[] = [
   { clave: 'datos-de-la-ferreteria', ruta: '/configuracion/datos-fiscales', rotulo: 'Datos de la ferretería', icono: 'datos-fiscales', soloDueno: true },
   { clave: 'facturacion', ruta: '/configuracion/facturacion', rotulo: 'Facturación', icono: 'facturacion', soloDueno: true },
   { clave: 'usuarios', ruta: '/usuarios', rotulo: 'Usuarios', icono: 'usuarios', soloDueno: true },
+  { clave: CLAVE_PERSONALIZAR_MENU, ruta: '/configuracion/menu', rotulo: 'Personalizar menú', icono: 'menu', soloDueno: true },
 ];
 
 /** El menú que trae el sistema: lo que ve un usuario cuando nadie lo personalizó. */
@@ -131,7 +135,7 @@ export const DISPOSICION_ORIGINAL: Disposicion = {
       id: 'configuracion',
       rotulo: 'Configuración',
       tono: 'configuracion',
-      claves: ['formas-de-pago', 'consumidor-final', 'datos-de-la-ferreteria', 'facturacion', 'usuarios'],
+      claves: ['formas-de-pago', 'consumidor-final', 'datos-de-la-ferreteria', 'facturacion', 'usuarios', CLAVE_PERSONALIZAR_MENU],
     },
   ],
   ocultas: [],

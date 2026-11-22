@@ -258,6 +258,13 @@ export const routes: Routes = [
           import('./features/configuracion-precios/configuracion-precios').then((m) => m.PaginaConfiguracionPrecios),
       },
       {
+        path: 'configuracion/menu',
+        title: titulo('Personalizar menú'),
+        data: conRoles(SOLO_DUENO),
+        loadComponent: () =>
+          import('./features/configuracion-menu/configuracion-menu').then((m) => m.PaginaConfiguracionMenu),
+      },
+      {
         path: 'configuracion/ventas',
         title: titulo('Consumidor Final'),
         data: conRoles(SOLO_DUENO),

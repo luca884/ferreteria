@@ -25,6 +25,7 @@ import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
 import { PaginaConfiguracionPrecios } from './features/configuracion-precios/configuracion-precios';
+import { PaginaConfiguracionMenu } from './features/configuracion-menu/configuracion-menu';
 import { FormasPago } from './features/formas-pago/formas-pago';
 import { PaginaConfiguracionVentas } from './features/configuracion-ventas/configuracion-ventas';
 import { PaginaDatosFiscales } from './features/datos-fiscales/datos-fiscales';
@@ -75,6 +76,7 @@ describe('rutas', () => {
     ['configuracion/cotizacion', PaginaConfiguracionCotizacion],
     ['configuracion/precios', PaginaConfiguracionPrecios],
     ['configuracion/ventas', PaginaConfiguracionVentas],
+    ['configuracion/menu', PaginaConfiguracionMenu],
     ['configuracion/datos-fiscales', PaginaDatosFiscales],
     ['configuracion/facturacion', PaginaFacturacion],
     ['configuracion/formas-pago', FormasPago],
@@ -120,6 +122,7 @@ describe('rutas', () => {
     'configuracion/cotizacion': DUENO,
     'configuracion/precios': DUENO,
     'configuracion/ventas': DUENO,
+    'configuracion/menu': DUENO,
     'configuracion/datos-fiscales': DUENO,
     'configuracion/facturacion': DUENO,
     'configuracion/formas-pago': DUENO,
@@ -291,6 +294,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'stock-bajo-minimo')).toBe('Stock bajo mínimo · Ferretería');
     expect(titulo(hijas(), 'controles-de-datos')).toBe('Controles de datos · Ferretería');
     expect(titulo(hijas(), 'configuracion/ventas')).toBe('Consumidor Final · Ferretería');
+    expect(titulo(hijas(), 'configuracion/menu')).toBe('Personalizar menú · Ferretería');
     expect(titulo(hijas(), 'configuracion/datos-fiscales')).toBe('Datos de la ferretería · Ferretería');
     expect(titulo(hijas(), 'configuracion/facturacion')).toBe('Facturación · Ferretería');
   });

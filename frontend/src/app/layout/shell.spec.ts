@@ -261,6 +261,7 @@ describe('Shell', () => {
         'Datos de la ferretería',
         'Facturación',
         'Usuarios',
+        'Personalizar menú',
       ]);
       const rutas: Record<string, string> = {
         Mostrador: '/mostrador',
@@ -286,11 +287,12 @@ describe('Shell', () => {
         'Datos de la ferretería': '/configuracion/datos-fiscales',
         Facturación: '/configuracion/facturacion',
         Usuarios: '/usuarios',
+        'Personalizar menú': '/configuracion/menu',
       };
       for (const [rotulo, ruta] of Object.entries(rutas)) {
         expect(el.querySelector(`nav a[href="${ruta}"]`)?.textContent?.trim(), ruta).toBe(rotulo);
       }
-      expect(el.querySelectorAll('aside nav a').length).toBe(23);
+      expect(el.querySelectorAll('aside nav a').length).toBe(24);
     });
 
     it('el Vendedor ve Mostrador, Ventas (Presupuestos, Remitos, Caja, Clientes), Artículos (Artículos, Rubros) y Compras (Proveedores)', async () => {
@@ -317,6 +319,7 @@ describe('Shell', () => {
         '/configuracion/ventas',
         '/configuracion/datos-fiscales',
         '/configuracion/facturacion',
+        '/configuracion/menu',
         '/usuarios',
       ]) {
         expect(el.querySelector(`a[href="${ruta}"]`), ruta).toBeNull();
