@@ -1195,6 +1195,21 @@ describe('Shell', () => {
       expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/articulos');
     });
 
+    it('un nombre de grupo largo se recorta con puntos suspensivos y la flecha sigue a la vista', async () => {
+      tokenMenu.set('sesion-vendedora');
+      const largo = 'Pedidos urgentes del mostrador';
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'g-1', rotulo: largo, tono: 'ventas', claves: ['caja'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      const grupo = boton(el, largo);
+
+      expect(grupo.querySelector('.rotulo-grupo')?.textContent?.trim()).toBe(largo);
+      expect(grupo.getAttribute('title')).toBe(largo);
+      expect(grupo.querySelector('.flecha')).not.toBeNull();
+    });
+
     it('usa el ícono de Artículos cuando abre el listado directo, aunque Rubros esté primero', async () => {
       tokenMenu.set('sesion-vendedora');
       obtenerMenu.mockReturnValue(of({
