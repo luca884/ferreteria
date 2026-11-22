@@ -2,7 +2,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { IconoDelMenu } from '../../layout/icono-menu';
-import { OpcionMenu, gruposPara } from '../../layout/menu';
+import { MenuActual } from '../../layout/menu-actual';
+import { OpcionMenu } from '../../layout/menu';
 import { AvisosFacturacionService } from '../mostrador/avisos-facturacion.service';
 
 /** Para qué sirve cada pantalla del grupo, en una línea. El Vendedor no tiene la cuenta corriente: su Clientes lo dice. */
@@ -26,7 +27,7 @@ function aclaracion(ruta: string, dueno: boolean): string {
 
 /**
  * El hub «Ventas» de la barra inferior del celular (movil-sectores T2, S3): una fila por pantalla del grupo Ventas del
- * menú, en su orden. Es una vista del mismo menú filtrado por rol (`gruposPara`): no agrega pantallas ni da acceso a
+ * menú, en su orden. Es una vista del mismo menú filtrado por rol (`MenuActual`): no agrega pantallas ni da acceso a
  * nada que el rol no tenga hoy (el Vendedor ve Caja, Presupuestos, Remitos y Clientes; el Dueño suma Ventas y Reportes).
  *
  * La fila de Ventas lleva la pastilla con las facturas de ARCA para revisar (rechazadas, pendientes de CAE hace más de
@@ -41,13 +42,14 @@ function aclaracion(ruta: string, dueno: boolean): string {
 })
 export class HubVentas {
   private readonly auth = inject(AuthService);
+  private readonly menu = inject(MenuActual);
 
   /** Las facturas para revisar; 0 hasta la lectura y si falla. */
   protected readonly paraRevisar = signal(0);
 
   protected readonly filas = computed(() => {
     const dueno = this.auth.esDueno();
-    const grupo = gruposPara(dueno).find((g) => g.seccion === 'ventas');
+    const grupo = this.menu.grupos().find((g) => g.id === 'ventas');
     return (grupo?.opciones ?? []).map((opcion: OpcionMenu) => ({
       ...opcion,
       aclaracion: aclaracion(opcion.ruta, dueno),
