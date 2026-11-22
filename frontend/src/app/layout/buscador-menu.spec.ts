@@ -4,6 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../core/auth/auth.service';
+import { MenuService } from '../core/menu/menu.service';
 import { Cliente } from '../features/clientes/cliente.models';
 import { ClientesService } from '../features/clientes/clientes.service';
 import { Proveedor } from '../features/proveedores/proveedor.models';
@@ -35,7 +36,8 @@ describe('BuscadorMenu (mejoras-ferreteros-bloque-2, S3)', () => {
       imports: [BuscadorMenu],
       providers: [
         provideRouter([{ path: '**', component: Vacia }]),
-        { provide: AuthService, useValue: { esDueno: signal(dueno) } },
+        { provide: AuthService, useValue: { esDueno: signal(dueno), token: signal(null) } },
+        { provide: MenuService, useValue: { obtener: vi.fn() } },
         { provide: ClientesService, useValue: clientes },
         { provide: ProveedoresService, useValue: proveedores },
       ],

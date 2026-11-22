@@ -46,9 +46,14 @@ Hay tres niveles, y gana el más específico:
 ## Celular
 
 La barra inferior sigue a la disposición: **Mostrador**, los **dos primeros grupos** que tengan opciones para ese
-usuario y **«Más»**, que abre el cajón con el menú completo. Tocar un grupo de la barra abre una pantalla con las
-opciones de ese grupo, como hoy hace «Ventas» (cada grupo tiene su entrada, no solo Ventas). Con el menú original la
-barra no cambia: Mostrador, Ventas, Artículos y Más.
+usuario y **«Más»**, que abre el cajón con el menú completo. Qué abre el botón de un grupo:
+
+- **Ventas y los grupos que arma el Dueño abren su hub**: una pantalla con las opciones visibles del grupo, como hoy
+  hace «Ventas».
+- **Artículos abre directo la lista de artículos**, como hoy, mientras esa opción siga dentro de su grupo. Si el Dueño la
+  mueve a otro grupo, el grupo abre su hub como los demás.
+
+Con el menú original la barra no cambia: Mostrador, Ventas, Artículos y Más.
 
 El editor se usa **desde la computadora**: en una pantalla chica (≤ 1023.98 px) muestra «Personalizá el menú desde la
 computadora.» en lugar del editor.
