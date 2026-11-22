@@ -39,7 +39,11 @@ export interface OpcionMenu {
   readonly soloDueno?: true;
 }
 
-/** Un grupo ya armado para mostrar: sus opciones son las que el rol puede abrir y la disposición no oculta. */
+/**
+ * Un grupo ya armado para mostrar: sus opciones son las que el rol puede abrir y la disposición no oculta. `id` es su
+ * identidad (qué grupo está abierto, a qué grupo pertenece una pantalla); `tono` es solo el color que le da el CSS, y
+ * dos grupos pueden compartirlo. Nunca se usa uno por el otro.
+ */
 export interface GrupoMenu {
   readonly id: string;
   readonly tono: Tono;
@@ -147,6 +151,8 @@ export function armarMenu(disposicion: Disposicion, dueno: boolean): GrupoMenu[]
     (opcion) => !ocultas.has(opcion.clave) && !disposicion.grupos.some((g) => g.claves.includes(opcion.clave)),
   );
   for (const opcion of sinUbicar) {
+    // «Original» es el de fábrica, no la disposición vigente: así una pantalla nueva del sistema vuelve a donde nació
+    // aunque el Dueño haya movido o borrado ese grupo. No se cambia por `disposicion`.
     const original = DISPOSICION_ORIGINAL.grupos.find((g) => g.claves.includes(opcion.clave));
     let destino = claves.find((c) => c.grupo.id === original?.id);
     if (!destino) {

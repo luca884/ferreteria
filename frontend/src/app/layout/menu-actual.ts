@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../core/auth/auth.service';
-import { DISPOSICION_ORIGINAL, Disposicion, GrupoMenu, Ubicacion, armarMenu, ubicar } from './menu';
+import { DISPOSICION_ORIGINAL, Disposicion, GrupoMenu, Ubicacion, armarMenu, ubicar as ubicarEn } from './menu';
 
 /**
  * El menú que ve el usuario logueado: la disposición vigente (CU-17) armada para su rol. Es la única fuente: el menú
@@ -24,6 +24,6 @@ export class MenuActual {
   private readonly completo = computed(() => armarMenu(this.disposicion(), true));
 
   ubicar(url: string): Ubicacion | null {
-    return ubicar(url, this.completo());
+    return ubicarEn(url, this.completo());
   }
 }
