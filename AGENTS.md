@@ -8,7 +8,7 @@ Harness: **Gentle Shell + Gentle AI** (Pi). Memoria persistente en Engram con `p
 
 SaaS multi-tenant de gestión para ferreterías de Mar del Plata: mostrador (venta rápida con lector de código de barras), stock, actualización masiva de precios desde las listas de los proveedores (Excel y PDF) y factura electrónica con ARCA. Cada ferretería es un tenant.
 
-- **Spec del MVP**: [`docs/spec.md`](docs/spec.md) es el índice; el contenido vive en `docs/spec/`, un archivo por caso de uso (16) más las secciones transversales (reglas de negocio, modelo de datos, ARCA, arquitectura). Leé **sólo** el archivo del CU que vas a tocar; no hace falta leer la spec entera. Si algo no está en la spec, no se implementa sin preguntar.
+- **Spec del MVP**: [`docs/spec.md`](docs/spec.md) es el índice; el contenido vive en `docs/spec/`, un archivo por caso de uso (17) más las secciones transversales (reglas de negocio, modelo de datos, ARCA, arquitectura). Leé **sólo** el archivo del CU que vas a tocar; no hace falta leer la spec entera. Si algo no está en la spec, no se implementa sin preguntar.
 - **Principio rector**: simple, práctico y que funcione. Si una ferretería real no lo pide, no entra.
 
 ## Stack
@@ -56,7 +56,7 @@ Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vend
 - Mensajes de error al usuario en español rioplatense.
 - Commits en español: `tipo: descripción` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`).
 - Un caso de uso por rama (`feat/cu-04-importar-lista`): primero tests del dominio, después endpoint, después pantalla. Esta rama gana sobre `feat/<feature>`.
-- Feature docs: `odd/tasks/<feature>.md`, commiteados con la feature. Antes de abrir uno, mirá [`odd/tasks/INDEX.md`](odd/tasks/INDEX.md): una línea por tarea (86 hoy) para no leer la carpeta entera. Si cambia el estado de una tarea, regeneralo con `node odd/indice-tareas.mjs` (nunca a mano). Espejo Engram con `project: "ferreteria"`.
+- Feature docs: `odd/tasks/<feature>.md`, commiteados con la feature. Antes de abrir uno, mirá [`odd/tasks/INDEX.md`](odd/tasks/INDEX.md): una línea por tarea (94 hoy) para no leer la carpeta entera. Si cambia el estado de una tarea, regeneralo con `node odd/indice-tareas.mjs` (nunca a mano). Espejo Engram con `project: "ferreteria"`.
 
 ## Límites
 

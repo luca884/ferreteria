@@ -5,7 +5,7 @@
 <!-- spec payload: spec.md:35-39 -->
 ## Casos de uso del MVP
 
-Son 16 casos de uso (CU-01 a CU-16), agrupados en seis módulos: Configuración, Artículos y precios, Venta, Stock y caja, Clientes y Reportes. Si algo no está en esta lista, no entra en el MVP.
+Son 17 casos de uso (CU-01 a CU-17), agrupados en seis módulos: Configuración, Artículos y precios, Venta, Stock y caja, Clientes y Reportes. Si algo no está en esta lista, no entra en el MVP.
 <!-- fin payload: spec.md:35-39 -->
 
 <!-- Única desviación de la copia verbatim de la partición del 2026-11-10, corregida ese mismo día por decisión de Luca: el
@@ -19,6 +19,7 @@ Son 16 casos de uso (CU-01 a CU-16), agrupados en seis módulos: Configuración,
 
 - [CU-01 · Configurar la ferretería](cu-01-configurar-ferreteria.md) — el Dueño
 - [CU-02 · Gestionar usuarios](cu-02-usuarios.md) — el Dueño
+- [CU-17 · Personalizar el menú](cu-17-personalizar-menu.md) — sólo el Dueño
 
 ### Artículos y precios
 

@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-20 desde los 93 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-22 desde los 94 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 93 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~22 KB; los 94 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **91 cerradas · 2 abiertas**
+- **91 cerradas · 3 abiertas**
 
 ## Abiertas
 
@@ -15,6 +15,7 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
+| [`personalizar-menu.md`](personalizar-menu.md) | abierta (1✓/5✗) | 2026-11-20 | — | — | 6 |
 
 ## Cerradas
 
@@ -112,7 +113,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`cu-13-compras.md`](cu-13-compras.md) | 2026-10-21 | registrar una compra (factura o remito del proveedor) que sume el stock y actualice el costo y el precio de los artículos | 8 |
 | [`cu-14-precio-manual.md`](cu-14-precio-manual.md) | 2026-10-21 | precio manual por artículo, ajustes sin límite sobre el precio final y actualización masiva del precio final | 22 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | 22 |
-| [`movil-sectores.md`](movil-sectores.md) | — | — | 103 |
+| [`movil-sectores.md`](movil-sectores.md) | — | — | 113 |
 
 ## Tareas por caso de uso
 
@@ -135,6 +136,7 @@ Para ir de una sección de la spec (`docs/spec/cu-NN-*.md`) a las tareas que ya 
 | CU-14 | `arreglos-precios`, `cu-03-configuracion-precios`, `cu-03-controles-de-datos`, `cu-13-factura-pdf`, `cu-14-precio-manual`, `decisiones-qa`, `ofertas`, `para-decidir-caja-y-margen`, `recargos-y-margen-negativo` |
 | CU-15 | `cu-08-consulta-ventas`, `cu-08-nota-de-credito`, `cu-13-factura-pdf`, `reportes-ventas` |
 | CU-16 | `cu-07-contingencias`, `cu-07-factura-mostrador`, `cu-08-consulta-ventas`, `cu-08-nota-de-credito`, `cu-09-movimientos-articulo` |
+| CU-17 | `personalizar-menu`, `responsive` |
 
 ## Regenerar
 
