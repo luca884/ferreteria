@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DisposicionValidadorTest {
 
     @Test
-    void elCatalogoTieneLasMismas22PantallasYPermisosQueElFrontend() {
+    void elCatalogoTieneLasMismas23PantallasYPermisosQueElFrontend() {
         assertThat(DisposicionValidador.pantallas()).isEqualTo(Map.ofEntries(
                 Map.entry("presupuestos", false), Map.entry("remitos", false), Map.entry("caja", false),
                 Map.entry("clientes", false), Map.entry("ventas", true), Map.entry("reportes", true),
@@ -27,7 +27,7 @@ class DisposicionValidadorTest {
                 Map.entry("compras", true), Map.entry("importaciones", true), Map.entry("actualizacion-masiva", true),
                 Map.entry("margen-y-redondeo", true), Map.entry("cotizacion", true), Map.entry("formas-de-pago", true),
                 Map.entry("consumidor-final", true), Map.entry("datos-de-la-ferreteria", true),
-                Map.entry("facturacion", true), Map.entry("usuarios", true)));
+                Map.entry("facturacion", true), Map.entry("usuarios", true), Map.entry("personalizar-menu", true)));
     }
 
     @Test
@@ -121,6 +121,21 @@ class DisposicionValidadorTest {
                     .hasMessage("El menú de un Vendedor no puede incluir opciones de solo Dueño.");
             assertThat(DisposicionValidador.validar(invalida, Rol.DUENO)).isEqualTo(invalida);
         }
+    }
+
+    @Test
+    void duenoPuedeMoverElEditorPeroNoOcultarlo() {
+        var visible = conGrupos(grupo("propio", "Diario", "personalizar-menu"));
+        assertThat(DisposicionValidador.validar(visible, Rol.DUENO)).isEqualTo(visible);
+        var oculto = new Disposicion(List.of(), List.of("personalizar-menu"));
+        for (Rol rol : List.of(Rol.DUENO, Rol.VENDEDOR)) {
+            assertThatThrownBy(() -> DisposicionValidador.validar(oculto, rol))
+                    .isExactlyInstanceOf(BadRequestException.class)
+                    .hasMessage("No se puede ocultar «Personalizar menú».");
+        }
+        assertThatThrownBy(() -> DisposicionValidador.validar(visible, Rol.VENDEDOR))
+                .isExactlyInstanceOf(BadRequestException.class)
+                .hasMessage("El menú de un Vendedor no puede incluir opciones de solo Dueño.");
     }
 
     @Test

@@ -17,6 +17,8 @@ import java.util.regex.Pattern;
 
 public final class DisposicionValidador {
 
+    private static final String PERSONALIZAR_MENU = "personalizar-menu";
+
     // Clave -> soloDueno. Mantener en ambos sentidos con CATALOGO de frontend/src/app/layout/menu.ts:
     // si cambia una clave o permiso allá, actualizar acá, y si cambia acá, actualizar allá.
     private static final Map<String, Boolean> PANTALLAS = Map.ofEntries(
@@ -27,7 +29,7 @@ public final class DisposicionValidador {
             Map.entry("compras", true), Map.entry("importaciones", true), Map.entry("actualizacion-masiva", true),
             Map.entry("margen-y-redondeo", true), Map.entry("cotizacion", true), Map.entry("formas-de-pago", true),
             Map.entry("consumidor-final", true), Map.entry("datos-de-la-ferreteria", true),
-            Map.entry("facturacion", true), Map.entry("usuarios", true));
+            Map.entry("facturacion", true), Map.entry("usuarios", true), Map.entry(PERSONALIZAR_MENU, true));
     private static final Set<String> TONOS = Set.of("ventas", "articulos", "compras", "precios", "configuracion");
     private static final Pattern ID_GRUPO = Pattern.compile("[a-z0-9-]{1,40}");
 
@@ -38,6 +40,9 @@ public final class DisposicionValidador {
     }
 
     public static Disposicion validar(Disposicion disposicion, Rol rol) {
+        if (disposicion != null && disposicion.ocultas() != null && disposicion.ocultas().contains(PERSONALIZAR_MENU)) {
+            throw new BadRequestException("No se puede ocultar «Personalizar menú».");
+        }
         Set<String> usadas = new HashSet<>();
         return normalizar(disposicion, false, claves -> {
             for (String clave : claves) {
