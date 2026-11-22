@@ -37,16 +37,24 @@ describe('Personalizar menú', () => {
     });
     fixture = TestBed.createComponent(PaginaConfiguracionMenu);
     http = TestBed.inject(HttpTestingController);
-    fixture.detectChanges();
-    http.expectOne({ method: 'GET', url: '/api/usuarios?incluirInactivos=true' }).flush([
-      { id: 7, nombre: 'Ana', rol: 'VENDEDOR', activo: false },
-      { id: 8, nombre: 'Juan', rol: 'DUENO', activo: true },
-    ]);
-    http.expectOne({ method: 'GET', url: vendedor }).flush(original);
-    fixture.detectChanges();
   });
 
   afterEach(() => http.verify());
+
+  function iniciar(fallanUsuarios = false) {
+    fixture.detectChanges();
+    const peticion = http.expectOne({ method: 'GET', url: '/api/usuarios?incluirInactivos=true' });
+    if (fallanUsuarios) {
+      peticion.flush({}, { status: 503, statusText: 'Service Unavailable' });
+    } else {
+      peticion.flush([
+        { id: 7, nombre: 'Ana', rol: 'VENDEDOR', activo: false },
+        { id: 8, nombre: 'Juan', rol: 'DUENO', activo: true },
+      ]);
+    }
+    http.expectOne({ method: 'GET', url: vendedor }).flush(original);
+    fixture.detectChanges();
+  }
 
   function elegir(texto: string) {
     select().value = [...select().options].find((o) => o.label.trim() === texto)!.value;
@@ -80,6 +88,7 @@ describe('Personalizar menú', () => {
   }
 
   it('muestra los dos roles y todos los usuarios, el origen y solo las opciones del rol elegido', () => {
+    iniciar();
     expect(texto('app-barra-acciones h1')).toBe('Personalizar menú');
     expect(texto('label[for="menu-de"]')).toBe('Menú de');
     expect([...select().options].map((o) => o.label.trim())).toEqual(['Vendedores', 'Dueño', 'Ana — Vendedor (inactivo)', 'Juan — Dueño']);
@@ -114,6 +123,7 @@ describe('Personalizar menú', () => {
   });
 
   it('arrastra opciones y grupos y guarda el cuerpo exacto; no oculta «Personalizar menú»', () => {
+    iniciar();
     respuestaDueno();
     const listas = fixture.debugElement.queryAll(By.directive(CdkDropList)).map((e) => e.injector.get(CdkDropList));
     const config = listas.find((l) => l.data === 'configuracion')!;
@@ -154,6 +164,7 @@ describe('Personalizar menú', () => {
   });
 
   it('restaura el usuario solo después de confirmar y vuelve a leer lo que hereda', () => {
+    iniciar();
     elegir('Ana — Vendedor (inactivo)');
     http.expectOne({ method: 'GET', url: ana }).flush({ origen: 'USUARIO', disposicion: DISPOSICION_ORIGINAL });
     fixture.detectChanges();
@@ -175,6 +186,7 @@ describe('Personalizar menú', () => {
   });
 
   it('muestra el mensaje del 400 y permite corregir sin perder el borrador', () => {
+    iniciar();
     renombrar('ventas', 'Pedidos');
     click('Guardar');
     http.expectOne({ method: 'PUT', url: vendedor }).flush({ message: 'El identificador del grupo no es válido.' },
@@ -187,6 +199,7 @@ describe('Personalizar menú', () => {
   });
 
   it('no abandona el borrador al elegir otro menú sin confirmar y permite descartarlo desde la barra', () => {
+    iniciar();
     renombrar('ventas', 'Pedidos');
     elegir('Dueño');
     expect(select().selectedOptions[0].label.trim()).toBe('Vendedores');
@@ -210,6 +223,7 @@ describe('Personalizar menú', () => {
   });
 
   it('deshabilita Guardar cuando el nombre no es válido y confirma antes de borrar un grupo propio', () => {
+    iniciar();
     click('Agregar grupo');
     const id = el().querySelector<HTMLInputElement>('input[id^="nombre-g-"]')!.id.replace('nombre-', '');
     expect(texto('#errores-grupos')).toBe('Poné un nombre para el grupo.');
@@ -229,5 +243,146 @@ describe('Personalizar menú', () => {
     fixture.detectChanges();
     expect(input(id)).toBeNull();
     expect(opciones('ventas').at(-1)).toBe('Caja');
+  });
+
+  it('envía un solo PUT aunque se pulse Guardar dos veces mientras está en vuelo', () => {
+    iniciar();
+    renombrar('ventas', 'Pedidos');
+    const guardar = boton('Guardar');
+    guardar.click();
+    guardar.click();
+    fixture.detectChanges();
+    expect(guardar.disabled).toBe(true);
+    const peticion = http.expectOne((req) => req.method === 'PUT');
+    expect(peticion.request.url).toBe(vendedor);
+    expect(recargar).not.toHaveBeenCalled();
+
+    peticion.flush({ origen: 'ROL', disposicion: peticion.request.body });
+    fixture.detectChanges();
+    expect(texto('.alerta.exito')).toBe('Guardamos el menú.');
+    expect(recargar).toHaveBeenCalledTimes(1);
+  });
+
+  it('envía un solo DELETE y no vuelve a abrir la confirmación de Restaurar mientras está en vuelo', () => {
+    iniciar();
+    click('Restaurar');
+    const confirmar = buscar<HTMLButtonElement>('app-confirmacion .confirmar');
+    confirmar.click();
+    confirmar.click();
+    fixture.detectChanges();
+    expect(boton('Restaurar').disabled).toBe(true);
+    click('Restaurar');
+    expect(buscar('[role="alertdialog"]')).toBeNull();
+    const peticion = http.expectOne((req) => req.method === 'DELETE');
+    expect(peticion.request.url).toBe(vendedor);
+    http.expectNone({ method: 'GET', url: vendedor });
+    expect(recargar).not.toHaveBeenCalled();
+
+    peticion.flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne({ method: 'GET', url: vendedor }).flush(original);
+    fixture.detectChanges();
+    expect(texto('.alerta.exito')).toBe('Volvió el menú original.');
+    expect(recargar).toHaveBeenCalledTimes(1);
+  });
+
+  it('si falla el GET del menú elegido, bloquea Guardar y Restaurar hasta reintentar con éxito', () => {
+    iniciar();
+    elegir('Dueño');
+    http.expectOne({ method: 'GET', url: dueno }).flush({}, { status: 503, statusText: 'Service Unavailable' });
+    fixture.detectChanges();
+    expect(texto('.error[role="alert"] span')).toBe('No se pudo cargar el menú.');
+    expect(texto('.error[role="alert"] button')).toBe('Reintentar menú');
+    expect(input('ventas')).toBeNull();
+    expect(boton('Guardar').disabled).toBe(true);
+    expect(boton('Restaurar').disabled).toBe(true);
+    click('Guardar');
+    click('Restaurar');
+    http.expectNone((req) => req.method === 'PUT' || req.method === 'DELETE');
+    expect(buscar('[role="alertdialog"]')).toBeNull();
+
+    click('Reintentar menú');
+    http.expectOne({ method: 'GET', url: dueno }).flush({ origen: 'ROL', disposicion: DISPOSICION_ORIGINAL });
+    fixture.detectChanges();
+    expect(buscar('.error[role="alert"]')).toBeNull();
+    expect(texto('#origen-menu')).toBe('Menú propio del Dueño');
+    expect(boton('Restaurar').disabled).toBe(false);
+    renombrar('ventas', 'Pedidos');
+    expect(boton('Guardar').disabled).toBe(false);
+  });
+
+  it('si falla la lista de usuarios, ofrece reintentar y permite editar los dos roles', () => {
+    iniciar(true);
+    expect(texto('.error[role="alert"] span')).toBe('No se pudo cargar la lista de usuarios.');
+    expect(texto('.error[role="alert"] button')).toBe('Reintentar usuarios');
+    expect([...select().options].map((o) => o.label.trim())).toEqual(['Vendedores', 'Dueño']);
+    expect(select().value).toBe('VENDEDOR');
+    expect(select().disabled).toBe(false);
+    renombrar('ventas', 'Pedidos');
+    expect(boton('Guardar').disabled).toBe(false);
+    click('Descartar cambios');
+
+    respuestaDueno();
+    expect(select().value).toBe('DUENO');
+    expect(opciones('configuracion')).toContain('Personalizar menú');
+    expect(texto('.error[role="alert"] span')).toBe('No se pudo cargar la lista de usuarios.');
+    renombrar('ventas', 'Pedidos');
+    expect(boton('Guardar').disabled).toBe(false);
+  });
+
+  it('si falla el DELETE, muestra el mensaje del servidor y conserva el borrador', () => {
+    iniciar();
+    elegir('Dueño');
+    http.expectOne({ method: 'GET', url: dueno }).flush({ origen: 'ROL', disposicion: DISPOSICION_ORIGINAL });
+    fixture.detectChanges();
+    renombrar('ventas', 'Pedidos');
+    click('Restaurar');
+    buscar<HTMLButtonElement>('app-confirmacion .confirmar').click();
+    http.expectOne({ method: 'DELETE', url: dueno }).flush({ message: 'El sistema está ocupado, reintentá.' },
+      { status: 503, statusText: 'Service Unavailable' });
+    fixture.detectChanges();
+    http.expectNone({ method: 'GET', url: dueno });
+    expect(texto('.error[role="alert"] span')).toBe('El sistema está ocupado, reintentá.');
+    expect(buscar('.alerta.exito')).toBeNull();
+    expect(texto('#origen-menu')).toBe('Menú propio del Dueño');
+    expect(input('ventas').value).toBe('Pedidos');
+    expect(boton('Guardar').disabled).toBe(false);
+    expect(boton('Restaurar').disabled).toBe(false);
+    expect(recargar).not.toHaveBeenCalled();
+  });
+
+  it('explica qué menú se hereda al restaurar un rol o un usuario', () => {
+    iniciar();
+    click('Restaurar');
+    expect(texto('app-confirmacion h2')).toBe('¿Restaurar el menú?');
+    expect(texto('app-confirmacion p')).toBe('Se borra la base de este rol. El rol vuelve a usar el menú original.');
+    click('Cancelar');
+
+    elegir('Ana — Vendedor (inactivo)');
+    http.expectOne({ method: 'GET', url: ana }).flush({ origen: 'USUARIO', disposicion: DISPOSICION_ORIGINAL });
+    fixture.detectChanges();
+    click('Restaurar');
+    expect(texto('app-confirmacion h2')).toBe('¿Restaurar el menú?');
+    expect(texto('app-confirmacion p')).toBe('Se borra el ajuste de este usuario. Va a usar el menú de su rol o el menú original.');
+    http.expectNone((req) => req.method === 'DELETE');
+  });
+
+  it('ignora el cambio de objetivo mientras Guardar está en vuelo', () => {
+    iniciar();
+    renombrar('ventas', 'Pedidos');
+    click('Guardar');
+    const peticion = http.expectOne({ method: 'PUT', url: vendedor });
+    expect(select().disabled).toBe(true);
+
+    elegir('Dueño');
+    expect(select().value).toBe('VENDEDOR');
+    expect(buscar('[role="alertdialog"]')).toBeNull();
+    http.expectNone((req) => req.method === 'GET');
+    expect(input('ventas').value).toBe('Pedidos');
+
+    peticion.flush({ origen: 'ROL', disposicion: peticion.request.body });
+    fixture.detectChanges();
+    expect(select().disabled).toBe(false);
+    expect(select().value).toBe('VENDEDOR');
+    expect(texto('#origen-menu')).toBe('Menú propio de los Vendedores');
   });
 });
