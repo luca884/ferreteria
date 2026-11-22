@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -90,6 +92,40 @@ class MenuIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void vendedorNoPuedeLeerNiCambiarLaBaseDelDueno() throws Exception {
+        Tienda tienda = tienda();
+        String ruta = ROLES + "DUENO";
+        respuesta(putJson(ruta, login(tienda.dueno()), AJUSTE), "ROL", AJUSTE);
+        String vendedor = login(tienda.vendedor());
+        var antes = filas(tienda);
+
+        error(getResult(ruta, vendedor), 403, MENSAJE_PROHIBIDO);
+        assertThat(filas(tienda)).isEqualTo(antes);
+        error(putJson(ruta, vendedor, BASE), 403, MENSAJE_PROHIBIDO);
+        assertThat(filas(tienda)).isEqualTo(antes);
+        error(delete(ruta, vendedor), 403, MENSAJE_PROHIBIDO);
+        assertThat(filas(tienda)).isEqualTo(antes);
+    }
+
+    @Test
+    void superAdminNoPuedeLeerNiCambiarDisposiciones() throws Exception {
+        Tienda tienda = tienda();
+        respuesta(putJson(ROLES + "VENDEDOR", login(tienda.dueno()), AJUSTE), "ROL", AJUSTE);
+        String admin = login("admin@demo.local");
+        // /usuarios/1 no apunta a la tienda creada para la prueba, por eso se compara toda la tabla.
+        String consulta = "select * from menu_disposicion order by id";
+        var antes = jdbc.queryForList(consulta);
+        for (String ruta : List.of(ROLES + "VENDEDOR", USUARIOS + "1")) {
+            error(getResult(ruta, admin), 403, MENSAJE_PROHIBIDO);
+            assertThat(jdbc.queryForList(consulta)).isEqualTo(antes);
+            error(putJson(ruta, admin, BASE), 403, MENSAJE_PROHIBIDO);
+            assertThat(jdbc.queryForList(consulta)).isEqualTo(antes);
+            error(delete(ruta, admin), 403, MENSAJE_PROHIBIDO);
+            assertThat(jdbc.queryForList(consulta)).isEqualTo(antes);
+        }
+    }
+
+    @Test
     void tiendasAisladasEnLosDosAlcances() throws Exception {
         Tienda a = tienda();
         Tienda b = tienda();
@@ -155,6 +191,66 @@ class MenuIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void rechazaGruposYClavesInvalidosEnAmbosAlcancesSinCambiarLasFilas() throws Exception {
+        Tienda tienda = tienda();
+        String dueno = login(tienda.dueno());
+        String rol = ROLES + "VENDEDOR";
+        String usuario = USUARIOS + tienda.vendedorId();
+        respuesta(putJson(rol, dueno, BASE), "ROL", BASE);
+        respuesta(putJson(usuario, dueno, AJUSTE), "USUARIO", AJUSTE);
+        var antes = filas(tienda);
+
+        String dosGrupos = """
+                {"grupos":[{"id":"uno","rotulo":"Primero","tono":"ventas","claves":["caja"]},
+                           {"id":"dos","rotulo":"%s","tono":"ventas","claves":["%s"]}],"ocultas":[]}
+                """;
+        String onceGrupos = IntStream.rangeClosed(1, 11)
+                .mapToObj(i -> """
+                        {"id":"grupo-%d","rotulo":"Grupo %d","tono":"ventas","claves":[]}
+                        """.formatted(i, i))
+                .collect(Collectors.joining(",", "{\"grupos\":[", "],\"ocultas\":[]}"));
+        record Caso(String cuerpo, String mensaje) {}
+        var casos = List.of(
+                new Caso(BASE.replace("Mostrador diario", ""), "Poné un nombre para el grupo."),
+                new Caso(BASE.replace("Mostrador diario", "   "), "Poné un nombre para el grupo."),
+                new Caso(dosGrupos.formatted("pRIMERO", "remitos"), "Ya hay un grupo con ese nombre."),
+                new Caso(onceGrupos, "Podés tener hasta 10 grupos."),
+                new Caso(BASE.replace("Mostrador diario", "x".repeat(31)),
+                        "El nombre del grupo puede tener hasta 30 caracteres."),
+                new Caso(BASE.replace("\"tono\":\"ventas\"", "\"tono\":\"azul\""), "Elegí un color válido para el grupo."),
+                new Caso(BASE.replace("\"caja\"", "\"inventada\""), "Hay una opción de menú que no existe."),
+                new Caso(dosGrupos.formatted("Segundo", "caja"), "Ya pusiste esa opción en el menú."),
+                new Caso(BASE.replace("\"remitos\"", "\"caja\""), "Ya pusiste esa opción en el menú."));
+        for (String ruta : List.of(rol, usuario)) {
+            for (Caso caso : casos) {
+                error(putJson(ruta, dueno, caso.cuerpo()), 400, caso.mensaje());
+                assertThat(filas(tienda)).isEqualTo(antes);
+            }
+        }
+    }
+
+    @Test
+    void rechazaCuerposInvalidosYUnIdNoNumericoSinCambiarLasFilas() throws Exception {
+        Tienda tienda = tienda();
+        String dueno = login(tienda.dueno());
+        String rol = ROLES + "VENDEDOR";
+        String usuario = USUARIOS + tienda.vendedorId();
+        respuesta(putJson(rol, dueno, BASE), "ROL", BASE);
+        respuesta(putJson(usuario, dueno, AJUSTE), "USUARIO", AJUSTE);
+        var antes = filas(tienda);
+
+        for (String ruta : List.of(rol, usuario)) {
+            error(putJson(ruta, dueno, "{"), 400, "El cuerpo del pedido no es válido");
+            assertThat(filas(tienda)).isEqualTo(antes);
+            error(putJson(ruta, dueno, "{\"grupos\":null,\"ocultas\":[]}"), 400,
+                    "La disposición del menú no está completa.");
+            assertThat(filas(tienda)).isEqualTo(antes);
+        }
+        error(putJson(USUARIOS + "abc", dueno, BASE), 400, "Parámetro inválido: usuarioId");
+        assertThat(filas(tienda)).isEqualTo(antes);
+    }
+
+    @Test
     void putReemplazaConJsonCanonicoSinDuplicarInclusoSiElUsuarioEstaInactivo() throws Exception {
         Tienda tienda = tienda();
         String dueno = login(tienda.dueno());
@@ -213,6 +309,24 @@ class MenuIntegrationTest extends IntegrationTestBase {
         var antes = filas(tienda);
         respuesta(getResult(MENU, vendedor), "USUARIO", BASE);
         respuesta(getResult(usuario, dueno), "USUARIO", BASE);
+        assertThat(filas(tienda)).isEqualTo(antes);
+    }
+
+    @Test
+    void alCambiarDeDuenoAVendedorElAjustePropioNoEntregaPantallasDeDueno() throws Exception {
+        Tienda tienda = tienda();
+        long usuarioId = jdbc.queryForObject("select id from usuario where email = ?", Long.class, tienda.dueno());
+        String dueno = login(tienda.dueno());
+        String ajusteDueno = BASE.replace("\"caja\"", "\"caja\",\"ventas\"")
+                .replace("\"remitos\"", "\"remitos\",\"usuarios\"");
+        respuesta(putJson(USUARIOS + usuarioId, dueno, ajusteDueno), "USUARIO", ajusteDueno);
+        respuesta(getResult(MENU, dueno), "USUARIO", ajusteDueno);
+        var antes = filas(tienda);
+
+        assertThat(jdbc.update("update usuario set rol = 'VENDEDOR' where id = ? and rol = 'DUENO'", usuarioId))
+                .isOne();
+        String vendedor = login(tienda.dueno());
+        respuesta(getResult(MENU, vendedor), "USUARIO", BASE);
         assertThat(filas(tienda)).isEqualTo(antes);
     }
 
