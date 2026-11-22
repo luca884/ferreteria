@@ -82,7 +82,7 @@ export class Shell {
         return {
           id, rotulo,
           ruta: articulos?.ruta ?? rutaHub(id),
-          icono: id === ID_GRUPO_VENTAS ? HUB_VENTAS.icono : opciones[0].icono,
+          icono: id === ID_GRUPO_VENTAS ? HUB_VENTAS.icono : (articulos ?? opciones[0]).icono,
         };
       }),
     ];
@@ -94,7 +94,11 @@ export class Shell {
 
   /** Se marca el grupo de la pantalla, no solo el enlace que abre desde la barra. */
   protected esDestinoActual(destino: Destino): boolean {
-    return this.grupoActual() === destino.id;
+    const ubicacion = this.ubicacion();
+    if (ubicacion?.id !== destino.id) return false;
+    if (destino.id !== MOSTRADOR.clave) return true;
+    // Una disposición vieja puede tener un grupo con el mismo id que el destino fijo.
+    return (destino.ruta === MOSTRADOR.ruta) === (ubicacion.tono === 'mostrador');
   }
   private readonly abiertos = signal<ReadonlySet<string>>(new Set());
 

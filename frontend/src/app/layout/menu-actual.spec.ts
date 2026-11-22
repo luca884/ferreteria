@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ApplicationRef, computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 import { Sesion } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { DISPOSICION_ORIGINAL, Disposicion } from './menu';
@@ -91,6 +92,46 @@ describe('MenuActual (CU-17 T3)', () => {
     menu.recargar();
     TestBed.tick();
     http.expectOne(url).flush(null, { status: 500, statusText: 'Internal Server Error' });
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(menu.disposicion()).toBe(DISPOSICION_ORIGINAL);
+  });
+
+  it('si pasan 5001 ms sin respuesta, cancela la lectura y queda el menú original', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const { menu, http } = iniciar();
+      const pendiente = http.expectOne(url);
+
+      vi.advanceTimersByTime(4_999);
+      expect(pendiente.cancelled).toBe(false);
+      vi.advanceTimersByTime(2);
+
+      expect(pendiente.cancelled).toBe(true);
+      expect(menu.disposicion()).toBe(DISPOSICION_ORIGINAL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('si se recarga antes de la primera respuesta, cancela la lectura y solo aplica la nueva', async () => {
+    const { menu, http } = iniciar();
+    const primera = http.expectOne(url);
+    expect(primera.cancelled).toBe(false);
+
+    menu.recargar();
+    TestBed.tick();
+
+    expect(primera.cancelled).toBe(true);
+    expect(menu.disposicion()).toBe(DISPOSICION_ORIGINAL);
+    http.expectOne(url).flush({ origen: 'USUARIO', disposicion: propia });
+    await TestBed.inject(ApplicationRef).whenStable();
+    expect(menu.disposicion()).toEqual(propia);
+  });
+
+  it('si la primera lectura devuelve 403, conserva el menú original', async () => {
+    const { menu, http } = iniciar();
+    http.expectOne(url).flush(null, { status: 403, statusText: 'Forbidden' });
     await TestBed.inject(ApplicationRef).whenStable();
 
     expect(menu.disposicion()).toBe(DISPOSICION_ORIGINAL);

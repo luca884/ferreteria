@@ -176,6 +176,20 @@ describe('hub por grupo (CU-17 T3)', () => {
     expect(leer).toHaveBeenCalledTimes(dueno ? 1 : 0);
   });
 
+  it('un enlace directo a un grupo propio va a Mostrador si la primera lectura del menú devuelve 500', async () => {
+    const { harness, leer } = await preparar(true);
+    const navegacion = harness.navigateByUrl('/area/diario');
+    const http = TestBed.inject(HttpTestingController);
+    const pedido = await vi.waitFor(() => http.expectOne({ method: 'GET', url: '/api/menu' }), { timeout: 500 });
+    pedido.flush(null, { status: 500, statusText: 'Internal Server Error' });
+    await navegacion;
+    http.verify();
+
+    expect(TestBed.inject(Router).url).toBe('/mostrador');
+    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Mostrador');
+    expect(leer).not.toHaveBeenCalled();
+  });
+
   it.each(['/area/no-existe', '/area/restringido', '/area-ventas'])('al Vendedor sin opciones en %s lo lleva a Mostrador', async (url) => {
     const { harness, leer } = await preparar(false);
     await entrar(harness, url);

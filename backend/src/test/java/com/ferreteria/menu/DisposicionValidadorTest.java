@@ -76,6 +76,11 @@ class DisposicionValidadorTest {
     }
 
     @Test
+    void idMostradorReservadoParaElDestinoFijo() {
+        rechaza(conGrupos(grupo("mostrador", "Diario", "caja")), "El identificador del grupo no es válido.");
+    }
+
+    @Test
     void idRepetido() {
         rechaza(conGrupos(grupo("ventas", "Uno"), grupo("ventas", "Dos")), "Ya hay un grupo con ese identificador.");
     }

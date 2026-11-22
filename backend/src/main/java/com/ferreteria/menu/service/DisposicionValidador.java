@@ -39,7 +39,7 @@ public final class DisposicionValidador {
 
     public static Disposicion validar(Disposicion disposicion, Rol rol) {
         Set<String> usadas = new HashSet<>();
-        return normalizar(disposicion, claves -> {
+        return normalizar(disposicion, false, claves -> {
             for (String clave : claves) {
                 Boolean soloDueno = PANTALLAS.get(clave);
                 if (soloDueno == null) {
@@ -56,15 +56,16 @@ public final class DisposicionValidador {
         });
     }
 
-    /** Una clave retirada o que el rol actual ya no puede abrir no invalida un ajuste guardado. */
+    /** Una clave retirada, un cambio de rol o el id antes permitido no invalidan un ajuste guardado. */
     static Disposicion paraLectura(Disposicion disposicion, Rol rol) {
-        return normalizar(disposicion, claves -> claves.stream().filter(clave -> {
+        return normalizar(disposicion, true, claves -> claves.stream().filter(clave -> {
             Boolean soloDueno = PANTALLAS.get(clave);
             return soloDueno != null && (!soloDueno || rol == Rol.DUENO);
         }).toList());
     }
 
-    private static Disposicion normalizar(Disposicion disposicion, UnaryOperator<List<String>> procesarClaves) {
+    private static Disposicion normalizar(Disposicion disposicion, boolean permitirIdMostrador,
+                                            UnaryOperator<List<String>> procesarClaves) {
         if (disposicion == null || disposicion.grupos() == null) {
             throw incompleta();
         }
@@ -89,7 +90,8 @@ public final class DisposicionValidador {
             if (!nombres.add(rotulo)) {
                 throw new BadRequestException("Ya hay un grupo con ese nombre.");
             }
-            if (grupo.id() == null || !ID_GRUPO.matcher(grupo.id()).matches()) {
+            if (grupo.id() == null || !ID_GRUPO.matcher(grupo.id()).matches()
+                    || (!permitirIdMostrador && "mostrador".equals(grupo.id()))) {
                 throw new BadRequestException("El identificador del grupo no es válido.");
             }
             if (!ids.add(grupo.id())) {

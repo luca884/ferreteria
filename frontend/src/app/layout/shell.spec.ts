@@ -1070,6 +1070,18 @@ describe('Shell', () => {
       ]);
     });
 
+    it('con el menú original, la barra completa del Dueño conserva sus rótulos y rutas', async () => {
+      const el = await render(true);
+
+      expect({
+        rotulos: destinos(el),
+        hrefs: Array.from(barra(el)!.querySelectorAll('a'), (a) => a.getAttribute('href')),
+      }).toEqual({
+        rotulos: ['Mostrador', 'Ventas', 'Artículos', 'Más'],
+        hrefs: ['/mostrador', '/area-ventas', '/articulos'],
+      });
+    });
+
     it('el destino de la pantalla abierta lleva aria-current="page" y los demás no', async () => {
       const el = await render(true, null, TODAS);
       const actual = () => barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href');
@@ -1178,6 +1190,42 @@ describe('Shell', () => {
       expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/diario');
       await irA('/remitos');
       expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/articulos');
+    });
+
+    it('usa el ícono de Artículos cuando abre el listado directo, aunque Rubros esté primero', async () => {
+      tokenMenu.set('sesion-vendedora');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'articulos', rotulo: 'Inventario', tono: 'articulos', claves: ['rubros', 'articulos'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      await irA('/articulos');
+
+      const enlace = barra(el)!.querySelector('a[href="/articulos"]');
+      const icono = (raiz: Element | null) => raiz?.querySelector('app-icono-menu svg')?.innerHTML;
+      expect(enlace?.textContent?.trim()).toBe('Inventario');
+      expect(icono(enlace)).toBeDefined();
+      expect(icono(enlace)).toBe(icono(el.querySelector('aside a[href="/articulos"]')));
+    });
+
+    it('distingue el destino fijo Mostrador de un grupo guardado con ese id al marcar la pantalla activa', async () => {
+      tokenMenu.set('sesion-vendedora');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'mostrador', rotulo: 'Diario', tono: 'ventas', claves: ['caja'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      const nav = barra(el)!;
+      expect(nav.querySelector('a[href="/area/mostrador"]')?.textContent?.trim()).toBe('Diario');
+      const activos = (selector: string) => Array.from(nav.querySelectorAll(selector), (a) => a.getAttribute('href'));
+
+      await irA('/mostrador');
+      expect(activos('a[aria-current="page"]')).toEqual(['/mostrador']);
+      expect(activos('a.activo')).toEqual(['/mostrador']);
+
+      await irA('/area/mostrador');
+      expect(activos('a[aria-current="page"]')).toEqual(['/area/mostrador']);
+      expect(activos('a.activo')).toEqual(['/area/mostrador']);
     });
 
     it('abre el grupo de la pantalla actual cuando llega la disposición y conserva el acceso directo a Artículos', async () => {
