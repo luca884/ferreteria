@@ -1,0 +1,10 @@
+{
+  "title": "Editor del menú · con botones",
+  "brief": "Luca: «mostrame como quedaría con los botones de subir y bajar». Tres formas de editar el menú sin depender del arrastre, para comparar en escritorio.",
+  "feature": "odd/tasks/personalizar-menu.md",
+  "artboards": [
+    { "file": "01-flechas-y-mover-a.html", "title": "Flechas siempre visibles", "tradeoff": "Cada acción se ve donde se usa, a costa de repetir controles y sumar paradas de Tab en cada opción.", "width": 1280, "height": 800 },
+    { "file": "02-modo-ordenar.html", "title": "Modo Ordenar", "tradeoff": "El editor queda limpio fuera del modo; cambiar de grupo con las flechas requiere aprender el salto y puede llevar varios pasos.", "width": 1280, "height": 800 },
+    { "file": "03-seleccion-y-barra.html", "title": "Seleccionar y mover", "tradeoff": "Una sola barra reduce el ruido y las paradas de Tab, pero hay que seleccionar antes de actuar.", "width": 1280, "height": 800 }
+  ]
+}
