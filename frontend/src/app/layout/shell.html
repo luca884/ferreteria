@@ -42,20 +42,20 @@
         <app-icono-menu [nombre]="mostrador.icono" />
         {{ mostrador.rotulo }}
       </a>
-      @for (grupo of grupos(); track grupo.seccion) {
+      @for (grupo of grupos(); track grupo.id) {
         <button
           type="button"
           class="grupo"
-          [attr.data-seccion]="grupo.seccion"
-          [attr.aria-expanded]="abierto(grupo.seccion)"
-          [attr.aria-controls]="'menu-' + grupo.seccion"
-          (click)="alternar(grupo.seccion)"
+          [attr.data-seccion]="grupo.tono"
+          [attr.aria-expanded]="abierto(grupo.id)"
+          [attr.aria-controls]="'menu-' + grupo.id"
+          (click)="alternar(grupo.id)"
         >
           {{ grupo.rotulo }}
           <svg class="flecha" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
         </button>
-        @if (abierto(grupo.seccion)) {
-          <div class="opciones" [id]="'menu-' + grupo.seccion" [attr.data-seccion]="grupo.seccion">
+        @if (abierto(grupo.id)) {
+          <div class="opciones" [id]="'menu-' + grupo.id" [attr.data-seccion]="grupo.tono">
             @for (opcion of grupo.opciones; track opcion.ruta) {
               <a [routerLink]="opcion.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
                 <app-icono-menu [nombre]="opcion.icono" />

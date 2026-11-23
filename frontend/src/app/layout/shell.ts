@@ -11,7 +11,8 @@ import { AvisosALaVista } from '../shared/avisos-a-la-vista';
 import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
-import { HUB_VENTAS, MOSTRADOR, OpcionMenu, Seccion, gruposPara, seccionDe } from './menu';
+import { MenuActual } from './menu-actual';
+import { HUB_VENTAS, MOSTRADOR, OpcionMenu } from './menu';
 
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
@@ -73,7 +74,8 @@ export class Shell {
    */
   protected readonly avisoAlLlegar = signal<Aviso | null>(null);
 
-  protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
+  private readonly menu = inject(MenuActual);
+  protected readonly grupos = this.menu.grupos;
   /**
    * Los destinos de la barra inferior del celular (móvil-pulgar, T1), sacados del mismo menú que se renderiza y
    * filtrados por el rol: si el rol no puede abrir una pantalla, la barra no la ofrece, así no queda un enlace que
@@ -89,13 +91,13 @@ export class Shell {
     );
   });
   private readonly url = signal(this.router.url);
-  protected readonly seccion = computed(() => seccionDe(this.url()));
+  protected readonly seccion = computed(() => this.menu.ubicar(this.url())?.tono ?? null);
   /** El destino de la barra de la pantalla abierta: el de su sección, así «Ventas» queda marcado en Caja o en Clientes. */
   protected esDestinoActual(destino: OpcionMenu): boolean {
-    const seccion = this.seccion();
-    return seccion !== null && seccion === seccionDe(destino.ruta);
+    const lugar = this.menu.ubicar(this.url());
+    return lugar !== null && lugar.id === this.menu.ubicar(destino.ruta)?.id;
   }
-  private readonly abiertos = signal<ReadonlySet<Seccion>>(new Set());
+  private readonly abiertos = signal<ReadonlySet<string>>(new Set());
 
   /** El cajón del menú (por debajo de 1024 px). Arranca cerrado y el corte lo resuelve el CSS. */
   protected readonly menuAbierto = signal(false);
@@ -170,14 +172,14 @@ export class Shell {
 
   protected readonly iniciales = computed(() => iniciales(this.auth.sesion()?.nombre ?? ''));
 
-  protected abierto(seccion: Seccion): boolean {
-    return this.abiertos().has(seccion);
+  protected abierto(grupo: string): boolean {
+    return this.abiertos().has(grupo);
   }
 
-  protected alternar(seccion: Seccion): void {
+  protected alternar(grupo: string): void {
     this.abiertos.update((abiertos) => {
       const nuevos = new Set(abiertos);
-      if (!nuevos.delete(seccion)) nuevos.add(seccion);
+      if (!nuevos.delete(grupo)) nuevos.add(grupo);
       return nuevos;
     });
   }
@@ -185,8 +187,8 @@ export class Shell {
   /** Al llegar a una pantalla se abre el grupo de su sección; los que el usuario abrió quedan abiertos. */
   private abrirElDe(url: string): void {
     this.url.set(url);
-    const seccion = seccionDe(url);
-    if (seccion && !this.abierto(seccion)) this.alternar(seccion);
+    const lugar = this.menu.ubicar(url);
+    if (lugar && !this.abierto(lugar.id)) this.alternar(lugar.id);
   }
 
   /** Lo resuelve el enlace y no el navegador: un `#contenido` en la URL lo tomaría el router. */

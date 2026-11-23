@@ -31,6 +31,7 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 | CU-14 | [`cu-14-precio-manual.md`](spec/cu-14-precio-manual.md) | Precio manual y ajustes sobre el precio final | quien edita artículos | 2.4 KB |
 | CU-15 | [`cu-15-reportes.md`](spec/cu-15-reportes.md) | Reportes de ventas | Dueño | 2.7 KB |
 | CU-16 | [`cu-16-consultar-ventas.md`](spec/cu-16-consultar-ventas.md) | Consultar y reimprimir ventas | Dueño | 5.6 KB |
+| CU-17 | [`cu-17-personalizar-menu.md`](spec/cu-17-personalizar-menu.md) | Personalizar el menú | Dueño | 4.0 KB |
 
 ## Secciones transversales
 

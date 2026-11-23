@@ -61,3 +61,13 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 - **Módulo `facturacion`** (rama 2 del plan de facturación): guarda ConfigArca, el registro fiscal, sus alícuotas, los intentos, la serie y el estado del simulador, y es el **único escritor** del registro fiscal y del CAE (sin setters del CAE). Es el único que habla con ARCA o con el simulador y, desde la rama 4, el que arma el QR. Fronteras en `ModulosArchTest`, que reemplazan la regla que prohibía el paquete: solo `facturacion` conoce a ARCA (escaneo de los hosts de ARCA en el código fuente); `facturacion.api` usa solo tipos del JDK; `ventas` usa `facturacion` solo por `facturacion.api` (desde la rama 3: decide y registra dentro de la transacción de la venta y pide el CAE después del commit, CU-07 pasos 3 y 5); `facturacion` no depende de `ventas`, `clientes`, `stock` ni `catalogo` (sí de `ferreteria`, por los datos del emisor), y no usa `HoraArgentina.ahora()`, `now()` ni `Instant.now()`: el tiempo sale del `Clock` inyectado. `plataforma` lee y cambia la marca «de prueba», el ambiente y la facturación habilitada solo por `facturacion.api`. Sus repositorios extienden `TenantScopedRepository`. La alícuota se modela con el Id de WSFEv1, no con la de `catalogo`: la venta la traduce (rama 3).
 <!-- fin payload: spec.md:418-475 -->
 
+### Disposición del menú (CU-17)
+
+- **`menu_disposicion`** (migración aditiva, sin tocar tablas existentes): guarda cómo ordena el Dueño el menú lateral.
+  Lleva `ferreteria_id` y un alcance, `ROL` (`DUENO` o `VENDEDOR`) o `USUARIO` (con `usuario_id`), con un CHECK de
+  coherencia (`ROL` ⇔ hay rol y no usuario; `USUARIO` ⇔ hay usuario y no rol), un único por (ferretería, rol) y otro por
+  (ferretería, usuario), y FK compuesta (ferretería, usuario) a `usuario`. El contenido es un JSON versionado con
+  `grupos` (id, rótulo, color y las claves de sus opciones) y `ocultas`. Guarda **solo claves** del catálogo de pantallas,
+  que vive en el código: ninguna ruta ni permiso. Lo que el JSON no menciona sigue visible (CU-17, «Qué menú ve cada usuario»).
+- **Módulo:** vive en `ferreteria`/`auth` según se resuelva en la tarea de backend (ver el feature doc). Su repositorio extiende
+  `TenantScopedRepository`.

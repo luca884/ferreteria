@@ -2,13 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Params, Router, RouterLink } from '@angular/router';
 import { Subject, catchError, debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
-import { AuthService } from '../core/auth/auth.service';
 import { contiene } from '../core/formato/texto';
 import { Cliente } from '../features/clientes/cliente.models';
 import { ClientesService } from '../features/clientes/clientes.service';
 import { Proveedor } from '../features/proveedores/proveedor.models';
 import { ProveedoresService } from '../features/proveedores/proveedores.service';
-import { MOSTRADOR, gruposPara } from './menu';
+import { MenuActual } from './menu-actual';
+import { MOSTRADOR } from './menu';
 
 /** Cuánto se espera después de la última tecla antes de pedirle los clientes al servidor. */
 export const ESPERA_CLIENTES_MS = 250;
@@ -120,7 +120,7 @@ interface Bloque {
   `,
 })
 export class BuscadorMenu {
-  private readonly auth = inject(AuthService);
+  private readonly menu = inject(MenuActual);
   private readonly router = inject(Router);
   private readonly clientesService = inject(ClientesService);
   private readonly proveedoresService = inject(ProveedoresService);
@@ -155,7 +155,7 @@ export class BuscadorMenu {
 
   protected readonly bloques = computed<Bloque[]>(() => {
     const consulta = this.consulta();
-    const opciones = [MOSTRADOR, ...gruposPara(this.auth.esDueno()).flatMap((grupo) => grupo.opciones)]
+    const opciones = [MOSTRADOR, ...this.menu.grupos().flatMap((grupo) => grupo.opciones)]
       .filter((opcion) => contiene(opcion.rotulo, consulta))
       .map((opcion) => ({ texto: opcion.rotulo, ruta: opcion.ruta }));
     const { consulta: deClientes, items } = this.clientes();
