@@ -99,7 +99,12 @@ describe('menú personalizable (CU-17, S5-S7)', () => {
     };
     const [propio] = armarMenu(d, true);
     expect(propio).toMatchObject({ id: 'g-1', tono: 'compras', rotulo: 'Lo de todos los días' });
-    expect(ubicar('/caja/historial', armarMenu(d, true))).toEqual({ id: 'g-1', tono: 'compras' });
+    const grupos = armarMenu(d, true);
+    expect(ubicar('/caja/historial', grupos)).toEqual({ id: 'g-1', tono: 'compras' });
+    expect(ubicar('/area/g-1?x=1#arriba', grupos)).toEqual({ id: 'g-1', tono: 'compras' });
+    expect(ubicar('/area/no-existe', grupos)).toBeNull();
+    expect(ubicar('/area-ventas', grupos)).toBeNull();
+    expect(ubicar('/area-ventas', gruposPara(true))).toEqual({ id: 'ventas', tono: 'ventas' });
   });
 
   it('ocultar saca la opción del menú sin sacarla del catálogo', () => {

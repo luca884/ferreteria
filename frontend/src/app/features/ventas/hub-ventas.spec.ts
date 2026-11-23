@@ -1,9 +1,15 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { Title } from '@angular/platform-browser';
+import { routes } from '../../app.routes';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { Disposicion } from '../../layout/menu';
 import { AvisosFacturacion } from '../mostrador/avisos-facturacion.models';
 import { AvisosFacturacionService } from '../mostrador/avisos-facturacion.service';
 import { HubVentas } from './hub-ventas';
@@ -29,7 +35,8 @@ describe('HubVentas (movil-sectores T2, S3)', () => {
       imports: [HubVentas],
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { esDueno: () => dueno } },
+        provideHttpClient(), provideHttpClientTesting(),
+        { provide: AuthService, useValue: { esDueno: () => dueno, token: signal(null) } },
         { provide: AvisosFacturacionService, useValue: { leer } },
       ],
     }).compileComponents();
@@ -108,5 +115,87 @@ describe('HubVentas (movil-sectores T2, S3)', () => {
 
     expect(leer).not.toHaveBeenCalled();
     expect(pastilla()).toBeNull();
+  });
+});
+
+@Component({ template: '<h1>Mostrador</h1>' })
+class PantallaMostrador {}
+
+describe('hub por grupo (CU-17 T3)', () => {
+  const disposicion: Disposicion = {
+    grupos: [
+      { id: 'diario', rotulo: 'Mi día', tono: 'compras', claves: ['ventas', 'caja', 'clientes'] },
+      { id: 'inventario', rotulo: 'Inventario', tono: 'articulos', claves: ['articulos'] },
+      { id: 'restringido', rotulo: 'Solo Dueño', tono: 'ventas', claves: ['reportes'] },
+    ],
+    ocultas: ['clientes'],
+  };
+
+  async function preparar(dueno: boolean) {
+    const rutas = routes.find((r) => r.path === '')!.children!;
+    const hubs = rutas.filter((r) => r.path === 'area/:grupo' || r.path === 'area-ventas');
+    const leer = vi.fn(() => of({ rechazadas: 1, pendientesViejas: 0, enRevision: 0 }));
+    TestBed.configureTestingModule({ providers: [
+      provideRouter([...hubs, { path: 'mostrador', component: PantallaMostrador }, { path: '**', redirectTo: 'mostrador' }]),
+      provideHttpClient(), provideHttpClientTesting(),
+      { provide: AuthService, useValue: {
+        esDueno: signal(dueno), token: signal('sesion'), debeCambiarContrasena: signal(false),
+        sesion: signal({ userId: 1, ferreteriaId: 1, rol: dueno ? 'DUENO' : 'VENDEDOR' }),
+      } },
+      { provide: AvisosFacturacionService, useValue: { leer } },
+    ] });
+    return { harness: await RouterTestingHarness.create(), leer };
+  }
+
+  async function entrar(harness: RouterTestingHarness, url: string) {
+    const navegacion = harness.navigateByUrl(url);
+    const http = TestBed.inject(HttpTestingController);
+    const pedido = await vi.waitFor(() => http.expectOne({ method: 'GET', url: '/api/menu' }), { timeout: 500 });
+    pedido.flush({ origen: 'USUARIO', disposicion });
+    await navegacion;
+    http.verify();
+  }
+
+  it.each([true, false])('un enlace directo espera el menú y lista las opciones en orden para esDueño=%s', async (dueno) => {
+    const { harness, leer } = await preparar(dueno);
+    await entrar(harness, '/area/diario');
+
+    const pantalla = harness.routeNativeElement!;
+    expect(pantalla.querySelector('h1')?.textContent?.trim()).toBe('Mi día');
+    expect(TestBed.inject(Title).getTitle()).toBe('Mi día · Ferretería');
+    const hrefs = () => Array.from(pantalla.querySelectorAll('.fila-hub')).map((a) => a.getAttribute('href'));
+    expect(hrefs()).toEqual(dueno ? ['/ventas', '/caja'] : ['/caja']);
+    const pill = pantalla.querySelector('.pastilla-hub');
+    expect(pill?.closest('a')?.getAttribute('href') ?? null).toBe(dueno ? '/ventas' : null);
+    expect(leer).toHaveBeenCalledTimes(dueno ? 1 : 0);
+
+    await harness.navigateByUrl('/area/inventario');
+    expect(pantalla.querySelector('h1')?.textContent?.trim()).toBe('Inventario');
+    expect(hrefs()).toEqual(['/articulos']);
+    expect(pantalla.querySelector('.pastilla-hub')).toBeNull();
+    expect(leer).toHaveBeenCalledTimes(dueno ? 1 : 0);
+  });
+
+  it('un enlace directo a un grupo propio va a Mostrador si la primera lectura del menú devuelve 500', async () => {
+    const { harness, leer } = await preparar(true);
+    const navegacion = harness.navigateByUrl('/area/diario');
+    const http = TestBed.inject(HttpTestingController);
+    const pedido = await vi.waitFor(() => http.expectOne({ method: 'GET', url: '/api/menu' }), { timeout: 500 });
+    pedido.flush(null, { status: 500, statusText: 'Internal Server Error' });
+    await navegacion;
+    http.verify();
+
+    expect(TestBed.inject(Router).url).toBe('/mostrador');
+    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Mostrador');
+    expect(leer).not.toHaveBeenCalled();
+  });
+
+  it.each(['/area/no-existe', '/area/restringido', '/area-ventas'])('al Vendedor sin opciones en %s lo lleva a Mostrador', async (url) => {
+    const { harness, leer } = await preparar(false);
+    await entrar(harness, url);
+
+    expect(TestBed.inject(Router).url).toBe('/mostrador');
+    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Mostrador');
+    expect(leer).not.toHaveBeenCalled();
   });
 });

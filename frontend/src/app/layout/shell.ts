@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NavigationEnd, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
@@ -12,16 +12,12 @@ import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
 import { MenuActual } from './menu-actual';
-import { HUB_VENTAS, MOSTRADOR, OpcionMenu } from './menu';
+import { HUB_VENTAS, ID_GRUPO_VENTAS, MOSTRADOR, OpcionMenu, rutaHub } from './menu';
 
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
 
-/**
- * Los destinos de la barra inferior del celular, en orden (móvil-pulgar, T1): las pantallas del día, siempre a un pulgar
- * de distancia. «Más» no está acá: es el botón que abre el cajón con el resto del menú.
- */
-const DESTINOS_AL_PULGAR = ['/mostrador', HUB_VENTAS.ruta, '/articulos'] as const;
+type Destino = Pick<OpcionMenu, 'ruta' | 'rotulo' | 'icono'> & { id: string };
 
 /** «Juan Pérez» → «JP», «ana» → «A». */
 export function iniciales(nombre: string): string {
@@ -45,8 +41,8 @@ export function iniciales(nombre: string): string {
  * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
  * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve.
  *
- * En el celular, además, abajo queda la barra de destinos (móvil-pulgar, T1): Mostrador, Ventas y Artículos al pulgar y
- * «Más» para abrir el mismo cajón de siempre. El cajón no se toca: la barra es una forma más de llegar a él.
+ * En el celular, abajo queda la barra de destinos: Mostrador, los primeros dos grupos con opciones y «Más» para abrir
+ * el mismo cajón de siempre (CU-17, S5).
  *
  * También es donde se engancha el único observer de los avisos (S8): el que trae a la vista el aviso de una acción que
  * aparece dentro del contenido.
@@ -76,26 +72,33 @@ export class Shell {
 
   private readonly menu = inject(MenuActual);
   protected readonly grupos = this.menu.grupos;
-  /**
-   * Los destinos de la barra inferior del celular (móvil-pulgar, T1), sacados del mismo menú que se renderiza y
-   * filtrados por el rol: si el rol no puede abrir una pantalla, la barra no la ofrece, así no queda un enlace que
-   * rebota. «Ventas» es el hub (`HUB_VENTAS`, movil-sectores T2), que tienen los dos roles y lista sólo lo que cada uno
-   * puede abrir; el Vendedor no tiene la consulta de ventas, y por eso la barra nunca apunta a `/ventas`. Al super admin no le toca ninguna: el panel no es de una ferretería y la barra solo le
-   * deja «Más» para abrir el menú.
-   */
-  protected readonly destinos = computed<readonly OpcionMenu[]>(() => {
+  /** Artículos conserva el acceso directo mientras siga en su grupo; los demás destinos abren un hub. */
+  protected readonly destinos = computed<readonly Destino[]>(() => {
     if (this.auth.esSuperAdmin()) return [];
-    const opciones = [MOSTRADOR, HUB_VENTAS, ...this.grupos().flatMap((grupo) => grupo.opciones)];
-    return DESTINOS_AL_PULGAR.map((ruta) => opciones.find((opcion) => opcion.ruta === ruta)).filter(
-      (opcion): opcion is OpcionMenu => !!opcion,
-    );
+    return [
+      { ...MOSTRADOR, id: MOSTRADOR.clave },
+      ...this.grupos().slice(0, 2).map(({ id, rotulo, opciones }) => {
+        const articulos = id === 'articulos' ? opciones.find((opcion) => opcion.clave === 'articulos') : undefined;
+        return {
+          id, rotulo,
+          ruta: articulos?.ruta ?? rutaHub(id),
+          icono: id === ID_GRUPO_VENTAS ? HUB_VENTAS.icono : (articulos ?? opciones[0]).icono,
+        };
+      }),
+    ];
   });
   private readonly url = signal(this.router.url);
-  protected readonly seccion = computed(() => this.menu.ubicar(this.url())?.tono ?? null);
-  /** El destino de la barra de la pantalla abierta: el de su sección, así «Ventas» queda marcado en Caja o en Clientes. */
-  protected esDestinoActual(destino: OpcionMenu): boolean {
-    const lugar = this.menu.ubicar(this.url());
-    return lugar !== null && lugar.id === this.menu.ubicar(destino.ruta)?.id;
+  private readonly ubicacion = computed(() => this.menu.ubicar(this.url()));
+  private readonly grupoActual = computed(() => this.ubicacion()?.id);
+  protected readonly seccion = computed(() => this.ubicacion()?.tono ?? null);
+
+  /** Se marca el grupo de la pantalla, no solo el enlace que abre desde la barra. */
+  protected esDestinoActual(destino: Destino): boolean {
+    const ubicacion = this.ubicacion();
+    if (ubicacion?.id !== destino.id) return false;
+    if (destino.id !== MOSTRADOR.clave) return true;
+    // Una disposición vieja puede tener un grupo con el mismo id que el destino fijo.
+    return (destino.ruta === MOSTRADOR.ruta) === (ubicacion.tono === 'mostrador');
   }
   private readonly abiertos = signal<ReadonlySet<string>>(new Set());
 
@@ -128,6 +131,11 @@ export class Shell {
     this.destruccion.onDestroy(() => this.avisosALaVista.desconectar());
 
     this.abrirElDe(this.router.url);
+    // Al cargar la disposición, la pantalla abierta puede haber quedado en otro grupo.
+    effect(() => {
+      const grupo = this.grupoActual();
+      untracked(() => this.abrirGrupo(grupo));
+    });
     this.router.events
       .pipe(
         filter((evento): evento is NavigationEnd => evento instanceof NavigationEnd),
@@ -187,8 +195,11 @@ export class Shell {
   /** Al llegar a una pantalla se abre el grupo de su sección; los que el usuario abrió quedan abiertos. */
   private abrirElDe(url: string): void {
     this.url.set(url);
-    const lugar = this.menu.ubicar(url);
-    if (lugar && !this.abierto(lugar.id)) this.alternar(lugar.id);
+    this.abrirGrupo(this.grupoActual());
+  }
+
+  private abrirGrupo(id: string | undefined): void {
+    if (id && !this.abierto(id)) this.alternar(id);
   }
 
   /** Lo resuelve el enlace y no el navegador: un `#contenido` en la URL lo tomaría el router. */

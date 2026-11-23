@@ -1,4 +1,4 @@
-<h1 class="titulo-hub">Ventas</h1>
+<h1 class="titulo-hub">{{ grupo()?.rotulo }}</h1>
 <ul class="grupo-hub">
   @for (fila of filas(); track fila.ruta) {
     <li>
@@ -6,7 +6,9 @@
         <span class="icono-hub"><app-icono-menu [nombre]="fila.icono" /></span>
         <span>
           <b>{{ fila.rotulo }}</b>
-          <small>{{ fila.aclaracion }}</small>
+          @if (fila.aclaracion) {
+            <small>{{ fila.aclaracion }}</small>
+          }
         </span>
         @if (fila.ruta === '/ventas' && paraRevisar() > 0) {
           <span class="pastilla-hub" [attr.aria-label]="avisoDeFacturas(paraRevisar())">{{ paraRevisar() }}</span>

@@ -90,6 +90,7 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
             esDueno: signal(true),
             esSuperAdmin: signal(false),
             sesion: signal(null),
+            token: signal(null),
             debeCambiarContrasena: signal(false),
             logout: () => undefined,
           },

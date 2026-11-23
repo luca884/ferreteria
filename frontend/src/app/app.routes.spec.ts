@@ -1,10 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
+import { of } from 'rxjs';
 import { NavigationStart, Route, Router, provideRouter } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { Rol, Sesion } from './core/auth/auth.models';
 import { AuthService } from './core/auth/auth.service';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
+import { MenuService } from './core/menu/menu.service';
+import { DISPOSICION_ORIGINAL } from './layout/menu';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { MovimientosArticulo } from './features/articulos/movimientos-articulo';
@@ -60,6 +64,7 @@ describe('rutas', () => {
     ['compras/nueva', NuevaCompra],
     ['compras/:id', Compras],
     ['area-ventas', HubVentas],
+    ['area/:grupo', HubVentas],
     ['ventas', Ventas],
     ['ventas/:id', Ventas],
     ['reportes', Reportes],
@@ -91,6 +96,7 @@ describe('rutas', () => {
     caja: AMBOS,
     // El hub «Ventas» de la barra del celular: los dos roles, y sólo lista lo que cada uno ya puede abrir.
     'area-ventas': AMBOS,
+    'area/:grupo': AMBOS,
     rubros: AMBOS,
     articulos: AMBOS,
     'articulos/:id': AMBOS,
@@ -141,9 +147,12 @@ describe('rutas', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
+        { provide: MenuService, useValue: { obtener: () => of(DISPOSICION_ORIGINAL) } },
         {
           provide: AuthService,
           useValue: {
+            token: signal(null),
+            esDueno: signal(rol === 'DUENO'),
             autenticado: signal(true),
             debeCambiarContrasena: signal(debeCambiarContrasena),
             sesion: signal({ rol } as Sesion),
@@ -168,7 +177,7 @@ describe('rutas', () => {
   const INICIO: Record<Rol, string> = { DUENO: '/mostrador', VENDEDOR: '/mostrador', SUPER_ADMIN: '/admin/ferreterias' };
   const recorrido = Object.entries(MAPA).flatMap(([path, roles]) =>
     (['DUENO', 'VENDEDOR', 'SUPER_ADMIN'] as Rol[]).map((rol) => {
-      const url = '/' + path.replace(':id', '7');
+      const url = '/' + path.replace(':id', '7').replace(':grupo', 'articulos');
       return [rol, url, roles.includes(rol) ? url : INICIO[rol]] as const;
     }),
   );
@@ -284,6 +293,18 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'configuracion/ventas')).toBe('Consumidor Final · Ferretería');
     expect(titulo(hijas(), 'configuracion/datos-fiscales')).toBe('Datos de la ferretería · Ferretería');
     expect(titulo(hijas(), 'configuracion/facturacion')).toBe('Facturación · Ferretería');
+  });
+
+  it('el hub por grupo usa el rótulo en la pestaña y el enlace histórico conserva su título', async () => {
+    const router = navegarComo('DUENO');
+    const title = TestBed.inject(Title);
+
+    await router.navigateByUrl('/area/articulos');
+    expect(title.getTitle()).toBe('Artículos · Ferretería');
+    await router.navigateByUrl('/area/compras');
+    expect(title.getTitle()).toBe('Compras · Ferretería');
+    await router.navigateByUrl('/area-ventas');
+    expect(title.getTitle()).toBe('Ventas · Ferretería');
   });
 
   it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {

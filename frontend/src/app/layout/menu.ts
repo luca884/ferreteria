@@ -73,6 +73,11 @@ export const MOSTRADOR: OpcionMenu = { clave: 'mostrador', ruta: '/mostrador', r
  * entrada al grupo Ventas, con las opciones que el rol ya tiene. Los dos roles lo tienen: no da acceso a nada nuevo.
  */
 export const HUB_VENTAS: OpcionMenu = { clave: 'hub-ventas', ruta: '/area-ventas', rotulo: 'Ventas', icono: 'ventas' };
+export const ID_GRUPO_VENTAS = 'ventas';
+
+export function rutaHub(id: string): string {
+  return id === ID_GRUPO_VENTAS ? HUB_VENTAS.ruta : `/area/${encodeURIComponent(id)}`;
+}
 
 /** Las pantallas del sistema que pueden estar en el menú. Se agregan acá; la disposición solo las ordena. */
 export const CATALOGO: readonly OpcionMenu[] = [
@@ -104,7 +109,7 @@ export const CATALOGO: readonly OpcionMenu[] = [
 export const DISPOSICION_ORIGINAL: Disposicion = {
   grupos: [
     {
-      id: 'ventas',
+      id: ID_GRUPO_VENTAS,
       rotulo: 'Ventas',
       tono: 'ventas',
       claves: ['presupuestos', 'remitos', 'caja', 'clientes', 'ventas', 'reportes'],
@@ -185,14 +190,15 @@ export interface Ubicacion {
 
 /**
  * «/clientes/5/cuenta?x=1» → el grupo que tiene la opción cuya ruta es la URL o la contiene como carpeta. «Mostrador»
- * es fijo y el hub «Ventas» del celular pertenece al grupo de id `ventas`. Una pantalla fuera del menú no tiene lugar.
+ * es fijo y cada hub pertenece a su grupo por id. «/area-ventas» sigue siendo el hub de Ventas.
  */
 export function ubicar(url: string, grupos: readonly GrupoMenu[]): Ubicacion | null {
   const ruta = url.split(/[?#]/)[0];
   const coincide = (opcion: OpcionMenu) => ruta === opcion.ruta || ruta.startsWith(`${opcion.ruta}/`);
   if (coincide(MOSTRADOR)) return { id: 'mostrador', tono: 'mostrador' };
-  const grupo = coincide(HUB_VENTAS)
-    ? grupos.find((g) => g.id === 'ventas')
+  const idHub = coincide(HUB_VENTAS) ? ID_GRUPO_VENTAS : /^\/area\/([^/]+)\/?$/.exec(ruta)?.[1];
+  const grupo = idHub
+    ? grupos.find((g) => encodeURIComponent(g.id) === idHub)
     : grupos.find((g) => g.opciones.some(coincide));
   return grupo ? { id: grupo.id, tono: grupo.tono } : null;
 }

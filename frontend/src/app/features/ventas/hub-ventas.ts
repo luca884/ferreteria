@@ -1,9 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, computed, inject } from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { catchError, map, of, switchMap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { IconoDelMenu } from '../../layout/icono-menu';
 import { MenuActual } from '../../layout/menu-actual';
-import { OpcionMenu } from '../../layout/menu';
 import { AvisosFacturacionService } from '../mostrador/avisos-facturacion.service';
 
 /** Para qué sirve cada pantalla del grupo, en una línea. El Vendedor no tiene la cuenta corriente: su Clientes lo dice. */
@@ -26,9 +27,8 @@ function aclaracion(ruta: string, dueno: boolean): string {
 }
 
 /**
- * El hub «Ventas» de la barra inferior del celular (movil-sectores T2, S3): una fila por pantalla del grupo Ventas del
- * menú, en su orden. Es una vista del mismo menú filtrado por rol (`MenuActual`): no agrega pantallas ni da acceso a
- * nada que el rol no tenga hoy (el Vendedor ve Caja, Presupuestos, Remitos y Clientes; el Dueño suma Ventas y Reportes).
+ * El hub de un grupo de la barra inferior (CU-17, S5): una fila por opción visible, en el orden de `MenuActual`.
+ * No agrega pantallas ni da permisos. La URL histórica `/area-ventas` abre el grupo Ventas.
  *
  * La fila de Ventas lleva la pastilla con las facturas de ARCA para revisar (rechazadas, pendientes de CAE hace más de
  * 30 minutos y en revisión), lo mismo que cuenta el aviso del Mostrador. Se lee una vez al abrir y sólo para el Dueño:
@@ -44,27 +44,28 @@ export class HubVentas {
   private readonly auth = inject(AuthService);
   private readonly menu = inject(MenuActual);
 
-  /** Las facturas para revisar; 0 hasta la lectura y si falla. */
-  protected readonly paraRevisar = signal(0);
+  private readonly avisos = inject(AvisosFacturacionService);
+  private readonly parametros = toSignal(inject(ActivatedRoute).paramMap, { requireSync: true });
+  protected readonly grupo = computed(() => this.menu.grupoDelHub(this.parametros().get('grupo')));
 
   protected readonly filas = computed(() => {
     const dueno = this.auth.esDueno();
-    const grupo = this.menu.grupos().find((g) => g.id === 'ventas');
-    return (grupo?.opciones ?? []).map((opcion: OpcionMenu) => ({
+    return (this.grupo()?.opciones ?? []).map((opcion) => ({
       ...opcion,
       aclaracion: aclaracion(opcion.ruta, dueno),
     }));
   });
 
-  constructor() {
-    if (!this.auth.esDueno()) return;
-    inject(AvisosFacturacionService)
-      .leer()
-      .subscribe({
-        next: (avisos) => this.paraRevisar.set(avisos.rechazadas + avisos.pendientesViejas + avisos.enRevision),
-        error: () => this.paraRevisar.set(0),
-      });
-  }
+  private readonly muestraVentas = computed(() =>
+    this.auth.esDueno() && !!this.grupo()?.opciones.some((opcion) => opcion.ruta === '/ventas'),
+  );
+  /** Las facturas para revisar; 0 hasta la lectura y si falla. */
+  protected readonly paraRevisar = toSignal(toObservable(this.muestraVentas).pipe(
+    switchMap((visible) => visible ? this.avisos.leer().pipe(
+      map((avisos) => avisos.rechazadas + avisos.pendientesViejas + avisos.enRevision),
+      catchError(() => of(0)),
+    ) : of(0)),
+  ), { initialValue: 0 });
 
   protected avisoDeFacturas(cuenta: number): string {
     return `${cuenta} ${cuenta === 1 ? 'factura' : 'facturas'} para revisar`;

@@ -1,4 +1,6 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { ActivatedRouteSnapshot, RedirectCommand, Router, Routes } from '@angular/router';
+import { map } from 'rxjs';
 import { authGuard } from './core/auth/auth.guard';
 import { contrasenaGuard } from './core/auth/contrasena.guard';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
@@ -10,9 +12,24 @@ import {
   conRoles,
   rolGuard,
 } from './core/auth/rol.guard';
+import { MenuActual } from './layout/menu-actual';
+import { GrupoMenu, MOSTRADOR } from './layout/menu';
 
 /** Título de la pestaña: la pantalla primero, para distinguir pestañas abiertas en paralelo. */
 const titulo = (pantalla: string) => `${pantalla} · Ferretería`;
+
+/** Un enlace a un grupo que el usuario no ve vuelve al Mostrador sin mostrar una pantalla vacía. */
+function resolverHub<T>(ruta: ActivatedRouteSnapshot, visible: (grupo: GrupoMenu) => T) {
+  const menu = inject(MenuActual);
+  const router = inject(Router);
+  const id = ruta.paramMap.get('grupo');
+  return menu.esperarDisposicion().pipe(map(() => {
+    const grupo = menu.grupoDelHub(id);
+    return grupo ? visible(grupo) : new RedirectCommand(router.createUrlTree([MOSTRADOR.ruta]));
+  }));
+}
+
+const cargarHub = () => import('./features/ventas/hub-ventas').then((m) => m.HubVentas);
 
 /**
  * Cada pantalla del shell declara sus roles (`data: conRoles(...)`) y `rolGuard` los exige: quien no tiene permiso
@@ -155,12 +172,19 @@ export const routes: Routes = [
         data: conRoles(SOLO_DUENO),
         loadComponent: () => import('./features/compras/compras').then((m) => m.Compras),
       },
-      // La entrada al grupo Ventas de la barra del celular: la ven los dos roles y sólo lista lo que cada uno ya puede abrir.
+      // Se conserva el enlace y el título histórico de Ventas; ambos hubs usan los grupos visibles del rol.
       {
         path: 'area-ventas',
         title: titulo('Ventas'),
         data: conRoles(DUENO_Y_VENDEDOR),
-        loadComponent: () => import('./features/ventas/hub-ventas').then((m) => m.HubVentas),
+        resolve: { grupo: (ruta: ActivatedRouteSnapshot) => resolverHub(ruta, (grupo) => grupo) },
+        loadComponent: cargarHub,
+      },
+      {
+        path: 'area/:grupo',
+        title: (ruta) => resolverHub(ruta, (grupo) => titulo(grupo.rotulo)),
+        data: conRoles(DUENO_Y_VENDEDOR),
+        loadComponent: cargarHub,
       },
       {
         path: 'ventas',

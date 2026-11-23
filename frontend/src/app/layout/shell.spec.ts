@@ -8,8 +8,10 @@ import { AuthService } from '../core/auth/auth.service';
 import { Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
+import { MenuService } from '../core/menu/menu.service';
 import { ClientesService } from '../features/clientes/clientes.service';
 import { ProveedoresService } from '../features/proveedores/proveedores.service';
+import { DISPOSICION_ORIGINAL, Disposicion } from './menu';
 import { Shell } from './shell';
 
 const COTIZACION: Cotizacion = {
@@ -108,11 +110,13 @@ describe('Shell', () => {
             esDueno: signal(dueno),
             esSuperAdmin: signal(sesion?.rol === 'SUPER_ADMIN'),
             sesion: signal(sesion),
+            token: tokenMenu,
             debeCambiarContrasena: marca,
             logout: () => undefined,
           },
         },
         { provide: CotizacionService, useValue: { obtener, refrescos$: refrescos } },
+        { provide: MenuService, useValue: { obtener: obtenerMenu } },
         { provide: ClientesService, useValue: { buscar: () => of({ items: [], page: 0, size: 5, totalElements: 0, totalPages: 0 }) } },
         { provide: ProveedoresService, useValue: { listar: () => of([]) } },
       ],
@@ -137,8 +141,12 @@ describe('Shell', () => {
   let refrescos: Subject<void>;
   /** La marca de contraseña por cambiar de la sesión (hallazgo 5); los tests la prenden y la apagan. */
   let marca: WritableSignal<boolean>;
+  let tokenMenu: WritableSignal<string | null>;
+  let obtenerMenu: ReturnType<typeof vi.fn<() => Observable<Disposicion>>>;
 
   beforeEach(() => {
+    tokenMenu = signal(null);
+    obtenerMenu = vi.fn(() => of(DISPOSICION_ORIGINAL));
     obtener = vi.fn(() => of(COTIZACION));
     refrescos = new Subject<void>();
     marca = signal(false);
@@ -1062,6 +1070,18 @@ describe('Shell', () => {
       ]);
     });
 
+    it('con el menú original, la barra completa del Dueño conserva sus rótulos y rutas', async () => {
+      const el = await render(true);
+
+      expect({
+        rotulos: destinos(el),
+        hrefs: Array.from(barra(el)!.querySelectorAll('a'), (a) => a.getAttribute('href')),
+      }).toEqual({
+        rotulos: ['Mostrador', 'Ventas', 'Artículos', 'Más'],
+        hrefs: ['/mostrador', '/area-ventas', '/articulos'],
+      });
+    });
+
     it('el destino de la pantalla abierta lleva aria-current="page" y los demás no', async () => {
       const el = await render(true, null, TODAS);
       const actual = () => barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href');
@@ -1136,6 +1156,101 @@ describe('Shell', () => {
       expect(barra(el)!.querySelector('a[href="/area-ventas"]')).not.toBeNull();
       expect(barra(el)!.querySelector('a[href="/ventas"]')).toBeNull();
       expect(barra(el)!.querySelector('a[href="/articulos"]')).not.toBeNull();
+    });
+
+    const VENDEDOR: Sesion = {
+      userId: 2, nombre: 'Ana', email: 'ana@example.test', rol: 'VENDEDOR',
+      ferreteriaId: 1, ferreteriaNombre: 'La Tuerca',
+    };
+
+    it('sigue el orden y los rótulos de los grupos con opciones visibles, y usa el primer ícono visible', async () => {
+      tokenMenu.set('sesion-vendedora');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [
+          { id: 'solo-dueno', rotulo: 'Solo Dueño', tono: 'ventas', claves: ['reportes'] },
+          { id: 'vacio', rotulo: 'Oculto', tono: 'compras', claves: ['proveedores'] },
+          { id: 'diario', rotulo: 'Diario', tono: 'ventas', claves: ['rubros', 'articulos'] },
+          { id: 'articulos', rotulo: 'Inventario', tono: 'articulos', claves: ['remitos'] },
+          { id: 'ventas', rotulo: 'Operaciones', tono: 'ventas', claves: ['caja'] },
+        ],
+        ocultas: ['proveedores'],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      const links = () => Array.from(barra(el)!.querySelectorAll('a'));
+      const icono = (selector: string) => el.querySelector(`${selector} app-icono-menu svg`)?.innerHTML;
+
+      expect(destinos(el)).toEqual(['Mostrador', 'Diario', 'Inventario', 'Más']);
+      expect(links().map((a) => a.getAttribute('href'))).toEqual(['/mostrador', '/area/diario', '/area/articulos']);
+      await irA('/area/diario');
+      expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/diario');
+      expect(el.getAttribute('data-seccion')).toBe('ventas');
+      expect(boton(el, 'Diario').getAttribute('aria-expanded')).toBe('true');
+      expect(icono('.destinos a[href="/area/diario"]')).toBe(icono('aside a[href="/rubros"]'));
+      await irA('/articulos');
+      expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/diario');
+      await irA('/remitos');
+      expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/articulos');
+    });
+
+    it('usa el ícono de Artículos cuando abre el listado directo, aunque Rubros esté primero', async () => {
+      tokenMenu.set('sesion-vendedora');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'articulos', rotulo: 'Inventario', tono: 'articulos', claves: ['rubros', 'articulos'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      await irA('/articulos');
+
+      const enlace = barra(el)!.querySelector('a[href="/articulos"]');
+      const icono = (raiz: Element | null) => raiz?.querySelector('app-icono-menu svg')?.innerHTML;
+      expect(enlace?.textContent?.trim()).toBe('Inventario');
+      expect(icono(enlace)).toBeDefined();
+      expect(icono(enlace)).toBe(icono(el.querySelector('aside a[href="/articulos"]')));
+    });
+
+    it('distingue el destino fijo Mostrador de un grupo guardado con ese id al marcar la pantalla activa', async () => {
+      tokenMenu.set('sesion-vendedora');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'mostrador', rotulo: 'Diario', tono: 'ventas', claves: ['caja'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      const nav = barra(el)!;
+      expect(nav.querySelector('a[href="/area/mostrador"]')?.textContent?.trim()).toBe('Diario');
+      const activos = (selector: string) => Array.from(nav.querySelectorAll(selector), (a) => a.getAttribute('href'));
+
+      await irA('/mostrador');
+      expect(activos('a[aria-current="page"]')).toEqual(['/mostrador']);
+      expect(activos('a.activo')).toEqual(['/mostrador']);
+
+      await irA('/area/mostrador');
+      expect(activos('a[aria-current="page"]')).toEqual(['/area/mostrador']);
+      expect(activos('a.activo')).toEqual(['/area/mostrador']);
+    });
+
+    it('abre el grupo de la pantalla actual cuando llega la disposición y conserva el acceso directo a Artículos', async () => {
+      const el = await render(false, VENDEDOR, TODAS);
+      await irA('/clientes');
+      expect(boton(el, 'Ventas').getAttribute('aria-expanded')).toBe('true');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [
+          { id: 'articulos', rotulo: 'Inventario', tono: 'compras', claves: ['rubros', 'articulos'] },
+          { id: 'ventas', rotulo: 'Operaciones', tono: 'ventas', claves: ['caja'] },
+          { id: 'diario', rotulo: 'Diario', tono: 'articulos', claves: ['clientes'] },
+        ],
+        ocultas: [],
+      }));
+      tokenMenu.set('sesion-vendedora');
+      await estable();
+
+      expect(destinos(el)).toEqual(['Mostrador', 'Inventario', 'Operaciones', 'Más']);
+      expect(boton(el, 'Diario').getAttribute('aria-expanded')).toBe('true');
+      expect(el.getAttribute('data-seccion')).toBe('articulos');
+      await irA('/articulos');
+      expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/articulos');
+      const iconoVentas = barra(el)!.querySelector('a[href="/area-ventas"] app-icono-menu svg');
+      expect(iconoVentas?.querySelector('path')?.getAttribute('d')).toContain('M3.5 1.5h9v13');
+      expect(el.getAttribute('data-seccion')).toBe('compras');
     });
 
     it('el super admin no ve la barra: no tiene destinos de ferretería que ofrecer', async () => {
