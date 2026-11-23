@@ -95,6 +95,8 @@ public class SecurityConfig {
                         // Gestionar los usuarios de la ferretería (CU-02) es solo del Dueño: el Vendedor y el super admin
                         // reciben 403 aunque el cuerpo no valide.
                         .requestMatchers("/api/usuarios/**").hasRole("DUENO")
+                        // Solo el Dueño administra las disposiciones (CU-17); el menú propio lo lee cada usuario.
+                        .requestMatchers("/api/menu/disposiciones/**").hasRole("DUENO")
                         // Las ferreterias de la plataforma (alta, suspension, reset) son solo del super admin: el Dueño y el
                         // Vendedor reciben 403 aunque el cuerpo no valide.
                         .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
