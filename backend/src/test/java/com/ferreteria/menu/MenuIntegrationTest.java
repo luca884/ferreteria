@@ -191,6 +191,36 @@ class MenuIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void duenoNoPuedeOcultarPersonalizarMenuEnLaBaseNiEnSuAjuste() throws Exception {
+        Tienda tienda = tienda();
+        String dueno = login(tienda.dueno());
+        long duenoId = jdbc.queryForObject("select id from usuario where email = ?", Long.class, tienda.dueno());
+        String rol = ROLES + "DUENO";
+        String usuario = USUARIOS + duenoId;
+        respuesta(putJson(rol, dueno, BASE), "ROL", BASE);
+        respuesta(putJson(usuario, dueno, AJUSTE), "USUARIO", AJUSTE);
+        var antes = filas(tienda);
+        String ocultaElEditor = BASE.replace("\"remitos\"", "\"personalizar-menu\"");
+
+        for (String ruta : List.of(rol, usuario)) {
+            error(putJson(ruta, dueno, ocultaElEditor), 400, "No se puede ocultar «Personalizar menú».");
+            assertThat(filas(tienda)).isEqualTo(antes);
+        }
+        respuesta(getResult(rol, dueno), "ROL", BASE);
+        respuesta(getResult(usuario, dueno), "USUARIO", AJUSTE);
+    }
+
+    @Test
+    void duenoPuedeMoverPersonalizarMenuAUnGrupoDeSuBase() throws Exception {
+        Tienda tienda = tienda();
+        String dueno = login(tienda.dueno());
+        String baseDueno = BASE.replace("\"caja\"", "\"caja\",\"personalizar-menu\"");
+
+        respuesta(putJson(ROLES + "DUENO", dueno, baseDueno), "ROL", baseDueno);
+        respuesta(getResult(MENU, dueno), "ROL", baseDueno);
+    }
+
+    @Test
     void rechazaGruposYClavesInvalidosEnAmbosAlcancesSinCambiarLasFilas() throws Exception {
         Tienda tienda = tienda();
         String dueno = login(tienda.dueno());

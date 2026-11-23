@@ -49,9 +49,10 @@
           [attr.data-seccion]="grupo.tono"
           [attr.aria-expanded]="abierto(grupo.id)"
           [attr.aria-controls]="'menu-' + grupo.id"
+          [attr.title]="grupo.rotulo"
           (click)="alternar(grupo.id)"
         >
-          {{ grupo.rotulo }}
+          <span class="rotulo-grupo">{{ grupo.rotulo }}</span>
           <svg class="flecha" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
         </button>
         @if (abierto(grupo.id)) {

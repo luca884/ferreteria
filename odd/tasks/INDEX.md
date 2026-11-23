@@ -7,7 +7,7 @@
 >
 > Tamaño: este índice pesa ~22 KB; los 94 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **91 cerradas · 3 abiertas**
+- **92 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -15,7 +15,6 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
-| [`personalizar-menu.md`](personalizar-menu.md) | abierta (4✓/2✗) | 2026-11-20 | — | — | 17 |
 
 ## Cerradas
 
@@ -23,6 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
+| [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 47 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
 | [`avisos-y-accesos.md`](avisos-y-accesos.md) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | 25 |

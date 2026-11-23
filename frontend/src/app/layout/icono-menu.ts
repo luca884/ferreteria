@@ -89,6 +89,9 @@ import { IconoMenu } from './menu';
           <circle cx="12" cy="11" r="2" />
           <path d="M11 12.8l-.5 2.2 1.5-.8 1.5.8-.5-2.2" />
         }
+        @case ('menu') {
+          <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
+        }
         @case ('usuarios') {
           <circle cx="8" cy="5" r="2.5" />
           <path d="M3 13.5c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2" />

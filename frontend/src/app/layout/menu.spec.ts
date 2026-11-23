@@ -39,6 +39,7 @@ describe('menu (mejoras-ferreteros-bloque-2, S1)', () => {
       ['/configuracion/datos-fiscales', 'configuracion'],
       ['/configuracion/facturacion', 'configuracion'],
       ['/usuarios', 'configuracion'],
+      ['/configuracion/menu', 'configuracion'],
       ['/mi-contrasena', null],
       ['/admin/ferreterias', null],
       ['/ventasx', null],
@@ -57,9 +58,9 @@ describe('menu (mejoras-ferreteros-bloque-2, S1)', () => {
     expect(MOSTRADOR.soloDueno).toBeUndefined();
   });
 
-  it('el dueño ve las 22 opciones, además del Mostrador', () => {
-    expect(gruposPara(true).flatMap((g) => g.opciones).length).toBe(22);
-    expect(CATALOGO.length).toBe(22);
+  it('el dueño ve las 23 opciones, además del Mostrador', () => {
+    expect(gruposPara(true).flatMap((g) => g.opciones).length).toBe(23);
+    expect(CATALOGO.length).toBe(23);
   });
 });
 
@@ -112,8 +113,8 @@ describe('menú personalizable (CU-17, S5-S7)', () => {
     const todas = armarMenu(d, true).flatMap((g) => g.opciones.map((o) => o.rotulo));
     expect(todas).not.toContain('Remitos');
     expect(todas).not.toContain('Usuarios');
-    expect(todas.length).toBe(20);
-    expect(CATALOGO.length).toBe(22);
+    expect(todas.length).toBe(21);
+    expect(CATALOGO.length).toBe(23);
   });
 
   it('una pantalla que la disposición no menciona no desaparece: vuelve a su grupo original', () => {

@@ -106,8 +106,19 @@ describe('BuscadorMenu (mejoras-ferreteros-bloque-2, S3)', () => {
     await render(false);
 
     await escribir('usuarios');
-
     expect(resultados().map((r) => r.texto)).not.toContain('Usuarios');
+
+    await escribir('personalizar menu');
+    expect(resultados().map((r) => r.href)).not.toContain('/configuracion/menu');
+  });
+
+  it('el Dueño puede encontrar Personalizar menú', async () => {
+    vi.useFakeTimers();
+    await render();
+
+    await escribir('personalizar menu');
+
+    expect(resultados()).toContainEqual({ texto: 'Personalizar menú', href: '/configuracion/menu' });
   });
 
   it('ofrece los clientes que coinciden y elegir uno abre Clientes buscándolo', async () => {

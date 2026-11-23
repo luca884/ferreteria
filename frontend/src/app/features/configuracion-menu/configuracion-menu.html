@@ -1,0 +1,121 @@
+<app-barra-acciones>
+  <h1>Personalizar menú</h1>
+</app-barra-acciones>
+
+<p class="ayuda aviso-escritorio" role="status">Personalizá el menú desde la computadora.</p>
+
+<div class="editor">
+  <div class="selector">
+    <div class="campo">
+      <label for="menu-de">Menú de</label>
+      <select #menuDe id="menu-de" [disabled]="bloqueado()" (change)="cambiarObjetivo(menuDe)">
+        @for (opcion of objetivos(); track claveDe(opcion)) {
+          <option [value]="claveDe(opcion)" [selected]="claveDe(opcion) === claveDe(objetivo())">{{ rotuloDe(opcion) }}</option>
+        }
+      </select>
+    </div>
+    @if (borrador()) {
+      <p id="origen-menu" class="ayuda" role="status">{{ origenTexto() }}</p>
+    }
+  </div>
+
+  @if (errorUsuarios(); as mensaje) {
+    <div class="error con-accion" role="alert">
+      <span>{{ mensaje }}</span>
+      <button type="button" class="secundario chico" (click)="cargarUsuarios()">Reintentar usuarios</button>
+    </div>
+  }
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (error(); as mensaje) {
+    <div class="error con-accion" role="alert">
+      <span>{{ mensaje }}</span>
+      @if (!borrador()) {
+        <button type="button" class="secundario chico" (click)="cargar()">Reintentar menú</button>
+      }
+    </div>
+  }
+
+  <div class="acciones-menu">
+    <button type="button" class="primario" [disabled]="bloqueado() || !puedeGuardar()" (click)="guardar()">Guardar</button>
+    <button type="button" class="secundario" [disabled]="bloqueado() || !hayCambios()" (click)="descartar()">Descartar cambios</button>
+    <button type="button" class="secundario" [disabled]="bloqueado() || !borrador()" (click)="pedirRestaurar()">Restaurar</button>
+    <p id="errores-grupos" class="validacion-grupos" role="alert" [class.error]="errorGrupos()">{{ errorGrupos() }}</p>
+  </div>
+
+  @if (cargando()) {
+    <p class="ayuda" role="status">Cargando el menú…</p>
+  } @else if (borrador(); as menu) {
+    <p class="ayuda">Arrastrá las opciones a otro grupo o a «Ocultas». Para reordenar grupos, arrastralos desde su encabezado.</p>
+    <div class="tablero">
+      <div class="panel" cdkScrollable role="region" tabindex="0" aria-label="Editor de grupos">
+        <div class="acciones-menu">
+          <button type="button" class="secundario" [disabled]="bloqueado() || !puedeAgregar()" (click)="agregar()">Agregar grupo</button>
+          @if (!puedeAgregar() && !errorGrupos()) {
+            <span class="ayuda">{{ errorLimite }}</span>
+          }
+        </div>
+        <div class="grupos" cdkDropList [cdkDropListAutoScrollStep]="14" role="list" aria-label="Grupos del menú"
+          (cdkDropListDropped)="soltarGrupo($event)">
+          @for (grupo of menu.grupos; track grupo.id) {
+            <section class="grupo" cdkDrag role="listitem" [cdkDragDisabled]="bloqueado()" [attr.data-seccion]="grupo.tono">
+              <header class="cabecera-grupo">
+                <button type="button" class="secundario asa grupo-asa" cdkDragHandle [disabled]="bloqueado()"
+                  [attr.aria-label]="'Arrastrar grupo ' + (grupo.rotulo || 'sin nombre')">⠿</button>
+                <div class="campo">
+                  <label [for]="'nombre-' + grupo.id">Nombre del grupo {{ $index + 1 }}</label>
+                  <input #nombre [id]="'nombre-' + grupo.id" [value]="grupo.rotulo" [disabled]="bloqueado()"
+                    (input)="renombrar(grupo.id, nombre.value)" />
+                </div>
+                <div class="campo">
+                  <label [for]="'color-' + grupo.id">Color</label>
+                  <select #color [id]="'color-' + grupo.id" [disabled]="bloqueado()" (change)="cambiarTono(grupo.id, color.value)">
+                    @for (tono of tonos; track tono.valor) {
+                      <option [value]="tono.valor" [selected]="tono.valor === grupo.tono">{{ tono.rotulo }}</option>
+                    }
+                  </select>
+                </div>
+                @if (!esOriginal(grupo.id)) {
+                  <button type="button" class="secundario" [disabled]="bloqueado()" (click)="pedirBorrar(grupo)">Borrar grupo</button>
+                }
+              </header>
+              <ul class="opciones" cdkDropList [cdkDropListAutoScrollStep]="14" [id]="listaDe(grupo.id)" [cdkDropListData]="grupo.id"
+                [cdkDropListConnectedTo]="listas()" [attr.aria-label]="'Opciones de ' + (grupo.rotulo || 'grupo sin nombre')"
+                (cdkDropListDropped)="soltarOpcion($event)">
+                <ng-container *ngTemplateOutlet="opciones; context: { $implicit: grupo.claves }; injector: 'outlet'" />
+              </ul>
+            </section>
+          }
+        </div>
+      </div>
+
+      <section class="panel ocultas" cdkScrollable tabindex="0" aria-labelledby="titulo-ocultas">
+        <h2 id="titulo-ocultas">Ocultas</h2>
+        <p class="ayuda">Para volver a mostrar una opción, arrastrala a un grupo.</p>
+        <ul class="opciones" cdkDropList [cdkDropListAutoScrollStep]="14" [id]="listaDe(null)" [cdkDropListData]="null" aria-label="Ocultas"
+          [cdkDropListConnectedTo]="listas()" [cdkDropListEnterPredicate]="entrarEnOcultas"
+          (cdkDropListDropped)="soltarOpcion($event)">
+          <ng-container *ngTemplateOutlet="opciones; context: { $implicit: menu.ocultas }; injector: 'outlet'" />
+        </ul>
+      </section>
+    </div>
+  }
+
+  <ng-template #opciones let-claves>
+    @for (clave of claves; track clave) {
+      <li class="opcion" cdkDrag cdkDragPreviewClass="opcion-preview" [cdkDragData]="clave" [cdkDragDisabled]="bloqueado()">
+        <button type="button" class="asa opcion-asa" cdkDragHandle [disabled]="bloqueado()"
+          [attr.aria-label]="'Arrastrar ' + rotulos().get(clave)"><span class="opcion-rotulo">{{ rotulos().get(clave) }}</span></button>
+        @if (!sePuedeOcultar(clave)) {
+          <small class="ayuda">No se puede ocultar</small>
+        }
+      </li>
+    }
+  </ng-template>
+
+  @if (pregunta(); as dialogo) {
+    <app-confirmacion [titulo]="dialogo.titulo" [mensaje]="dialogo.mensaje" [textoConfirmar]="dialogo.boton"
+      [peligro]="true" (cancelar)="pregunta.set(null)" (confirmar)="confirmar()" />
+  }
+</div>

@@ -261,6 +261,7 @@ describe('Shell', () => {
         'Datos de la ferretería',
         'Facturación',
         'Usuarios',
+        'Personalizar menú',
       ]);
       const rutas: Record<string, string> = {
         Mostrador: '/mostrador',
@@ -286,11 +287,12 @@ describe('Shell', () => {
         'Datos de la ferretería': '/configuracion/datos-fiscales',
         Facturación: '/configuracion/facturacion',
         Usuarios: '/usuarios',
+        'Personalizar menú': '/configuracion/menu',
       };
       for (const [rotulo, ruta] of Object.entries(rutas)) {
         expect(el.querySelector(`nav a[href="${ruta}"]`)?.textContent?.trim(), ruta).toBe(rotulo);
       }
-      expect(el.querySelectorAll('aside nav a').length).toBe(23);
+      expect(el.querySelectorAll('aside nav a').length).toBe(24);
     });
 
     it('el Vendedor ve Mostrador, Ventas (Presupuestos, Remitos, Caja, Clientes), Artículos (Artículos, Rubros) y Compras (Proveedores)', async () => {
@@ -317,6 +319,7 @@ describe('Shell', () => {
         '/configuracion/ventas',
         '/configuracion/datos-fiscales',
         '/configuracion/facturacion',
+        '/configuracion/menu',
         '/usuarios',
       ]) {
         expect(el.querySelector(`a[href="${ruta}"]`), ruta).toBeNull();
@@ -1190,6 +1193,21 @@ describe('Shell', () => {
       expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/diario');
       await irA('/remitos');
       expect(barra(el)!.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe('/area/articulos');
+    });
+
+    it('un nombre de grupo largo se recorta con puntos suspensivos y la flecha sigue a la vista', async () => {
+      tokenMenu.set('sesion-vendedora');
+      const largo = 'Pedidos urgentes del mostrador';
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'g-1', rotulo: largo, tono: 'ventas', claves: ['caja'] }],
+        ocultas: [],
+      }));
+      const el = await render(false, VENDEDOR, TODAS);
+      const grupo = boton(el, largo);
+
+      expect(grupo.querySelector('.rotulo-grupo')?.textContent?.trim()).toBe(largo);
+      expect(grupo.getAttribute('title')).toBe(largo);
+      expect(grupo.querySelector('.flecha')).not.toBeNull();
     });
 
     it('usa el ícono de Artículos cuando abre el listado directo, aunque Rubros esté primero', async () => {

@@ -62,16 +62,23 @@ computadora.» en lugar del editor.
 
 Pantalla «Personalizar menú» dentro de Configuración, solo Dueño.
 
-- Un selector «Menú de» elige a quién se edita: los Vendedores (la base del rol), el Dueño (la base del rol) o un
-  usuario puntual (su ajuste).
-- Las opciones y los grupos se **arrastran y se sueltan**.
-- «Guardar» aplica los cambios y «Restaurar» vuelve al nivel de abajo. Hasta guardar no cambia nada para nadie.
-- Los cambios se ven en el menú del usuario editado la próxima vez que abre la app o recarga.
+- «Menú de» permite editar la base de Vendedores, la base del Dueño o el ajuste de un usuario. La lista muestra
+  el nombre, el rol y si está inactivo. El editor indica si el menú es propio, heredado del rol u original.
+- Arrastrá las opciones para reordenarlas, pasarlas a otro grupo o soltarlas en «Ocultas». Para volver a mostrar una,
+  arrastrala desde «Ocultas» a un grupo. «Personalizar menú» se puede mover, pero no ocultar.
+- Arrastrá un grupo desde su encabezado para reordenarlo. Ahí podés cambiar el nombre y elegir uno de los cinco colores.
+  «Agregar grupo» crea un grupo propio. Solo los grupos propios se pueden borrar, con confirmación; sus opciones
+  vuelven a sus grupos originales. Un grupo original se puede dejar vacío.
+- «Guardar» aplica los cambios cuando son válidos. «Descartar cambios» vuelve a lo cargado. Si cambiás «Menú de» con
+  cambios pendientes, se pide confirmación para descartarlos.
+- «Restaurar» pide confirmación, borra la personalización de ese nivel y muestra el menú que queda vigente: la base
+  del rol (si se borró un ajuste de usuario y hay una base) o el original. Guardar y restaurar actualizan enseguida el
+  menú del Dueño que está editando. Los demás usuarios ven el cambio cuando abren la app o recargan.
 
-### Límites (propuestos, a confirmar)
+### Límites
 
-- Hasta 10 grupos por disposición; el rótulo de un grupo va de 1 a 30 caracteres y no puede repetirse dentro de la
-  misma disposición.
+- Hasta 10 grupos por disposición. El nombre tiene de 1 a 30 caracteres y no se puede repetir dentro de la misma
+  disposición, aunque cambien las mayúsculas.
 
 ### Mensajes
 
@@ -80,6 +87,16 @@ Pantalla «Personalizar menú» dentro de Configuración, solo Dueño.
 - Demasiados grupos: «Podés tener hasta 10 grupos.»
 - Guardado: «Guardamos el menú.»
 - Restaurado: «Volvió el menú original.»
+- Nombre de más de 30 caracteres: «El nombre del grupo puede tener hasta 30 caracteres.»
+- Si el servidor devuelve un error de validación, el editor muestra su mensaje:
+  - Id inválido o reservado (`mostrador`): «El identificador del grupo no es válido.»
+  - Id repetido: «Ya hay un grupo con ese identificador.»
+  - Color inválido: «Elegí un color válido para el grupo.»
+  - Clave desconocida: «Hay una opción de menú que no existe.»
+  - Clave repetida, también si está en un grupo y en «Ocultas»: «Ya pusiste esa opción en el menú.»
+  - Opción de Dueño en un menú de Vendedor: «El menú de un Vendedor no puede incluir opciones de solo Dueño.»
+  - Intento de ocultar el editor: «No se puede ocultar «Personalizar menú».»
+  - Disposición incompleta: «La disposición del menú no está completa.»
 
 ## Fuera de alcance
 
