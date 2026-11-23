@@ -108,13 +108,13 @@ describe('editor de menú', () => {
     expect(moverOpcion(vendedor, 'ventas', 'ventas', ocultas, 0)).toBe(vendedor);
   });
 
-  it('ofrece exactamente los cinco tonos del editor, sin el de Mostrador', () => {
+  it('ofrece exactamente los cinco tonos del editor, sin el de Mostrador, con el nombre de su color', () => {
     expect(TONOS).toEqual([
-      { valor: 'ventas', rotulo: 'Ventas' },
-      { valor: 'articulos', rotulo: 'Artículos' },
-      { valor: 'compras', rotulo: 'Compras' },
-      { valor: 'precios', rotulo: 'Precios' },
-      { valor: 'configuracion', rotulo: 'Configuración' },
+      { valor: 'ventas', rotulo: 'Turquesa' },
+      { valor: 'articulos', rotulo: 'Naranja' },
+      { valor: 'compras', rotulo: 'Violeta' },
+      { valor: 'precios', rotulo: 'Verde' },
+      { valor: 'configuracion', rotulo: 'Rosa' },
     ]);
   });
 

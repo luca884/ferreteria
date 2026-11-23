@@ -68,7 +68,7 @@ Pantalla «Personalizar menú» dentro de Configuración, solo Dueño.
 - Si editás la base de Vendedores o el menú de otro usuario, aparece el aviso «Estás editando el menú de … Tu menú no cambia.».
 - Arrastrá las opciones para reordenarlas, pasarlas a otro grupo o soltarlas en «Ocultas». Para volver a mostrar una,
   arrastrala desde «Ocultas» a un grupo. «Personalizar menú» se puede mover, pero no ocultar.
-- Arrastrá un grupo desde su encabezado para reordenarlo. Ahí podés cambiar el nombre y elegir uno de los cinco colores.
+- Arrastrá un grupo desde su encabezado para reordenarlo. Ahí podés cambiar el nombre y elegir uno de los cinco colores, que se llaman por su color (Turquesa, Naranja, Violeta, Verde y Rosa), no por la sección.
   «Agregar grupo» crea un grupo propio. Solo los grupos propios se pueden borrar, con confirmación; sus opciones
   vuelven a sus grupos originales. Un grupo original se puede dejar vacío.
 - «Guardar» aplica los cambios cuando son válidos. «Descartar cambios» vuelve a lo cargado. Si cambiás «Menú de» con
