@@ -62,8 +62,10 @@ computadora.» en lugar del editor.
 
 Pantalla «Personalizar menú» dentro de Configuración, solo Dueño.
 
-- «Menú de» permite editar la base de Vendedores, la base del Dueño o el ajuste de un usuario. La lista muestra
-  el nombre, el rol y si está inactivo. El editor indica si el menú es propio, heredado del rol u original.
+- El editor abre en el menú del Dueño (la base de su rol). «Menú de» permite editar la base de Vendedores, la del Dueño
+  o el ajuste de un usuario. La lista muestra el nombre, el rol y si está inactivo. El editor indica si el menú es
+  propio, heredado del rol u original.
+- Si editás la base de Vendedores o el menú de otro usuario, aparece el aviso «Estás editando el menú de … Tu menú no cambia.».
 - Arrastrá las opciones para reordenarlas, pasarlas a otro grupo o soltarlas en «Ocultas». Para volver a mostrar una,
   arrastrala desde «Ocultas» a un grupo. «Personalizar menú» se puede mover, pero no ocultar.
 - Arrastrá un grupo desde su encabezado para reordenarlo. Ahí podés cambiar el nombre y elegir uno de los cinco colores.

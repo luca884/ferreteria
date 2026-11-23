@@ -4,6 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { mensajeDe } from '../../core/api/api-error';
+import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
 import { DestinoMenu, MenuResuelto } from '../../core/menu/menu.models';
 import { MenuService } from '../../core/menu/menu.service';
@@ -26,7 +27,8 @@ type OpcionSoltada = Pick<CdkDragDrop<unknown>, 'isPointerOverContainer' | 'curr
   container: { data: string | null };
 };
 
-const ROLES: readonly Objetivo[] = [{ rol: 'VENDEDOR' }, { rol: 'DUENO' }];
+const MENU_DUENO: Objetivo = { rol: 'DUENO' };
+const ROLES: readonly Objetivo[] = [{ rol: 'VENDEDOR' }, MENU_DUENO];
 const rolConArticulo = (rol: RolDeFerreteria) => rol === 'VENDEDOR' ? 'de los Vendedores' : 'del Dueño';
 const destinoDe = ({ rol, usuario }: Objetivo): DestinoMenu => usuario
   ? { ambito: 'usuarios', id: usuario.id }
@@ -43,6 +45,7 @@ export class PaginaConfiguracionMenu implements OnInit {
   private readonly menus = inject(MenuService);
   private readonly usuarios = inject(UsuariosService);
   private readonly menuActual = inject(MenuActual);
+  private readonly sesion = inject(AuthService).sesion;
   private readonly avisos = inject(Avisos);
   private readonly destruir = inject(DestroyRef);
   private readonly listaUsuarios = signal<readonly Usuario[]>([]);
@@ -50,7 +53,7 @@ export class PaginaConfiguracionMenu implements OnInit {
   private readonly origen = signal<MenuResuelto['origen']>('ORIGINAL');
   private readonly enviando = signal(false);
 
-  protected readonly objetivo = signal<Objetivo>(ROLES[0]);
+  protected readonly objetivo = signal<Objetivo>(MENU_DUENO);
   protected readonly objetivos = computed(() => [
     ...ROLES, ...this.listaUsuarios().map((usuario): Objetivo => ({ rol: usuario.rol, usuario })),
   ]);
@@ -70,6 +73,13 @@ export class PaginaConfiguracionMenu implements OnInit {
     if (this.origen() === 'ORIGINAL') return 'Usa el menú original';
     if (this.origen() === 'USUARIO' && usuario) return `Menú propio de ${usuario.nombre}`;
     return `${usuario ? 'Usa el menú' : 'Menú propio'} ${rolConArticulo(rol)}`;
+  });
+  protected readonly avisoAjeno = computed(() => {
+    const sesion = this.sesion();
+    const { rol, usuario } = this.objetivo();
+    if (!sesion || (usuario ? usuario.id === sesion.userId : rol === sesion.rol)) return null;
+    const deQuien = usuario ? `de ${usuario.nombre}` : rolConArticulo(rol);
+    return `Estás editando el menú ${deQuien}. Tu menú no cambia.`;
   });
   protected readonly rotulos = computed(() => new Map(opcionesPara(this.objetivo().rol).map((o) => [o.clave, o.rotulo])));
   protected readonly listas = computed(() => [
