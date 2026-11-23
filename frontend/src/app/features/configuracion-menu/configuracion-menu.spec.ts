@@ -2,9 +2,11 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { CdkScrollable, ScrollDispatcher } from '@angular/cdk/scrolling';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { vi } from 'vitest';
+import { AuthService } from '../../core/auth/auth.service';
 import { DISPOSICION_ORIGINAL, Disposicion } from '../../layout/menu';
 import { MenuActual } from '../../layout/menu-actual';
 import { PaginaConfiguracionMenu } from './configuracion-menu';
@@ -21,6 +23,8 @@ describe('Personalizar menú', () => {
   let fixture: ComponentFixture<PaginaConfiguracionMenu>;
   let http: HttpTestingController;
   const recargar = vi.fn();
+  const sesionDueno = { userId: 99, rol: 'DUENO' as const };
+  const sesion = signal(sesionDueno);
   const el = () => fixture.nativeElement as HTMLElement;
   const buscar = <T extends HTMLElement = HTMLElement>(selector: string) => el().querySelector<T>(selector)!;
   const texto = (selector: string) => buscar(selector).textContent?.trim();
@@ -32,8 +36,12 @@ describe('Personalizar menú', () => {
 
   beforeEach(() => {
     recargar.mockClear();
+    sesion.set(sesionDueno);
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: MenuActual, useValue: { recargar } }],
+      providers: [
+        provideHttpClient(), provideHttpClientTesting(),
+        { provide: MenuActual, useValue: { recargar } }, { provide: AuthService, useValue: { sesion } },
+      ],
     });
     fixture = TestBed.createComponent(PaginaConfiguracionMenu);
     http = TestBed.inject(HttpTestingController);
@@ -41,7 +49,7 @@ describe('Personalizar menú', () => {
 
   afterEach(() => http.verify());
 
-  function iniciar(fallanUsuarios = false) {
+  function iniciarUsuarios(fallanUsuarios = false) {
     fixture.detectChanges();
     const peticion = http.expectOne({ method: 'GET', url: '/api/usuarios?incluirInactivos=true' });
     if (fallanUsuarios) {
@@ -52,6 +60,17 @@ describe('Personalizar menú', () => {
         { id: 8, nombre: 'Juan', rol: 'DUENO', activo: true },
       ]);
     }
+  }
+
+  function iniciar(fallanUsuarios = false) {
+    iniciarUsuarios(fallanUsuarios);
+    http.expectOne({ method: 'GET', url: dueno }).flush(original);
+    fixture.detectChanges();
+  }
+
+  function iniciarEnVendedores(fallanUsuarios = false) {
+    iniciar(fallanUsuarios);
+    elegir('Vendedores');
     http.expectOne({ method: 'GET', url: vendedor }).flush(original);
     fixture.detectChanges();
   }
@@ -87,8 +106,45 @@ describe('Personalizar menú', () => {
     fixture.detectChanges();
   }
 
-  it('muestra los dos roles y todos los usuarios, el origen y solo las opciones del rol elegido', () => {
+  it('abre en el menú del Dueño', () => {
+    iniciarUsuarios();
+    const peticion = http.expectOne((req) => req.url.startsWith(`${roles}/`));
+    peticion.flush(original);
+    fixture.detectChanges();
+    expect(peticion.request.method).toBe('GET');
+    expect.soft(peticion.request.url).toBe(dueno);
+    expect(select().value).toBe('DUENO');
+    expect(texto('#origen-menu')).toBe('Usa el menú original');
+    expect(opciones('ventas')).toEqual(['Presupuestos', 'Remitos', 'Caja', 'Clientes', 'Ventas', 'Reportes']);
+    expect(buscar('#aviso-ajeno')).toBeNull();
+  });
+
+  it('avisa solo al editar un menú ajeno', () => {
     iniciar();
+    const aviso = () => buscar('#origen-menu + p#aviso-ajeno.alerta.advertencia[role="status"]')?.textContent?.trim();
+
+    elegir('Vendedores');
+    http.expectOne({ method: 'GET', url: vendedor }).flush(original);
+    fixture.detectChanges();
+    expect.soft(aviso()).toBe('Estás editando el menú de los Vendedores. Tu menú no cambia.');
+
+    elegir('Juan — Dueño');
+    http.expectOne({ method: 'GET', url: juan }).flush(original);
+    fixture.detectChanges();
+    expect.soft(aviso()).toBe('Estás editando el menú de Juan. Tu menú no cambia.');
+
+    respuestaDueno();
+    expect(buscar('#aviso-ajeno')).toBeNull();
+
+    sesion.set({ userId: 8, rol: 'DUENO' });
+    elegir('Juan — Dueño');
+    http.expectOne({ method: 'GET', url: juan }).flush(original);
+    fixture.detectChanges();
+    expect(buscar('#aviso-ajeno')).toBeNull();
+  });
+
+  it('muestra los dos roles y todos los usuarios, el origen y solo las opciones del rol elegido', () => {
+    iniciarEnVendedores();
     expect(texto('app-barra-acciones h1')).toBe('Personalizar menú');
     expect(texto('label[for="menu-de"]')).toBe('Menú de');
     expect([...select().options].map((o) => o.label.trim())).toEqual(['Vendedores', 'Dueño', 'Ana — Vendedor (inactivo)', 'Juan — Dueño']);
@@ -123,14 +179,14 @@ describe('Personalizar menú', () => {
   });
 
   it('usa un paso de auto-scroll de 14 en todas las listas de arrastre', () => {
-    iniciar();
+    iniciarEnVendedores();
     const listas = fixture.debugElement.queryAll(By.directive(CdkDropList));
     expect(listas.map((lista) => lista.injector.get(CdkDropList).autoScrollStep))
       .toEqual(Array(DISPOSICION_ORIGINAL.grupos.length + 2).fill(14));
   });
 
   it('registra ambos paneles desplazables como ancestros de sus listas', () => {
-    iniciar();
+    iniciarEnVendedores();
     const scroll = TestBed.inject(ScrollDispatcher);
     for (const lista of fixture.debugElement.queryAll(By.directive(CdkDropList))) {
       const panel = lista.nativeElement.closest('.panel');
@@ -142,7 +198,7 @@ describe('Personalizar menú', () => {
   });
 
   it('aplica la clase de vista previa solo a las opciones, incluidas las ocultas', () => {
-    iniciar();
+    iniciarEnVendedores();
     soltar('remitos', 'ventas', null, 0);
     const arrastres = fixture.debugElement.queryAll(By.directive(CdkDrag));
     expect(opciones('ocultas')).toEqual(['Remitos']);
@@ -158,7 +214,7 @@ describe('Personalizar menú', () => {
   });
 
   it('mantiene la misma alerta de validación vacía en la barra y la llena sin habilitar Guardar', () => {
-    iniciar();
+    iniciarEnVendedores();
     const alerta = buscar('#errores-grupos');
     expect(alerta).not.toBeNull();
     expect(alerta.closest('.acciones-menu')).toBe(boton('Guardar').closest('.acciones-menu'));
@@ -180,7 +236,7 @@ describe('Personalizar menú', () => {
   });
 
   it('arrastra opciones y grupos y guarda el cuerpo exacto; no oculta «Personalizar menú»', () => {
-    iniciar();
+    iniciarEnVendedores();
     respuestaDueno();
     const listas = fixture.debugElement.queryAll(By.directive(CdkDropList)).map((e) => e.injector.get(CdkDropList));
     const config = listas.find((l) => l.data === 'configuracion')!;
@@ -221,7 +277,7 @@ describe('Personalizar menú', () => {
   });
 
   it('restaura el usuario solo después de confirmar y vuelve a leer lo que hereda', () => {
-    iniciar();
+    iniciarEnVendedores();
     elegir('Ana — Vendedor (inactivo)');
     http.expectOne({ method: 'GET', url: ana }).flush({ origen: 'USUARIO', disposicion: DISPOSICION_ORIGINAL });
     fixture.detectChanges();
@@ -243,7 +299,7 @@ describe('Personalizar menú', () => {
   });
 
   it('muestra el mensaje del 400 y permite corregir sin perder el borrador', () => {
-    iniciar();
+    iniciarEnVendedores();
     renombrar('ventas', 'Pedidos');
     click('Guardar');
     http.expectOne({ method: 'PUT', url: vendedor }).flush({ message: 'El identificador del grupo no es válido.' },
@@ -256,7 +312,7 @@ describe('Personalizar menú', () => {
   });
 
   it('no abandona el borrador al elegir otro menú sin confirmar y permite descartarlo desde la barra', () => {
-    iniciar();
+    iniciarEnVendedores();
     renombrar('ventas', 'Pedidos');
     elegir('Dueño');
     expect(select().selectedOptions[0].label.trim()).toBe('Vendedores');
@@ -280,7 +336,7 @@ describe('Personalizar menú', () => {
   });
 
   it('deshabilita Guardar cuando el nombre no es válido y confirma antes de borrar un grupo propio', () => {
-    iniciar();
+    iniciarEnVendedores();
     click('Agregar grupo');
     const id = el().querySelector<HTMLInputElement>('input[id^="nombre-g-"]')!.id.replace('nombre-', '');
     expect(texto('#errores-grupos')).toBe('Poné un nombre para el grupo.');
@@ -303,7 +359,7 @@ describe('Personalizar menú', () => {
   });
 
   it('envía un solo PUT aunque se pulse Guardar dos veces mientras está en vuelo', () => {
-    iniciar();
+    iniciarEnVendedores();
     renombrar('ventas', 'Pedidos');
     const guardar = boton('Guardar');
     guardar.click();
@@ -321,7 +377,7 @@ describe('Personalizar menú', () => {
   });
 
   it('envía un solo DELETE y no vuelve a abrir la confirmación de Restaurar mientras está en vuelo', () => {
-    iniciar();
+    iniciarEnVendedores();
     click('Restaurar');
     const confirmar = buscar<HTMLButtonElement>('app-confirmacion .confirmar');
     confirmar.click();
@@ -343,7 +399,7 @@ describe('Personalizar menú', () => {
   });
 
   it('si falla el GET del menú elegido, bloquea Guardar y Restaurar hasta reintentar con éxito', () => {
-    iniciar();
+    iniciarEnVendedores();
     elegir('Dueño');
     http.expectOne({ method: 'GET', url: dueno }).flush({}, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
@@ -368,7 +424,7 @@ describe('Personalizar menú', () => {
   });
 
   it('si falla la lista de usuarios, ofrece reintentar y permite editar los dos roles', () => {
-    iniciar(true);
+    iniciarEnVendedores(true);
     expect(texto('.error[role="alert"] span')).toBe('No se pudo cargar la lista de usuarios.');
     expect(texto('.error[role="alert"] button')).toBe('Reintentar usuarios');
     expect([...select().options].map((o) => o.label.trim())).toEqual(['Vendedores', 'Dueño']);
@@ -387,7 +443,7 @@ describe('Personalizar menú', () => {
   });
 
   it('si falla el DELETE, muestra el mensaje del servidor y conserva el borrador', () => {
-    iniciar();
+    iniciarEnVendedores();
     elegir('Dueño');
     http.expectOne({ method: 'GET', url: dueno }).flush({ origen: 'ROL', disposicion: DISPOSICION_ORIGINAL });
     fixture.detectChanges();
@@ -408,7 +464,7 @@ describe('Personalizar menú', () => {
   });
 
   it('explica qué menú se hereda al restaurar un rol o un usuario', () => {
-    iniciar();
+    iniciarEnVendedores();
     click('Restaurar');
     expect(texto('app-confirmacion h2')).toBe('¿Restaurar el menú?');
     expect(texto('app-confirmacion p')).toBe('Se borra la base de este rol. El rol vuelve a usar el menú original.');
@@ -424,7 +480,7 @@ describe('Personalizar menú', () => {
   });
 
   it('ignora el cambio de objetivo mientras Guardar está en vuelo', () => {
-    iniciar();
+    iniciarEnVendedores();
     renombrar('ventas', 'Pedidos');
     click('Guardar');
     const peticion = http.expectOne({ method: 'PUT', url: vendedor });

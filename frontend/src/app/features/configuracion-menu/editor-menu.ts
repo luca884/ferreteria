@@ -8,11 +8,11 @@ export const ERROR_LIMITE = 'Podés tener hasta 10 grupos.';
 export const ERROR_NOMBRE_LARGO = 'El nombre del grupo puede tener hasta 30 caracteres.';
 
 export const TONOS = [
-  { valor: 'ventas', rotulo: 'Ventas' },
-  { valor: 'articulos', rotulo: 'Artículos' },
-  { valor: 'compras', rotulo: 'Compras' },
-  { valor: 'precios', rotulo: 'Precios' },
-  { valor: 'configuracion', rotulo: 'Configuración' },
+  { valor: 'ventas', rotulo: 'Turquesa' },
+  { valor: 'articulos', rotulo: 'Naranja' },
+  { valor: 'compras', rotulo: 'Violeta' },
+  { valor: 'precios', rotulo: 'Verde' },
+  { valor: 'configuracion', rotulo: 'Rosa' },
 ] as const satisfies readonly { valor: Exclude<Tono, 'mostrador'>; rotulo: string }[];
 
 const originales = DISPOSICION_ORIGINAL.grupos;

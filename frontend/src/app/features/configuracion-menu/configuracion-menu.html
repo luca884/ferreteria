@@ -17,6 +17,9 @@
     @if (borrador()) {
       <p id="origen-menu" class="ayuda" role="status">{{ origenTexto() }}</p>
     }
+    @if (avisoAjeno(); as mensaje) {
+      <p id="aviso-ajeno" class="alerta advertencia" role="status">{{ mensaje }}</p>
+    }
   </div>
 
   @if (errorUsuarios(); as mensaje) {
