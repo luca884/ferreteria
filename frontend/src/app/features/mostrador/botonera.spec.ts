@@ -34,6 +34,13 @@ describe('Botonera', () => {
     ]);
   });
 
+  it('filtra las acciones visibles sin cambiar el orden del mapa de atajos', () => {
+    fixture.componentRef.setInput('visibles', ['vaciar', 'cobrar', 'cantidad']);
+    fixture.detectChanges();
+
+    expect(textos()).toEqual(['Cantidad', 'Cobrar', 'Vaciar']);
+  });
+
   it('la tecla no se ve: no hay ningún kbd y va en aria-keyshortcuts', () => {
     expect(el().querySelectorAll('kbd')).toHaveLength(0);
     expect(boton('Cobrar').getAttribute('aria-keyshortcuts')).toBe('F4');

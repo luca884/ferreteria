@@ -1,12 +1,24 @@
 <app-barra-acciones>
   <h1 class="sr-only">Mostrador</h1>
   <app-selector-modo [modo]="modo()" (elegir)="modo.set($event)" />
+  <div class="chip-cliente">
+    Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong>
+    <button type="button" (mousedown)="$event.preventDefault()" (click)="alBotonera('cliente')">Cambiar</button>
+  </div>
+  @if (!escritorio()) {
+    <ng-container [ngTemplateOutlet]="botonera" />
+  }
+</app-barra-acciones>
+
+<ng-template #botonera>
   <app-botonera
+    [class.en-panel]="escritorio()"
+    [visibles]="accionesVisibles()"
     [motivos]="motivos()"
     [explicada]="motivoVisible()?.accion ?? null"
     (accion)="alBotonera($event)"
   />
-</app-barra-acciones>
+</ng-template>
 
 <div class="zona-busqueda">
   <!-- S4: por qué la acción que se acaba de intentar no se puede usar. Va debajo de la barra y no roba el foco. -->
@@ -158,7 +170,7 @@
   }
 </div>
 
-<aside class="panel-derecho" aria-label="Artículo y totales">
+<aside class="panel-derecho" [class.vacio]="!ticket.ticket().renglones.length && fichaMostrada() === null" aria-label="Artículo y totales">
   @if (fichaMostrada(); as articulo) {
     <app-ficha-articulo [articulo]="articulo" />
   } @else {
@@ -182,6 +194,9 @@
     </div>
   }
   <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
+  @if (escritorio()) {
+    <ng-container [ngTemplateOutlet]="botonera" />
+  }
   <!-- movil-sectores T8b: sólo del celular (styles.css lo esconde de 640 px para arriba). Abre «Más acciones». -->
   <button type="button" class="mas-acciones-ticket" aria-label="Más acciones del ticket" aria-haspopup="dialog" (click)="abrirMasAcciones($event)">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

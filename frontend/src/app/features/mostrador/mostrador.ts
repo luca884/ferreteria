@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -71,6 +72,13 @@ import { VencimientoCertificado, vencimientoParaElMostrador } from '../facturaci
 import { FacturacionService } from '../facturacion/facturacion.service';
 
 const ESPERA_MS = 250;
+
+/** Debajo de escritorio la botonera sigue en la barra superior para mantener «Cobrar» fijo sobre el TOTAL. */
+function esEscritorio(): boolean {
+  return typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function' ||
+    window.matchMedia('(min-width: 1024px)').matches;
+}
 /** Id del panel de avisos que la franja del celular abre y cierra (móvil-pulgar, T4). */
 const AVISOS_PANEL_ID = 'avisos-mostrador';
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -200,6 +208,7 @@ interface Escaneo {
     DialogoPresupuesto,
     DialogoRemito,
     ListaResultados,
+    NgTemplateOutlet,
     FichaArticulo,
     HojaMasAcciones,
     HojaRenglon,
@@ -216,6 +225,7 @@ interface Escaneo {
   host: {
     '(document:keydown)': 'alTeclear($event)',
     '(window:beforeunload)': 'alSalir($event)',
+    '(window:resize)': 'ajustarPresentacion()',
   },
 })
 export class Mostrador {
@@ -278,6 +288,10 @@ export class Mostrador {
     return estado === 'ABIERTA' || estado === 'DE_OTRO_DIA';
   });
   protected readonly ticket = inject(TicketStore);
+  protected readonly accionesVisibles = computed<readonly AccionBotonera[] | null>(() =>
+    this.ticket.ticket().renglones.length === 0 ? [] : null,
+  );
+  protected readonly escritorio = signal(esEscritorio());
   private readonly caja = viewChild.required(CajaBusqueda);
 
   /**
@@ -694,6 +708,10 @@ export class Mostrador {
       return;
     }
     this.intentar(accion);
+  }
+
+  protected ajustarPresentacion(): void {
+    this.escritorio.set(esEscritorio());
   }
 
   protected alBotonera(accion: AccionBotonera): void {

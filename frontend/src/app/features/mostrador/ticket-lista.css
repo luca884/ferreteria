@@ -125,6 +125,18 @@ td {
   text-align: center;
 }
 
+.vacio strong {
+  display: none;
+}
+@media screen and (min-width: 1024px) {
+  .vacio strong {
+    display: block;
+    margin-bottom: var(--e-2);
+    color: var(--texto);
+    font-size: var(--texto-xl);
+  }
+}
+
 /*
  * Una columna en la pantalla no son los 33rem fijos de las columnas de escritorio: las de números se achican y la
  * descripción se queda con el resto, que antes era 0 px. La descripción se lee entera y parte en dos renglones.

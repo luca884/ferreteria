@@ -437,38 +437,6 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
-    it('muestra la botonera con las etiquetas a la vista y las teclas solo en aria-keyshortcuts (R-038)', async () => {
-      await crear();
-
-      const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
-        b.textContent!.replace(/\s+/g, ' ').trim(),
-      );
-      expect(botones).toEqual([
-        'Buscar',
-        'Cantidad',
-        'Descuento',
-        'Dto. total',
-        'Cobrar',
-        'Presupuesto',
-        'Remito',
-        'Cliente',
-        'Quitar',
-        'Vaciar',
-      ]);
-      expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
-    });
-
-    it('la botonera va en la barra de acciones de arriba, con el título de la pantalla', async () => {
-      await crear();
-
-      const barra = el().querySelector('app-barra-acciones')!;
-      expect(barra).not.toBeNull();
-      expect(barra.querySelector('h1')?.textContent?.trim()).toBe('Mostrador');
-      expect(barra.querySelector('app-botonera [role="toolbar"]')?.getAttribute('aria-label')).toBe(
-        'Acciones del mostrador',
-      );
-    });
-
     it('al tipear busca tras 250 ms sin teclear, una sola vez y con el último texto', async () => {
       await crear();
 
@@ -1430,6 +1398,49 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(3);
     });
 
+    it('con renglones muestra las diez etiquetas, con las teclas solo en aria-keyshortcuts (R-038)', async () => {
+      await conTicket();
+
+      const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
+        b.textContent!.replace(/\s+/g, ' ').trim(),
+      );
+      expect(botones).toEqual([
+        'Buscar',
+        'Cantidad',
+        'Descuento',
+        'Dto. total',
+        'Cobrar',
+        'Presupuesto',
+        'Remito',
+        'Cliente',
+        'Quitar',
+        'Vaciar',
+      ]);
+      expect(botonera('Buscar').getAttribute('aria-keyshortcuts')).toBe('F2');
+      expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
+    });
+
+    it('al pasar a tableta la botonera vuelve a la barra de acciones sin tocar el ticket', async () => {
+      await conTicket();
+      const antes = descripciones();
+      const selector = 'app-botonera [role="toolbar"]';
+      expect(el().querySelector(`.panel-derecho ${selector}`)?.getAttribute('aria-label')).toBe('Acciones del mostrador');
+
+      vi.stubGlobal('matchMedia', (media: string) => ({ matches: media === '(max-width: 1023.98px)', media }));
+      try {
+        window.dispatchEvent(new Event('resize'));
+        await refrescar();
+
+        const barra = el().querySelector('app-barra-acciones')!;
+        expect(barra.querySelector('h1')?.textContent?.trim()).toBe('Mostrador');
+        expect(barra.querySelector(selector)?.getAttribute('aria-label')).toBe('Acciones del mostrador');
+        expect(el().querySelectorAll(selector)).toHaveLength(1);
+        expect(descripciones()).toEqual(antes);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('mostrador-simple S2: abre en Venta, con el selector de modo arriba, en la barra de acciones', async () => {
       await crear();
 
@@ -1444,6 +1455,52 @@ describe('Mostrador', () => {
         ['Presupuesto', 'false'],
         ['Remito', 'false'],
       ]);
+    });
+
+    it('mostrador-simple S1: el ticket vacío muestra «Listo para vender»', async () => {
+      await crear();
+
+      expect(el().querySelector('app-ticket-lista .vacio strong')?.textContent).toBe('Listo para vender');
+    });
+
+    it('mostrador-simple S1: con el ticket vacío no hay botones de acción a la vista y la tecla explica el motivo', async () => {
+      await crear();
+
+      expect(el().querySelectorAll('app-botonera button')).toHaveLength(0);
+
+      await tecla('F4', campo());
+
+      expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
+      expect(dialogo()).toBeNull();
+    });
+
+    it('mostrador-simple S1/S7: el panel de la derecha sólo aparece con renglones o con la ficha de un artículo', async () => {
+      await crear();
+      const panel = () => el().querySelector('.panel-derecho')!;
+      expect(panel().classList).toContain('vacio');
+
+      await escribir('tor');
+      await avanzar(250);
+      await responder(llamadas.length - 1, lista([articulo(1)]));
+      expect(panel().classList).not.toContain('vacio');
+    });
+
+    it('mostrador-simple S1: con renglones el panel de la derecha se ve y trae los botones', async () => {
+      await conTicket();
+
+      expect(el().querySelector('.panel-derecho')!.classList).not.toContain('vacio');
+      expect(el().querySelectorAll('.panel-derecho app-botonera button').length).toBeGreaterThan(0);
+    });
+
+    it('mostrador-simple S4: el cliente se ve siempre en la barra y «Cambiar» abre el selector', async () => {
+      await crear();
+      const chip = () => el().querySelector('app-barra-acciones .chip-cliente')!;
+      expect(chip().textContent).toContain('Consumidor Final');
+
+      chip().querySelector<HTMLButtonElement>('button')!.click();
+      await refrescar();
+
+      expect(dialogo()!.textContent).toContain('Cliente');
     });
 
     it('mostrador-simple S5: cambiar de modo no toca el ticket ni el total', async () => {
@@ -1507,36 +1564,39 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
-    it('con el ticket vacío la botonera apaga cantidad, cobrar, quitar y vaciar y explica por qué', async () => {
+    it('con el ticket vacío F3, F4 y F10 explican por qué no pueden actuar', async () => {
       await crear();
+      expect(el().querySelectorAll('app-botonera button')).toHaveLength(0);
 
-      for (const etiqueta of ['Cantidad', 'Cobrar', 'Quitar', 'Vaciar']) {
-        expect(botonera(etiqueta).getAttribute('aria-disabled')).toBe('true');
-        // S4: el clic tiene que llegar para poder explicar, así que no va el atributo disabled.
-        expect(botonera(etiqueta).hasAttribute('disabled')).toBe(false);
+      for (const key of ['F3', 'F4', 'F10']) {
+        const evento = await tecla(key, campo());
+        expect(evento.defaultPrevented).toBe(true);
+        expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
+        expect(dialogo()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(cobros).toHaveLength(0);
       }
-      expect(botonera('Buscar').hasAttribute('aria-disabled')).toBe(false);
-
-      botonera('Cobrar').click();
-      await refrescar();
-
-      expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
-      expect(dialogo()).toBeNull();
-      expect(cobros).toHaveLength(0);
     });
 
     it('S4: un botón apagado no ejecuta la acción y dice por qué en un aviso role=status enlazado', async () => {
-      await crear();
+      await crear(sinCaja);
+      await escanear('M', articulo(1));
 
-      botonera('Cantidad').click();
+      const cobrar = botonera('Cobrar');
+      expect(cobrar.getAttribute('aria-disabled')).toBe('true');
+      expect(cobrar.hasAttribute('disabled')).toBe(false);
+      expect(botonera('Buscar').hasAttribute('aria-disabled')).toBe(false);
+      cobrar.click();
       await refrescar();
 
       const aviso = el().querySelector('.motivo-botonera')!;
       expect(aviso.getAttribute('role')).toBe('status');
-      expect(aviso.textContent!.trim()).toBe('Agregá un renglón para usar esta acción.');
-      expect(botonera('Cantidad').getAttribute('aria-describedby')).toBe(aviso.id);
-      expect(botonera('Cobrar').hasAttribute('aria-describedby')).toBe(false);
+      expect(aviso.textContent!.trim()).toBe('Abrí la caja para vender.');
+      expect(cobrar.getAttribute('aria-describedby')).toBe(aviso.id);
+      expect(botonera('Cantidad').hasAttribute('aria-describedby')).toBe(false);
       expect(dialogo()).toBeNull();
+      expect(descripciones()).toEqual(['Artículo 1']);
+      expect(cobros).toHaveLength(0);
     });
 
     it('S4: la tecla de una acción apagada dice lo mismo que su botón, y no hace nada', async () => {
@@ -1569,7 +1629,7 @@ describe('Mostrador', () => {
     });
 
     it('S4: con un diálogo abierto ninguna acción se ejecuta y se dice que hay que cerrarlo', async () => {
-      await crear();
+      await conTicket();
       await tecla('F9', campo());
       expect(dialogo()!.textContent).toContain('Cliente');
 
@@ -1585,21 +1645,29 @@ describe('Mostrador', () => {
       expect(dialogo()!.textContent).toContain('Cliente');
     });
 
-    it('S4: el motivo no le roba el foco a la caja de búsqueda y se va con la próxima acción que sí se puede', async () => {
+    it('S4: el motivo no roba el foco y se va al cambiar el cliente; al cerrar, vuelve al buscador', async () => {
       await crear();
       expect(document.activeElement).toBe(campo());
 
-      botonera('Cantidad').click();
-      await refrescar();
+      await tecla('F3', campo());
 
       expect(motivoDelBotonera()).toBe('Agregá un renglón para usar esta acción.');
       expect(document.activeElement).toBe(campo());
 
-      botonera('Cliente').click();
+      const cambiar = el().querySelector<HTMLButtonElement>('.chip-cliente button')!;
+      const evento = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      cambiar.dispatchEvent(evento);
+      expect(evento.defaultPrevented).toBe(true);
+      cambiar.click();
       await refrescar();
 
       expect(el().querySelector('.motivo-botonera')).toBeNull();
-      expect(dialogo()).not.toBeNull();
+      expect(dialogo()!.textContent).toContain('Cliente');
+
+      await tecla('Escape');
+
+      expect(dialogo()).toBeNull();
+      expect(document.activeElement).toBe(campo());
     });
   });
 
@@ -3141,19 +3209,17 @@ describe('Mostrador', () => {
       expect(totalGrande()).toBe('$ 1.500,00');
     });
 
-    it('sin renglones los descuentos no abren nada: dicen por qué y los botones están apagados', async () => {
+    it('sin renglones no hay botones de descuento y los atajos explican el motivo', async () => {
       await crear();
+      expect(el().querySelectorAll('app-botonera button')).toHaveLength(0);
 
-      await tecla('F7');
-      await tecla('F6');
-
-      expect(dialogo()).toBeNull();
-      expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe(
-        'Agregá un renglón para usar esta acción.',
-      );
-      const botones = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button'));
-      for (const texto of ['Descuento', 'Dto. total']) {
-        expect(botones.find((b) => normal(b.textContent).includes(texto))!.getAttribute('aria-disabled')).toBe('true');
+      for (const key of ['F7', 'F6']) {
+        await tecla(key);
+        expect(dialogo()).toBeNull();
+        expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe(
+          'Agregá un renglón para usar esta acción.',
+        );
+        expect(renglonesTicket()).toHaveLength(0);
       }
     });
 
@@ -3428,22 +3494,27 @@ describe('Mostrador', () => {
       expect(guardados).toHaveLength(0);
     });
 
-    it('el botón F8 Presupuesto abre lo mismo, y está apagado con el ticket vacío', async () => {
+    it('el botón Presupuesto aparece con el primer renglón y abre lo mismo que F8', async () => {
       await crear();
       const boton = () =>
         Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
           normal(b.textContent).includes('Presupuesto'),
-        )!;
-      expect(boton().getAttribute('aria-disabled')).toBe('true');
+        );
+      expect(boton()).toBeUndefined();
+      await tecla('F8');
+      expect(dialogoPresupuesto()).toBeNull();
+      expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe('Agregá un renglón para usar esta acción.');
+      expect(guardados).toHaveLength(0);
 
       await escribir('M');
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
-      expect(boton().hasAttribute('aria-disabled')).toBe(false);
-      boton().click();
+      expect(boton()!.hasAttribute('aria-disabled')).toBe(false);
+      boton()!.click();
       await refrescar();
 
-      expect(dialogoPresupuesto()).not.toBeNull();
+      expect(normal(dialogoPresupuesto()?.querySelector('h2')?.textContent)).toBe('Guardar presupuesto');
+      expect(guardados).toHaveLength(0);
     });
 
     it('no exige caja abierta: sin caja F8 abre el diálogo y el botón está habilitado', async () => {
@@ -3796,9 +3867,9 @@ describe('Mostrador', () => {
       articulos,
     });
 
-    it('el botón Remito abre «Emitir remito» y no manda nada todavía; está apagado con el ticket vacío', async () => {
+    it('el botón Remito aparece con el primer renglón y abre «Emitir remito» sin mandar nada todavía', async () => {
       await crear();
-      expect(botonRemito().getAttribute('aria-disabled')).toBe('true');
+      expect(botonRemito()).toBeUndefined();
 
       await escribir('M');
       await enter();
@@ -4451,8 +4522,8 @@ describe('Mostrador', () => {
       expect(normal(dialogoCliente()?.querySelector('h2')?.textContent)).toBe('Cliente');
     });
 
-    it('el botón F9 Cliente abre lo mismo y está siempre habilitado', async () => {
-      await crear();
+    it('con renglones el botón Cliente está habilitado y abre lo mismo que F9', async () => {
+      await conMartillos();
       const boton = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
         normal(b.textContent).includes('Cliente'),
       )!;
@@ -5766,15 +5837,21 @@ describe('Mostrador', () => {
         expect(cobrar().getAttribute('aria-describedby')).toBe(motivo()!.id);
       });
 
-      it('con el ticket vacío «Cobrar» explica que falta un renglón', async () => {
+      it('con el ticket vacío se mantiene el TOTAL y F4 explica que falta un renglón', async () => {
         comoCelular();
         await crear();
+        expect(totalGrande()).toBe('$ 0,00');
+        expect(cobrar()).toBeUndefined();
 
-        cobrar().click();
+        const evento = new KeyboardEvent('keydown', { key: 'F4', bubbles: true, cancelable: true });
+        campo().dispatchEvent(evento);
         await refrescar();
 
+        expect(evento.defaultPrevented).toBe(true);
         expect(normal(motivo()?.textContent)).toBe('Agregá un renglón para usar esta acción.');
         expect(motivo()!.getAttribute('data-accion')).toBe('cobrar');
+        expect(el().querySelector('app-dialogo-cobro')).toBeNull();
+        expect(cobros).toHaveLength(0);
       });
     });
 
