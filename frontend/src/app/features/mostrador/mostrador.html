@@ -1,6 +1,9 @@
 <app-barra-acciones>
   <h1 class="sr-only">Mostrador</h1>
-  <app-selector-modo [modo]="modo()" (elegir)="modo.set($event)" />
+  <!-- Sólo en escritorio: debajo de 1024 px el cierre es el de siempre (Cobrar fijo y «Más acciones»), el modo no cambiaría nada. -->
+  @if (escritorio()) {
+    <app-selector-modo [modo]="modo()" (elegir)="modo.set($event)" />
+  }
   <div class="chip-cliente">
     Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong>
     <button type="button" (mousedown)="$event.preventDefault()" (click)="alBotonera('cliente')">Cambiar</button>

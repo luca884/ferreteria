@@ -1452,6 +1452,21 @@ describe('Mostrador', () => {
       }
     });
 
+    it('mostrador-simple S8: debajo de 1024 px no se ofrece el selector de modo (el celular conserva su cierre de siempre)', async () => {
+      vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media }));
+      try {
+        await crear();
+        expect(el().querySelector('app-selector-modo')).toBeNull();
+
+        vi.stubGlobal('matchMedia', (media: string) => ({ matches: media === '(min-width: 1024px)', media }));
+        window.dispatchEvent(new Event('resize'));
+        await refrescar();
+        expect(el().querySelector('app-selector-modo')).not.toBeNull();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('al pasar a tableta la botonera vuelve a la barra de acciones sin tocar el ticket', async () => {
       await conTicket();
       const antes = descripciones();

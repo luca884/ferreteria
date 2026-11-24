@@ -47,8 +47,31 @@ export const AVISO_BOTONERA_ID = 'aviso-botonera';
       align-items: stretch;
       gap: 6px;
     }
+    /*
+     * En el panel de la derecha (escritorio): las acciones del renglón y del ticket en una grilla de tres, y el cierre del
+     * modo (Cobrar, Guardar presupuesto o Emitir remito) arriba y a todo el ancho, como en la maqueta A.
+     */
     :host(.en-panel) .botonera {
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    :host(.en-panel) .accion-barra {
+      width: auto;
+      min-width: 0;
+    }
+    :host(.en-panel) .accion-barra.primario {
+      grid-column: 1 / -1;
+      order: -1;
+      min-height: 52px;
+      font-size: var(--texto-md);
+      font-weight: 700;
+    }
+    :host(.en-panel) .peligro {
+      margin-left: 0;
+    }
+    :host(.en-panel) .peligro::before {
+      display: none;
     }
     /*
      * Una acción que hoy no se puede usar se ve apagada, con el mismo aspecto que le da el disabled de styles.css

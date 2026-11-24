@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-22 desde los 94 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-24 desde los 95 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 94 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~23 KB; los 95 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **92 cerradas · 2 abiertas**
+- **93 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -22,6 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
+| [`mostrador-simple.md`](mostrador-simple.md) | 2026-11-24 | el mostrador abre directo en Venta con un selector de modo (Venta / Presupuesto / Remito), sin botones apagados, y muestra cada acción cuando se puede | 8 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
