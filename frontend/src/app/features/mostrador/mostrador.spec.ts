@@ -1430,6 +1430,43 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(3);
     });
 
+    it('mostrador-simple S2: abre en Venta, con el selector de modo arriba, en la barra de acciones', async () => {
+      await crear();
+
+      const selector = el().querySelector('app-barra-acciones app-selector-modo')!;
+      expect(selector).not.toBeNull();
+      const modos = Array.from(selector.querySelectorAll('button')).map((b) => [
+        b.textContent!.trim(),
+        b.getAttribute('aria-pressed'),
+      ]);
+      expect(modos).toEqual([
+        ['Venta', 'true'],
+        ['Presupuesto', 'false'],
+        ['Remito', 'false'],
+      ]);
+    });
+
+    it('mostrador-simple S5: cambiar de modo no toca el ticket ni el total', async () => {
+      await conTicket();
+      const antes = { descripciones: descripciones(), total: total() };
+      const modo = (texto: string) =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-selector-modo button')).find(
+          (b) => b.textContent!.trim() === texto,
+        )!;
+
+      modo('Presupuesto').click();
+      await refrescar();
+      expect(modo('Presupuesto').getAttribute('aria-pressed')).toBe('true');
+      expect(modo('Venta').getAttribute('aria-pressed')).toBe('false');
+      expect({ descripciones: descripciones(), total: total() }).toEqual(antes);
+
+      modo('Remito').click();
+      await refrescar();
+      expect(modo('Remito').getAttribute('aria-pressed')).toBe('true');
+      expect({ descripciones: descripciones(), total: total() }).toEqual(antes);
+      expect(dialogo()).toBeNull();
+    });
+
     it('la botonera dispara lo mismo que la tecla', async () => {
       await conTicket();
 

@@ -1,5 +1,6 @@
 <app-barra-acciones>
   <h1 class="sr-only">Mostrador</h1>
+  <app-selector-modo [modo]="modo()" (elegir)="modo.set($event)" />
   <app-botonera
     [motivos]="motivos()"
     [explicada]="motivoVisible()?.accion ?? null"

@@ -3,6 +3,7 @@ import { Component, DestroyRef, computed, inject, signal, viewChild } from '@ang
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, timer } from 'rxjs';
 import { AccionBotonera, AVISO_BOTONERA_ID, Botonera } from './botonera';
+import { ModoMostrador, SelectorModo } from './selector-modo';
 import { AvisosCae } from './avisos-cae';
 import { AvisosFacturacion } from './avisos-facturacion';
 import { CajaBusqueda } from './caja-busqueda';
@@ -188,6 +189,7 @@ interface Escaneo {
     AvisosFacturacion,
     BarraAcciones,
     Botonera,
+    SelectorModo,
     MontoPipe,
     CajaBusqueda,
     DialogoCantidad,
@@ -414,6 +416,8 @@ export class Mostrador {
   /** Temporizador que oculta el aviso de venta cobrada; cada aviso nuevo arranca el suyo. */
   private ocultarAviso: ReturnType<typeof setTimeout> | undefined;
 
+  /** Qué se está armando: abre siempre en Venta. Cambiarlo no toca el ticket: cambia sólo el cierre (mostrador-simple S2, S5). */
+  protected readonly modo = signal<ModoMostrador>('venta');
   protected readonly dialogo = signal<Dialogo | null>(null);
   /** Para el buscador: con un diálogo abierto no recupera el foco diferido. */
   protected readonly sinDialogo = () => this.dialogo() === null;
