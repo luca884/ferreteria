@@ -1,0 +1,27 @@
+{
+  "title": "Mostrador · más simple",
+  "brief": "Mostrador que abre directo en Venta, con selector de modo (Venta / Presupuesto / Remito), sin botones apagados y con el ticket conservado al cambiar de modo.",
+  "artboards": [
+    {
+      "file": "01-pestanas-y-panel-de-cierre.html",
+      "title": "A · Pestañas y panel de cierre",
+      "tradeoff": "La más parecida a hoy y la más fácil de construir; el modo se ve siempre arriba y el cierre vive a la derecha.",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "02-tarjetas-como-estado-vacio.html",
+      "title": "B · Tarjetas como estado vacío",
+      "tradeoff": "El estado vacío enseña los tres modos con tarjetas grandes; ocupa más pantalla y suma un bloque para mantener.",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "03-dock-con-modo-y-mas.html",
+      "title": "C · Dock con modo y «Más»",
+      "tradeoff": "La pantalla más limpia (columna centrada y una barra inferior); esconde Cliente, Dto. total y Vaciar detrás de «Más».",
+      "width": 1440,
+      "height": 900
+    }
+  ]
+}
