@@ -41,6 +41,20 @@ describe('Botonera', () => {
     expect(textos()).toEqual(['Cantidad', 'Cobrar', 'Vaciar']);
   });
 
+  it('mostrador-simple S3: `rotulos` cambia la etiqueta de una acción y `principal` la marca como primaria', () => {
+    fixture.componentRef.setInput('visibles', ['presupuesto', 'quitar']);
+    fixture.componentRef.setInput('rotulos', { presupuesto: 'Guardar presupuesto' });
+    fixture.componentRef.setInput('principal', 'presupuesto');
+    fixture.detectChanges();
+
+    expect(textos()).toEqual(['Guardar presupuesto', 'Quitar']);
+    expect(boton('Guardar presupuesto').classList).toContain('primario');
+    expect(boton('Guardar presupuesto').classList).not.toContain('cobrar-fijo');
+    expect(boton('Quitar').classList).not.toContain('primario');
+    // La tecla sigue siendo la de la acción, no la del rótulo.
+    expect(boton('Guardar presupuesto').getAttribute('aria-keyshortcuts')).toBe('F8');
+  });
+
   it('la tecla no se ve: no hay ningún kbd y va en aria-keyshortcuts', () => {
     expect(el().querySelectorAll('kbd')).toHaveLength(0);
     expect(boton('Cobrar').getAttribute('aria-keyshortcuts')).toBe('F4');

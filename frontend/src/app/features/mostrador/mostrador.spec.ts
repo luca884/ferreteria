@@ -289,6 +289,27 @@ describe('Mostrador', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
+  const botonesDeBotonera = () => Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button'));
+  const rotulo = (b: HTMLButtonElement) => b.textContent!.replace(/\s+/g, ' ').trim();
+
+  function elegirModo(modo: 'Presupuesto' | 'Remito') {
+    const boton = Array.from(el().querySelectorAll<HTMLButtonElement>('app-selector-modo button')).find(
+      (b) => rotulo(b) === modo,
+    )!;
+    if (boton.getAttribute('aria-pressed') !== 'true') {
+      boton.click();
+      fixture.detectChanges();
+    }
+  }
+
+  function botonera(etiqueta: string) {
+    if ((etiqueta === 'Presupuesto' || etiqueta === 'Remito') && el().querySelector('app-botonera.en-panel')) {
+      elegirModo(etiqueta);
+      etiqueta = etiqueta === 'Presupuesto' ? 'Guardar presupuesto' : 'Emitir remito';
+    }
+    return botonesDeBotonera().find((b) => rotulo(b) === etiqueta)!;
+  }
+
   const campo = () => el().querySelector('input')!;
   const filas = () => Array.from(el().querySelectorAll<HTMLElement>('[role="option"]'));
 
@@ -1090,10 +1111,6 @@ describe('Mostrador', () => {
       renglonesTicket().map((r) => r.querySelector('.descripcion')!.textContent!.trim());
     const cantidades = () =>
       renglonesTicket().map((r) => r.querySelector('.cantidad')!.textContent!.trim());
-    const botonera = (etiqueta: string) =>
-      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
-        b.textContent!.includes(etiqueta),
-      )!;
     /** S4: el aviso que dice por qué la acción intentada no se puede usar. */
     const motivoDelBotonera = () =>
       (el().querySelector('.motivo-botonera')?.textContent ?? '').replace(/\s+/g, ' ').trim();
@@ -1398,26 +1415,41 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(3);
     });
 
-    it('con renglones muestra las diez etiquetas, con las teclas solo en aria-keyshortcuts (R-038)', async () => {
+    it('en escritorio con renglones muestra las seis etiquetas de Venta, con las teclas solo en aria-keyshortcuts (R-038)', async () => {
       await conTicket();
 
-      const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
-        b.textContent!.replace(/\s+/g, ' ').trim(),
-      );
-      expect(botones).toEqual([
-        'Buscar',
-        'Cantidad',
-        'Descuento',
-        'Dto. total',
-        'Cobrar',
-        'Presupuesto',
-        'Remito',
-        'Cliente',
-        'Quitar',
-        'Vaciar',
+      expect(botonesDeBotonera().map((b) => [rotulo(b), b.getAttribute('aria-keyshortcuts')])).toEqual([
+        ['Cantidad', 'F3'],
+        ['Descuento', 'F7'],
+        ['Dto. total', 'F6'],
+        ['Cobrar', 'F4'],
+        ['Quitar', 'F10'],
+        ['Vaciar', null],
       ]);
-      expect(botonera('Buscar').getAttribute('aria-keyshortcuts')).toBe('F2');
       expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
+    });
+
+    it('debajo de 1024 px con renglones conserva las diez etiquetas y sus aria-keyshortcuts (R-038)', async () => {
+      vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media }));
+      try {
+        await conTicket();
+
+        expect(botonesDeBotonera().map((b) => [rotulo(b), b.getAttribute('aria-keyshortcuts')])).toEqual([
+          ['Buscar', 'F2'],
+          ['Cantidad', 'F3'],
+          ['Descuento', 'F7'],
+          ['Dto. total', 'F6'],
+          ['Cobrar', 'F4'],
+          ['Presupuesto', 'F8'],
+          ['Remito', null],
+          ['Cliente', 'F9'],
+          ['Quitar', 'F10'],
+          ['Vaciar', null],
+        ]);
+        expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('al pasar a tableta la botonera vuelve a la barra de acciones sin tocar el ticket', async () => {
@@ -1503,6 +1535,63 @@ describe('Mostrador', () => {
       expect(dialogo()!.textContent).toContain('Cliente');
     });
 
+    describe('mostrador-simple S3: el cierre cambia con el modo', () => {
+      const enPanel = () =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('.panel-derecho app-botonera button'));
+      const rotulos = () => enPanel().map((b) => b.textContent!.replace(/\s+/g, ' ').trim());
+      const cambiarModo = async (texto: string) => {
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-selector-modo button'))
+          .find((b) => b.textContent!.trim() === texto)!
+          .click();
+        await refrescar();
+      };
+
+      it('Venta: las acciones del renglón y del ticket, y Cobrar como botón principal', async () => {
+        await conTicket();
+
+        expect(rotulos()).toEqual(['Cantidad', 'Descuento', 'Dto. total', 'Cobrar', 'Quitar', 'Vaciar']);
+        expect(enPanel().filter((b) => b.classList.contains('primario')).map((b) => b.textContent!.trim())).toEqual([
+          'Cobrar',
+        ]);
+      });
+
+      it('Presupuesto: «Guardar presupuesto» reemplaza a Cobrar, abre el diálogo de siempre y F8 sigue andando', async () => {
+        await conTicket();
+        await cambiarModo('Presupuesto');
+
+        expect(rotulos()).toEqual(['Cantidad', 'Descuento', 'Dto. total', 'Guardar presupuesto', 'Quitar', 'Vaciar']);
+        expect(enPanel().find((b) => b.textContent!.trim() === 'Guardar presupuesto')!.classList).toContain('primario');
+
+        enPanel().find((b) => b.textContent!.trim() === 'Guardar presupuesto')!.click();
+        await refrescar();
+        expect(el().querySelector('app-dialogo-presupuesto')).not.toBeNull();
+        await tecla('Escape');
+
+        await tecla('F8', campo());
+        expect(el().querySelector('app-dialogo-presupuesto')).not.toBeNull();
+      });
+
+      it('Remito: «Emitir remito» reemplaza a Cobrar y abre el diálogo de siempre', async () => {
+        await conTicket();
+        await cambiarModo('Remito');
+
+        expect(rotulos()).toEqual(['Cantidad', 'Descuento', 'Dto. total', 'Emitir remito', 'Quitar', 'Vaciar']);
+
+        enPanel().find((b) => b.textContent!.trim() === 'Emitir remito')!.click();
+        await refrescar();
+        expect(el().querySelector('app-dialogo-remito')).not.toBeNull();
+      });
+
+      it('las teclas no dependen del modo: F4 cobra estando en Presupuesto', async () => {
+        await conTicket();
+        await cambiarModo('Presupuesto');
+
+        await tecla('F4', campo());
+
+        expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
+      });
+    });
+
     it('mostrador-simple S5: cambiar de modo no toca el ticket ni el total', async () => {
       await conTicket();
       const antes = { descripciones: descripciones(), total: total() };
@@ -1524,7 +1613,7 @@ describe('Mostrador', () => {
       expect(dialogo()).toBeNull();
     });
 
-    it('la botonera dispara lo mismo que la tecla', async () => {
+    it('los botones de Cantidad, Quitar y Cobrar abren sus diálogos, y F2 enfoca el buscador', async () => {
       await conTicket();
 
       botonera('Cantidad').click();
@@ -1542,8 +1631,10 @@ describe('Mostrador', () => {
       expect(dialogo()!.textContent).toContain('Cobrar');
       await tecla('Escape');
 
-      botonera('Buscar').click();
-      await refrescar();
+      const cobrar = botonera('Cobrar');
+      cobrar.focus();
+      expect(document.activeElement).toBe(cobrar);
+      expect((await tecla('F2', cobrar)).defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(campo());
     });
 
@@ -1585,7 +1676,8 @@ describe('Mostrador', () => {
       const cobrar = botonera('Cobrar');
       expect(cobrar.getAttribute('aria-disabled')).toBe('true');
       expect(cobrar.hasAttribute('disabled')).toBe(false);
-      expect(botonera('Buscar').hasAttribute('aria-disabled')).toBe(false);
+      cobrar.focus();
+      expect(document.activeElement).toBe(cobrar);
       cobrar.click();
       await refrescar();
 
@@ -1597,6 +1689,10 @@ describe('Mostrador', () => {
       expect(dialogo()).toBeNull();
       expect(descripciones()).toEqual(['Artículo 1']);
       expect(cobros).toHaveLength(0);
+
+      // Aunque la caja esté cerrada, Buscar sigue disponible por F2.
+      expect((await tecla('F2', cobrar)).defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(campo());
     });
 
     it('S4: la tecla de una acción apagada dice lo mismo que su botón, y no hace nada', async () => {
@@ -1633,14 +1729,19 @@ describe('Mostrador', () => {
       await tecla('F9', campo());
       expect(dialogo()!.textContent).toContain('Cliente');
 
-      botonera('Buscar').click();
-      await refrescar();
+      expect((await tecla('F2')).defaultPrevented).toBe(true);
+      expect(motivoDelBotonera()).toBe('Cerrá el diálogo para seguir con el ticket.');
+      expect(dialogo()!.textContent).toContain('Cliente');
+      expect(dentroDelDialogo()).toBe(true);
 
+      await avanzar(5000);
+      botonera('Cantidad').click();
+      await refrescar();
       expect(motivoDelBotonera()).toBe('Cerrá el diálogo para seguir con el ticket.');
       expect(dialogo()!.textContent).toContain('Cliente');
 
+      await avanzar(5000);
       await tecla('F3', campo());
-
       expect(motivoDelBotonera()).toBe('Cerrá el diálogo para seguir con el ticket.');
       expect(dialogo()!.textContent).toContain('Cliente');
     });
@@ -3494,13 +3595,10 @@ describe('Mostrador', () => {
       expect(guardados).toHaveLength(0);
     });
 
-    it('el botón Presupuesto aparece con el primer renglón y abre lo mismo que F8', async () => {
+    it('en modo Presupuesto, «Guardar presupuesto» aparece con el primer renglón y abre lo mismo que F8', async () => {
       await crear();
-      const boton = () =>
-        Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
-          normal(b.textContent).includes('Presupuesto'),
-        );
-      expect(boton()).toBeUndefined();
+      elegirModo('Presupuesto');
+      expect(botonera('Guardar presupuesto')).toBeUndefined();
       await tecla('F8');
       expect(dialogoPresupuesto()).toBeNull();
       expect(normal(el().querySelector('.motivo-botonera')?.textContent)).toBe('Agregá un renglón para usar esta acción.');
@@ -3509,8 +3607,9 @@ describe('Mostrador', () => {
       await escribir('M');
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
-      expect(boton()!.hasAttribute('aria-disabled')).toBe(false);
-      boton()!.click();
+      const guardar = botonera('Guardar presupuesto');
+      expect(guardar.hasAttribute('aria-disabled')).toBe(false);
+      guardar.click();
       await refrescar();
 
       expect(normal(dialogoPresupuesto()?.querySelector('h2')?.textContent)).toBe('Guardar presupuesto');
@@ -3802,10 +3901,7 @@ describe('Mostrador', () => {
     const advertencia = () => normal(el().querySelector('.aviso.advertencia')?.textContent);
     const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
     const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
-    const botonRemito = () =>
-      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
-        normal(b.textContent).includes('Remito'),
-      )!;
+    const botonRemito = () => botonera('Remito');
 
     async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
       const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -3867,14 +3963,15 @@ describe('Mostrador', () => {
       articulos,
     });
 
-    it('el botón Remito aparece con el primer renglón y abre «Emitir remito» sin mandar nada todavía', async () => {
+    it('en modo Remito, «Emitir remito» aparece con el primer renglón y abre el diálogo sin mandar nada todavía', async () => {
       await crear();
-      expect(botonRemito()).toBeUndefined();
+      elegirModo('Remito');
+      expect(botonera('Emitir remito')).toBeUndefined();
 
       await escribir('M');
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
-      expect(botonRemito().hasAttribute('aria-disabled')).toBe(false);
+      expect(botonera('Emitir remito').hasAttribute('aria-disabled')).toBe(false);
       await abrirRemito();
 
       expect(normal(dialogoRemito()?.querySelector('h2')?.textContent)).toBe('Emitir remito');
@@ -4070,11 +4167,13 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(1);
     });
 
-    it('con otro diálogo abierto el botón Remito no abre el del remito', async () => {
+    it('con otro diálogo abierto «Emitir remito» no abre el del remito', async () => {
       await conMartillos();
+      elegirModo('Remito');
       await tecla('F4');
+      expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
 
-      botonRemito().click();
+      botonera('Emitir remito').click();
       await refrescar();
 
       expect(dialogoRemito()).toBeNull();
@@ -4522,11 +4621,9 @@ describe('Mostrador', () => {
       expect(normal(dialogoCliente()?.querySelector('h2')?.textContent)).toBe('Cliente');
     });
 
-    it('con renglones el botón Cliente está habilitado y abre lo mismo que F9', async () => {
+    it('con renglones «Cambiar» en el chip de cliente está habilitado y abre lo mismo que F9', async () => {
       await conMartillos();
-      const boton = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
-        normal(b.textContent).includes('Cliente'),
-      )!;
+      const boton = el().querySelector<HTMLButtonElement>('app-barra-acciones .chip-cliente button')!;
       expect(boton.hasAttribute('aria-disabled')).toBe(false);
 
       boton.click();
@@ -6041,10 +6138,7 @@ describe('Mostrador', () => {
         );
       const dialogoAbierto = (selector: string) =>
         el().querySelector<HTMLElement>(`${selector} [role="dialog"], ${selector} [role="alertdialog"]`);
-      const botoneraBoton = (etiqueta: string) =>
-        Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find(
-          (b) => normal(b.textContent) === etiqueta,
-        )!;
+      const botoneraBoton = botonera;
       const ayuda = (texto: string) => normal(filaMas(texto).querySelector('small')?.textContent);
       const SIN_RENGLONES = 'Agregá un renglón para usar esta acción.';
 
@@ -7889,8 +7983,7 @@ describe('Mostrador', () => {
     const hojaMas = () => el$('app-hoja-mas-acciones [role="dialog"].hoja-inferior');
     const filaMas = (texto: string) =>
       Array.from(hojaMas()!.querySelectorAll<HTMLButtonElement>('.accion-hoja')).find((b) => normal(b.textContent).startsWith(texto))!;
-    const botoneraBoton = (etiqueta: string) =>
-      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) => normal(b.textContent) === etiqueta)!;
+    const botoneraBoton = botonera;
     const rechazo = (status: number, motivo: string, articulos: unknown[], message = 'rechazo') => ({
       status, message, timestamp: '2026-10-18T10:00:00', motivo, articulos,
     });

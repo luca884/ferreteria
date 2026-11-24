@@ -79,6 +79,16 @@ function esEscritorio(): boolean {
     typeof window.matchMedia !== 'function' ||
     window.matchMedia('(min-width: 1024px)').matches;
 }
+/** La acción que cierra el ticket en cada modo. */
+const CIERRE_DEL_MODO: Record<ModoMostrador, AccionBotonera> = {
+  venta: 'cobrar',
+  presupuesto: 'presupuesto',
+  remito: 'remito',
+};
+const ROTULOS_DEL_MODO: Partial<Record<AccionBotonera, string>> = {
+  presupuesto: 'Guardar presupuesto',
+  remito: 'Emitir remito',
+};
 /** Id del panel de avisos que la franja del celular abre y cierra (móvil-pulgar, T4). */
 const AVISOS_PANEL_ID = 'avisos-mostrador';
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -288,8 +298,21 @@ export class Mostrador {
     return estado === 'ABIERTA' || estado === 'DE_OTRO_DIA';
   });
   protected readonly ticket = inject(TicketStore);
-  protected readonly accionesVisibles = computed<readonly AccionBotonera[] | null>(() =>
-    this.ticket.ticket().renglones.length === 0 ? [] : null,
+  /**
+   * Qué botones se ven. Sin renglones, ninguno (S1). En escritorio, con renglones, las acciones del renglón y del ticket
+   * más el cierre del modo: Cobrar, Guardar presupuesto o Emitir remito (S3). Buscar y Cliente no van: el buscador siempre
+   * tiene el foco y el cliente está en la barra. En el celular siguen los diez de siempre (la hoja «Más acciones» los usa).
+   */
+  protected readonly accionesVisibles = computed<readonly AccionBotonera[] | null>(() => {
+    if (this.ticket.ticket().renglones.length === 0) return [];
+    if (!this.escritorio()) return null;
+    return ['cantidad', 'descuento', 'descuentoTotal', CIERRE_DEL_MODO[this.modo()], 'quitar', 'vaciar'];
+  });
+  protected readonly rotulosDelModo = computed<Partial<Record<AccionBotonera, string>>>(() =>
+    this.escritorio() ? ROTULOS_DEL_MODO : {},
+  );
+  protected readonly principalDelModo = computed<AccionBotonera | null>(() =>
+    this.escritorio() ? CIERRE_DEL_MODO[this.modo()] : null,
   );
   protected readonly escritorio = signal(esEscritorio());
   private readonly caja = viewChild.required(CajaBusqueda);

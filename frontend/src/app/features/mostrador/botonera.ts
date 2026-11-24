@@ -21,14 +21,14 @@ export const AVISO_BOTONERA_ID = 'aviso-botonera';
           <button
             type="button"
             class="accion-barra"
-            [class]="variantes[atajo.accion] ?? ''"
+            [class]="claseDe(atajo.accion)"
             [attr.aria-disabled]="motivoDe(atajo.accion) === null ? null : 'true'"
             [attr.aria-describedby]="explicada() === atajo.accion ? avisoId : null"
             [attr.aria-keyshortcuts]="atajo.tecla"
             (mousedown)="$event.preventDefault()"
             (click)="emitir(atajo.accion)"
           >
-            {{ atajo.etiqueta }}
+            {{ rotuloDe(atajo) }}
           </button>
         }
       </div>
@@ -134,6 +134,14 @@ export class Botonera {
       ? atajos
       : atajos.filter(({ accion }) => accion !== 'cerrar' && visibles.includes(accion));
   });
+  /** Otro texto para una acción según el modo («Guardar presupuesto»): la tecla y la acción son las de siempre. */
+  readonly rotulos = input<Partial<Record<AccionBotonera, string>>>({});
+  /** La acción principal del modo: se ve como botón primario. Cobrar ya lo es por `variantes`. */
+  readonly principal = input<AccionBotonera | null>(null);
+  protected claseDe(accion: AccionMostrador): string {
+    const base = this.variantes[accion] ?? '';
+    return this.principal() === accion && !base.includes('primario') ? `${base} primario`.trim() : base;
+  }
   /** El motivo por el que cada acción no se puede usar ahora; las que no figuran, se pueden. */
   readonly motivos = input<Partial<Record<AccionBotonera, string>>>({});
   /** La acción cuyo motivo está a la vista: su botón lo enlaza para que se lea con la tecla o el lector de pantalla. */
@@ -141,6 +149,10 @@ export class Botonera {
   readonly accion = output<AccionBotonera>();
 
   protected readonly avisoId = AVISO_BOTONERA_ID;
+
+  protected rotuloDe(atajo: Atajo): string {
+    return this.rotulos()[atajo.accion as AccionBotonera] ?? atajo.etiqueta;
+  }
 
   protected motivoDe(accion: AccionMostrador): string | null {
     return this.motivos()[accion as AccionBotonera] ?? null;
