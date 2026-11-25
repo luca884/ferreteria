@@ -25,6 +25,21 @@
     <div class="marca-texto">
       <strong class="ferreteria">{{ auth.sesion()?.ferreteriaNombre ?? 'Panel de administración' }}</strong>
     </div>
+    <button
+      type="button"
+      class="plegar-menu"
+      [disabled]="!esEscritorio()"
+      [attr.aria-expanded]="!colapsado()"
+      aria-controls="menu-lateral"
+      [attr.aria-label]="textoPlegar()"
+      [attr.title]="textoPlegar()"
+      (click)="plegarMenu()"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2 2.5h12v11H2zM6 2.5v11" />
+        <path [attr.d]="colapsado() ? 'M8.5 5.5l2.5 2.5-2.5 2.5' : 'M11 5.5L8.5 8l2.5 2.5'" />
+      </svg>
+    </button>
   </div>
 
   @if (!auth.esSuperAdmin()) {
@@ -33,29 +48,33 @@
 
   <nav aria-label="Secciones">
     @if (auth.esSuperAdmin()) {
-      <a routerLink="/admin/ferreterias" routerLinkActive="activo" ariaCurrentWhenActive="page">
+      <a class="fijo" routerLink="/admin/ferreterias" routerLinkActive="activo" ariaCurrentWhenActive="page" [attr.title]="enColumna() ? 'Ferreterías' : null">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 14.5h13M3 14.5V5.5l5-3 5 3v9M6 14.5v-4h4v4M6 7.5h1M9 7.5h1" /></svg>
-        Ferreterías
+        <span class="rotulo-fijo">Ferreterías</span>
       </a>
     } @else {
-      <a class="fijo" data-seccion="mostrador" [routerLink]="mostrador.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
+      <a class="fijo" data-seccion="mostrador" [routerLink]="mostrador.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page" [attr.title]="enColumna() ? mostrador.rotulo : null">
         <app-icono-menu [nombre]="mostrador.icono" />
-        {{ mostrador.rotulo }}
+        <span class="rotulo-fijo">{{ mostrador.rotulo }}</span>
       </a>
       @for (grupo of grupos(); track grupo.id) {
+        @let desplegado = !enColumna() && abierto(grupo.id);
         <button
           type="button"
           class="grupo"
           [attr.data-seccion]="grupo.tono"
-          [attr.aria-expanded]="abierto(grupo.id)"
+          [attr.aria-expanded]="desplegado"
           [attr.aria-controls]="'menu-' + grupo.id"
           [attr.title]="grupo.rotulo"
-          (click)="alternar(grupo.id)"
+          (click)="activarGrupo(grupo.id)"
         >
+          @if (enColumna()) {
+            <app-icono-menu class="icono-grupo" [nombre]="iconoDeGrupo(grupo.id)" />
+          }
           <span class="rotulo-grupo">{{ grupo.rotulo }}</span>
           <svg class="flecha" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
         </button>
-        @if (abierto(grupo.id)) {
+        @if (desplegado) {
           <div class="opciones" [id]="'menu-' + grupo.id" [attr.data-seccion]="grupo.tono">
             @for (opcion of grupo.opciones; track opcion.ruta) {
               <a [routerLink]="opcion.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
@@ -82,7 +101,12 @@
         <span class="usuario-rol">{{ rolLabels[sesion.rol] }}</span>
       </span>
     }
-    <button type="button" class="salir" (click)="salir()">Salir</button>
+    <button type="button" class="salir" [attr.title]="enColumna() ? 'Salir' : null" (click)="salir()">
+      @if (enColumna()) {
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 2.5H2.5v11H7M5.5 8h8M11 5.5L13.5 8 11 10.5" /></svg>
+      }
+      <span class="salir-texto">Salir</span>
+    </button>
     <a class="cambiar-contrasena" routerLink="/mi-contrasena" routerLinkActive="activo" ariaCurrentWhenActive="page">
       Cambiar mi contraseña
     </a>

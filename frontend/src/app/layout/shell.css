@@ -50,6 +50,17 @@
   gap: 10px;
   padding: 4px 8px 16px;
 }
+.plegar-menu {
+  display: none;
+}
+.plegar-menu svg,
+.salir svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
 .logo {
   flex: 0 0 auto;
   width: 28px;
@@ -507,5 +518,55 @@ nav a:focus-visible {
   .encabezado,
   .velo {
     display: none;
+  }
+  .plegar-menu {
+    display: inline-grid;
+    flex: 0 0 28px;
+    place-items: center;
+    min-height: 28px;
+    margin-left: auto;
+    padding: 0;
+    border-color: var(--borde);
+    color: var(--texto-suave);
+  }
+
+  /* La columna angosta solo existe en escritorio; los rótulos siguen disponibles para lectores de pantalla. */
+  :host(.menu-colapsado) {
+    --ancho-menu: 64px;
+  }
+  :host(.menu-colapsado) .marca,
+  :host(.menu-colapsado) .usuario {
+    flex-direction: column;
+    padding-inline: 0;
+  }
+  :host(.menu-colapsado) .plegar-menu {
+    flex: 0 0 auto;
+    width: 28px;
+    margin-left: 0;
+  }
+  :host(.menu-colapsado) :is(.marca-texto, app-buscador-menu, app-cotizacion-lateral, .flecha, .usuario-datos, .cambiar-contrasena),
+  :host(.menu-colapsado) .grupo::before {
+    display: none;
+  }
+  :host(.menu-colapsado) :is(.rotulo-fijo, .rotulo-grupo, .salir-texto) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :host(.menu-colapsado) :is(.fijo, .grupo, .salir) {
+    position: relative;
+    justify-content: center;
+    width: 100%;
+    padding-inline: 0;
+  }
+  :host(.menu-colapsado) .salir {
+    display: inline-flex;
+    align-items: center;
+  }
+  .icono-grupo {
+    color: var(--tono);
   }
 }

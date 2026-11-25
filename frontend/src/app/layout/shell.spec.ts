@@ -226,6 +226,152 @@ describe('Shell', () => {
     });
   });
 
+  function simularMenuMovil(): void {
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      media, matches: media !== '(min-width: 1024px)',
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+  }
+
+  describe('menú colapsable de escritorio', () => {
+    const clave = 'menu-lateral-colapsado';
+    const plegar = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('aside.lateral button.plegar-menu')!;
+
+    const esperarEstado = (el: HTMLElement, colapsado: boolean) => {
+      const texto = colapsado ? 'Abrir el menú' : 'Achicar el menú';
+      const control = plegar(el);
+      expect(el.classList.contains('menu-colapsado')).toBe(colapsado);
+      expect(control).not.toBeNull();
+      expect(control.getAttribute('aria-expanded')).toBe(String(!colapsado));
+      expect(control.getAttribute('aria-label')).toBe(texto);
+      expect(control.title).toBe(texto);
+      expect(el.querySelector(`#${control.getAttribute('aria-controls')}`)).toBe(el.querySelector('aside.lateral'));
+    };
+
+    beforeEach(() => localStorage.removeItem(clave));
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+      localStorage.removeItem(clave);
+    });
+
+    it('sin preferencia arranca ancho y tiene el botón dentro del menú lateral', async () => {
+      const el = await render(true);
+
+      esperarEstado(el, false);
+      expect(localStorage.getItem(clave)).toBeNull();
+    });
+
+    it('el mismo botón achica y vuelve a abrir el menú, guardando cada elección', async () => {
+      const el = await render(true);
+      const control = plegar(el);
+      expect(control).not.toBeNull();
+
+      control.click();
+      await estable();
+      esperarEstado(el, true);
+      expect(localStorage.getItem(clave)).toBe('true');
+
+      control.click();
+      await estable();
+      esperarEstado(el, false);
+      expect(localStorage.getItem(clave)).toBe('false');
+    });
+
+    it.each([true, false])('recuerda la preferencia %s al abrir y no la cambia al navegar', async (preferencia) => {
+      localStorage.setItem(clave, String(preferencia));
+      const el = await render(true, null, TODAS);
+
+      esperarEstado(el, preferencia);
+      await irA('/rubros');
+      esperarEstado(el, preferencia);
+      expect(localStorage.getItem(clave)).toBe(String(preferencia));
+    });
+
+    it('si el navegador no deja leer ni escribir la preferencia, el botón funciona igual', async () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Sin acceso'); });
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Sin acceso'); });
+      const el = await render(true);
+
+      esperarEstado(el, false);
+      plegar(el).click();
+      await estable();
+      esperarEstado(el, true);
+    });
+
+    it.each([false, true])('al tocar un grupo en la columna vuelve al menú ancho y lo abre (ya abierto: %s)', async (abierto) => {
+      localStorage.setItem(clave, 'true');
+      const el = await render(true, null, TODAS);
+      if (abierto) await irA('/proveedores');
+      const compras = boton(el, 'Compras');
+      expect(compras.getAttribute('aria-expanded')).toBe('false');
+
+      compras.click();
+      await estable();
+      esperarEstado(el, false);
+      expect(localStorage.getItem(clave)).toBe('false');
+      expect(compras.getAttribute('aria-expanded')).toBe('true');
+      expect(opcionesDe(el, 'Compras')).toEqual(['Proveedores', 'Compras']);
+    });
+
+    it('Mostrador y los cinco grupos tienen ícono, nombre y título en la columna', async () => {
+      localStorage.setItem(clave, 'true');
+      const el = await render(true);
+      const mostrador = el.querySelector('aside nav a[href="/mostrador"]')!;
+      expect(mostrador.textContent?.trim()).toBe('Mostrador');
+      expect(mostrador.getAttribute('title')).toBe('Mostrador');
+      expect(mostrador.querySelector('svg[aria-hidden="true"] path')).not.toBeNull();
+
+      const iconos = ['Ventas', 'Artículos', 'Compras', 'Precios', 'Configuración'].map((rotulo) => {
+        const grupo = boton(el, rotulo);
+        expect(grupo.title).toBe(rotulo);
+        const icono = grupo.querySelector('app-icono-menu svg[aria-hidden="true"]');
+        expect(icono?.getAttribute('viewBox')).toBe('0 0 16 16');
+        expect(icono?.querySelector('path')).not.toBeNull();
+        return icono!.innerHTML;
+      });
+      expect(new Set(iconos).size).toBe(5);
+    });
+
+    it('la columna del super admin conserva el enlace a Ferreterías y el botón Salir con sus rótulos', async () => {
+      localStorage.setItem(clave, 'true');
+      const el = await render(false, {
+        userId: 1, nombre: 'Admin', email: 'admin@example.test', rol: 'SUPER_ADMIN',
+        ferreteriaId: null, ferreteriaNombre: null,
+      });
+      expect(enlaces(el)).toEqual(['Ferreterías']);
+      const ferreterias = el.querySelector('aside nav a[href="/admin/ferreterias"]')!;
+      const salir = el.querySelector('aside .usuario button.salir')!;
+      expect(ferreterias.getAttribute('title')).toBe('Ferreterías');
+      expect(ferreterias.querySelector('svg[aria-hidden="true"] path')).not.toBeNull();
+      expect(salir.textContent?.trim()).toBe('Salir');
+      expect(salir.getAttribute('title')).toBe('Salir');
+      expect(salir.querySelector('svg[aria-hidden="true"] path')).not.toBeNull();
+      expect(el.querySelector('.avatar')?.textContent?.trim()).toBe('A');
+    });
+
+    it('una preferencia angosta no altera los grupos ni el primer foco del cajón en el celular', async () => {
+      simularMenuMovil();
+      localStorage.setItem(clave, 'true');
+      const el = await render(true);
+      expect(plegar(el)?.disabled).toBe(true);
+      el.querySelector<HTMLButtonElement>('header button.abrir-menu')!.click();
+      await estable();
+      const cajon = el.querySelector('aside.lateral')!;
+      cajon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      expect(document.activeElement).toBe(cajon.querySelector('app-buscador-menu input'));
+
+      const compras = boton(el, 'Compras');
+      compras.click();
+      await estable();
+      expect(compras.getAttribute('aria-expanded')).toBe('true');
+      compras.click();
+      await estable();
+      expect(compras.getAttribute('aria-expanded')).toBe('false');
+      expect(localStorage.getItem(clave)).toBe('true');
+    });
+  });
+
   describe('menú agrupado (mejoras-ferreteros-bloque-2, S1)', () => {
     it('las secciones van en el menú lateral', async () => {
       const el = await render(true);
@@ -941,28 +1087,34 @@ describe('Shell', () => {
     });
 
     it('Tab no se escapa del cajón: del último control vuelve al primero, y con Shift+Tab al revés', async () => {
-      const el = await render(true);
-      const { cajon } = await abrirElCajon(el);
-      const controles = focosables(cajon);
-      const primero = controles[0];
-      const ultimo = controles[controles.length - 1];
-      expect(controles.length).toBeGreaterThan(1);
+      // jsdom no aplica el corte CSS: simulamos el ancho donde existe el cajón y no se tabula el botón de escritorio.
+      simularMenuMovil();
+      try {
+        const el = await render(true);
+        const { cajon } = await abrirElCajon(el);
+        const controles = focosables(cajon);
+        const primero = controles[0];
+        const ultimo = controles[controles.length - 1];
+        expect(controles.length).toBeGreaterThan(1);
 
-      ultimo.focus();
-      const tab = tecla('Tab');
-      ultimo.dispatchEvent(tab);
-      await estable();
+        ultimo.focus();
+        const tab = tecla('Tab');
+        ultimo.dispatchEvent(tab);
+        await estable();
 
-      expect(tab.defaultPrevented).toBe(true);
-      expect(document.activeElement).toBe(primero);
+        expect(tab.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(primero);
 
-      primero.focus();
-      const shiftTab = tecla('Tab', true);
-      primero.dispatchEvent(shiftTab);
-      await estable();
+        primero.focus();
+        const shiftTab = tecla('Tab', true);
+        primero.dispatchEvent(shiftTab);
+        await estable();
 
-      expect(shiftTab.defaultPrevented).toBe(true);
-      expect(document.activeElement).toBe(ultimo);
+        expect(shiftTab.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(ultimo);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('con el cajón cerrado Tab no se intercepta', async () => {

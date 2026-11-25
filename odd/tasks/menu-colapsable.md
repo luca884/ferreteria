@@ -17,8 +17,8 @@ Restricciones: test-first donde jsdom alcanza (el CSS de media query se verifica
 
 ## Tasks
 
-- [ ] T1 · S1, S2, S4, S5 · ruta: worker · Aceptación: botón que alterna ancho/angosto, estado persistido, `--ancho-menu` y CSS de la columna angosta desde 1024 px, tests del estado y de la persistencia · Evidencia: — · commit: —
-- [ ] T2 · S3 · ruta: worker · Aceptación: cinco íconos de grupo en `icono-menu.ts` (o equivalente) y su uso en la columna angosta, con `title` y nombre accesible · Evidencia: — · commit: —
+- [x] T1 · S1, S2, S4, S5 · ruta: worker · Aceptación: botón que alterna ancho/angosto, estado persistido, `--ancho-menu` y CSS de la columna angosta desde 1024 px, tests del estado y de la persistencia · Evidencia: RED 10 de 160 en `layout/**` → GREEN 160/160; `features/mostrador/**` 1359/1359; ego-browser a 1440 px: expandido, columna angosta (logo, botón, seis íconos, avatar y «Salir»), tocar un grupo ensancha y abre ese grupo y guarda `menu-lateral-colapsado=false`; a 390 px el cajón queda igual · commit (ver git log) · Risk: none. Sin verificar a la vista: el corte exacto a 1023/1024 px y el menú de super admin en la columna
+- [x] T2 · S3 · ruta: worker · Aceptación: cinco íconos de grupo en `icono-menu.ts` (o equivalente) y su uso en la columna angosta, con `title` y nombre accesible · Evidencia: test de un ícono por grupo en `shell.spec.ts`; capturas: cada grupo con su ícono y el color de su tono · commit (mismo que T1)
 - [ ] T3 · cierre · Aceptación: suite del frontend, `ng build`, ego-browser a 1440, 1100 y 390 px con capturas, doc del menú actualizada, `node odd/indice-tareas.mjs` · Evidencia: — · commit: —
 
 ## Log
