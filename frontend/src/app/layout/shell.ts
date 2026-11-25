@@ -17,6 +17,7 @@ import { HUB_VENTAS, ID_GRUPO_VENTAS, MOSTRADOR, OpcionMenu, rutaHub } from './m
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
 
+/** La preferencia del menú es de cada usuario: `menu-lateral-colapsado:{usuarioId}`, como el ticket del mostrador. */
 const CLAVE_COLAPSADO = 'menu-lateral-colapsado';
 const CORTE_ESCRITORIO = '(min-width: 1024px)';
 
@@ -110,7 +111,8 @@ export class Shell {
   }
   private readonly abiertos = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly colapsado = signal(leerColapsado());
+  private readonly claveColapsado = claveDeColapsado(this.auth.sesion()?.userId);
+  protected readonly colapsado = signal(leerColapsado(this.claveColapsado));
   protected readonly esEscritorio = signal(true);
   protected readonly enColumna = computed(() => this.esEscritorio() && this.colapsado());
   protected readonly textoPlegar = computed(() => this.colapsado() ? 'Abrir el menú' : 'Achicar el menú');
@@ -222,8 +224,9 @@ export class Shell {
 
   private guardarColapsado(colapsado: boolean): void {
     this.colapsado.set(colapsado);
+    if (this.claveColapsado === null) return;
     try {
-      localStorage.setItem(CLAVE_COLAPSADO, String(colapsado));
+      localStorage.setItem(this.claveColapsado, String(colapsado));
     } catch {
       // Sin almacenamiento: el menú se achica igual, solo que no se recuerda.
     }
@@ -328,9 +331,14 @@ export class Shell {
   }
 }
 
-function leerColapsado(): boolean {
+function claveDeColapsado(usuarioId: number | null | undefined): string | null {
+  return usuarioId == null ? null : `${CLAVE_COLAPSADO}:${usuarioId}`;
+}
+
+function leerColapsado(clave: string | null): boolean {
+  if (clave === null) return false;
   try {
-    return localStorage.getItem(CLAVE_COLAPSADO) === 'true';
+    return localStorage.getItem(clave) === 'true';
   } catch {
     return false;
   }

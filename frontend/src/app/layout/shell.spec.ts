@@ -234,7 +234,12 @@ describe('Shell', () => {
   }
 
   describe('menú colapsable de escritorio', () => {
-    const clave = 'menu-lateral-colapsado';
+    const USUARIO: Sesion = {
+      userId: 7, nombre: 'Dueña', email: 'duena@example.test', rol: 'DUENO',
+      ferreteriaId: 3, ferreteriaNombre: 'Tornillo',
+    };
+    const clavePara = (usuarioId: number) => `menu-lateral-colapsado:${usuarioId}`;
+    const clave = clavePara(USUARIO.userId);
     const plegar = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('aside.lateral button.plegar-menu')!;
 
     const esperarEstado = (el: HTMLElement, colapsado: boolean) => {
@@ -248,22 +253,23 @@ describe('Shell', () => {
       expect(el.querySelector(`#${control.getAttribute('aria-controls')}`)).toBe(el.querySelector('aside.lateral'));
     };
 
-    beforeEach(() => localStorage.removeItem(clave));
+    const limpiar = () => [clave, clavePara(1), clavePara(8)].forEach((k) => localStorage.removeItem(k));
+    beforeEach(limpiar);
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
-      localStorage.removeItem(clave);
+      limpiar();
     });
 
     it('sin preferencia arranca ancho y tiene el botón dentro del menú lateral', async () => {
-      const el = await render(true);
+      const el = await render(true, USUARIO);
 
       esperarEstado(el, false);
       expect(localStorage.getItem(clave)).toBeNull();
     });
 
     it('el mismo botón achica y vuelve a abrir el menú, guardando cada elección', async () => {
-      const el = await render(true);
+      const el = await render(true, USUARIO);
       const control = plegar(el);
       expect(control).not.toBeNull();
 
@@ -280,7 +286,7 @@ describe('Shell', () => {
 
     it.each([true, false])('recuerda la preferencia %s al abrir y no la cambia al navegar', async (preferencia) => {
       localStorage.setItem(clave, String(preferencia));
-      const el = await render(true, null, TODAS);
+      const el = await render(true, USUARIO, TODAS);
 
       esperarEstado(el, preferencia);
       await irA('/rubros');
@@ -291,7 +297,7 @@ describe('Shell', () => {
     it('si el navegador no deja leer ni escribir la preferencia, el botón funciona igual', async () => {
       vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Sin acceso'); });
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Sin acceso'); });
-      const el = await render(true);
+      const el = await render(true, USUARIO);
 
       esperarEstado(el, false);
       plegar(el).click();
@@ -301,7 +307,7 @@ describe('Shell', () => {
 
     it.each([false, true])('al tocar un grupo en la columna vuelve al menú ancho y lo abre (ya abierto: %s)', async (abierto) => {
       localStorage.setItem(clave, 'true');
-      const el = await render(true, null, TODAS);
+      const el = await render(true, USUARIO, TODAS);
       if (abierto) await irA('/proveedores');
       const compras = boton(el, 'Compras');
       expect(compras.getAttribute('aria-expanded')).toBe('false');
@@ -316,7 +322,7 @@ describe('Shell', () => {
 
     it('Mostrador y los cinco grupos tienen ícono, nombre y título en la columna', async () => {
       localStorage.setItem(clave, 'true');
-      const el = await render(true);
+      const el = await render(true, USUARIO);
       const mostrador = el.querySelector('aside nav a[href="/mostrador"]')!;
       expect(mostrador.textContent?.trim()).toBe('Mostrador');
       expect(mostrador.getAttribute('title')).toBe('Mostrador');
@@ -333,8 +339,53 @@ describe('Shell', () => {
       expect(new Set(iconos).size).toBe(5);
     });
 
-    it('la columna del super admin conserva el enlace a Ferreterías y el botón Salir con sus rótulos', async () => {
+    it('la preferencia es de cada usuario: otro usuario del mismo navegador no la hereda ni la pisa', async () => {
       localStorage.setItem(clave, 'true');
+      const el = await render(true, { ...USUARIO, userId: 8 });
+
+      esperarEstado(el, false);
+      plegar(el).click();
+      await estable();
+      esperarEstado(el, true);
+      expect(localStorage.getItem(clavePara(8))).toBe('true');
+      expect(localStorage.getItem(clave)).toBe('true');
+      plegar(el).click();
+      await estable();
+      expect(localStorage.getItem(clavePara(8))).toBe('false');
+      expect(localStorage.getItem(clave)).toBe('true');
+    });
+
+    it('sin sesión no lee ni guarda ninguna preferencia, y el botón funciona igual', async () => {
+      localStorage.setItem(clave, 'true');
+      const guardar = vi.spyOn(Storage.prototype, 'setItem');
+      const el = await render(true);
+
+      esperarEstado(el, false);
+      plegar(el).click();
+      await estable();
+      esperarEstado(el, true);
+      expect(guardar).not.toHaveBeenCalled();
+    });
+
+    it('un grupo propio muestra el ícono genérico, con su rótulo como título y nombre en la columna', async () => {
+      localStorage.setItem(clave, 'true');
+      tokenMenu.set('sesion-duena');
+      obtenerMenu.mockReturnValue(of({
+        grupos: [{ id: 'g-1', rotulo: 'Pedidos urgentes', tono: 'ventas', claves: ['caja'] }],
+        ocultas: [],
+      }));
+      const el = await render(true, USUARIO, TODAS);
+      const grupo = boton(el, 'Pedidos urgentes');
+
+      expect(grupo.title).toBe('Pedidos urgentes');
+      const icono = grupo.querySelector('app-icono-menu svg[aria-hidden="true"]');
+      expect(icono?.getAttribute('viewBox')).toBe('0 0 16 16');
+      expect(icono?.querySelector('path')).not.toBeNull();
+      expect(icono?.querySelector('path')?.getAttribute('d')).toBe('M2.5 4h11M2.5 8h11M2.5 12h11');
+    });
+
+    it('la columna del super admin conserva el enlace a Ferreterías y el botón Salir con sus rótulos', async () => {
+      localStorage.setItem(clavePara(1), 'true');
       const el = await render(false, {
         userId: 1, nombre: 'Admin', email: 'admin@example.test', rol: 'SUPER_ADMIN',
         ferreteriaId: null, ferreteriaNombre: null,
@@ -353,7 +404,7 @@ describe('Shell', () => {
     it('una preferencia angosta no altera los grupos ni el primer foco del cajón en el celular', async () => {
       simularMenuMovil();
       localStorage.setItem(clave, 'true');
-      const el = await render(true);
+      const el = await render(true, USUARIO);
       expect(plegar(el)?.disabled).toBe(true);
       el.querySelector<HTMLButtonElement>('header button.abrir-menu')!.click();
       await estable();
