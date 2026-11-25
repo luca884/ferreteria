@@ -168,6 +168,39 @@ td {
 }
 
 /*
+ * Entre 1024 y 1279 px el ticket comparte el ancho con el menú y con el panel de 320 px: las columnas fijas de escritorio
+ * (33 rem) lo dejaban sin Descripción ni Total. Acá la grilla se acomoda sola: sin la columna del código (ya está en la
+ * ficha del panel), con las de números más angostas y la descripción partida en dos renglones.
+ */
+@media screen and (min-width: 1024px) and (max-width: 1279.98px) {
+  .grilla-ticket {
+    table-layout: auto;
+  }
+  .col-cantidad {
+    width: 3.5rem;
+  }
+  .col-precio {
+    width: 6.5rem;
+  }
+  .col-total {
+    width: 7rem;
+  }
+  .col-codigo,
+  th:nth-child(2),
+  td.codigo {
+    display: none;
+  }
+  .detalle {
+    overflow: visible;
+  }
+  .descripcion {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/*
  * En el celular cada renglón del ticket es una tarjeta «etiqueta: valor», con el patrón de `.tabla-tarjetas` que ya usan
  * Artículos, Ventas y Reportes (styles.css): cada celda lleva su `data-etiqueta` y la tabla deja de ser grilla.
  */
