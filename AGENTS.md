@@ -56,7 +56,7 @@ Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vend
 - Mensajes de error al usuario en español rioplatense.
 - Commits en español: `tipo: descripción` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`).
 - Un caso de uso por rama (`feat/cu-04-importar-lista`): primero tests del dominio, después endpoint, después pantalla. Esta rama gana sobre `feat/<feature>`.
-- Feature docs: `odd/tasks/<feature>.md`, commiteados con la feature. Antes de abrir uno, mirá [`odd/tasks/INDEX.md`](odd/tasks/INDEX.md): una línea por tarea (94 hoy) para no leer la carpeta entera. Si cambia el estado de una tarea, regeneralo con `node odd/indice-tareas.mjs` (nunca a mano). Espejo Engram con `project: "ferreteria"`.
+- Feature docs: `odd/tasks/<feature>.md`, commiteados con la feature. Antes de abrir uno, mirá [`odd/tasks/INDEX.md`](odd/tasks/INDEX.md): una línea por tarea (95 hoy) para no leer la carpeta entera. Si cambia el estado de una tarea, regeneralo con `node odd/indice-tareas.mjs` (nunca a mano). Espejo Engram con `project: "ferreteria"`.
 
 ## Límites
 

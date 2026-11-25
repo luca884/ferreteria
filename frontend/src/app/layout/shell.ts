@@ -10,12 +10,16 @@ import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { AvisosALaVista } from '../shared/avisos-a-la-vista';
 import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
-import { IconoDelMenu } from './icono-menu';
+import { IconoDelMenu, iconoDeGrupo } from './icono-menu';
 import { MenuActual } from './menu-actual';
 import { HUB_VENTAS, ID_GRUPO_VENTAS, MOSTRADOR, OpcionMenu, rutaHub } from './menu';
 
 /** Cada cuánto vuelve a leer la cotización del servidor. Solo lee la base: no llama a ninguna API externa. */
 export const INTERVALO_COTIZACION_MS = 5 * 60_000;
+
+/** La preferencia del menú es de cada usuario: `menu-lateral-colapsado:{usuarioId}`, como el ticket del mostrador. */
+const CLAVE_COLAPSADO = 'menu-lateral-colapsado';
+const CORTE_ESCRITORIO = '(min-width: 1024px)';
 
 type Destino = Pick<OpcionMenu, 'ruta' | 'rotulo' | 'icono'> & { id: string };
 
@@ -39,7 +43,8 @@ export function iniciales(nombre: string): string {
  *
  * Por debajo de 1024 px (S2) el menú pasa a ser un cajón que se abre con el botón «Menú» de un encabezado nuevo, que
  * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
- * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve.
+ * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve:
+ * el menú de escritorio se puede achicar a una columna de íconos y el navegador recuerda la elección.
  *
  * En el celular, abajo queda la barra de destinos: Mostrador, los primeros dos grupos con opciones y «Más» para abrir
  * el mismo cajón de siempre (CU-17, S5).
@@ -52,7 +57,11 @@ export function iniciales(nombre: string): string {
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CotizacionLateral, IconoDelMenu, BuscadorMenu],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
-  host: { '[attr.data-seccion]': 'seccion()', '(keydown)': 'alTeclear($event)' },
+  host: {
+    '[attr.data-seccion]': 'seccion()',
+    '[class.menu-colapsado]': 'enColumna()',
+    '(keydown)': 'alTeclear($event)',
+  },
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
@@ -102,6 +111,13 @@ export class Shell {
   }
   private readonly abiertos = signal<ReadonlySet<string>>(new Set());
 
+  private readonly claveColapsado = claveDeColapsado(this.auth.sesion()?.userId);
+  protected readonly colapsado = signal(leerColapsado(this.claveColapsado));
+  protected readonly esEscritorio = signal(true);
+  protected readonly enColumna = computed(() => this.esEscritorio() && this.colapsado());
+  protected readonly textoPlegar = computed(() => this.colapsado() ? 'Abrir el menú' : 'Achicar el menú');
+  protected readonly iconoDeGrupo = iconoDeGrupo;
+
   /** El cajón del menú (por debajo de 1024 px). Arranca cerrado y el corte lo resuelve el CSS. */
   protected readonly menuAbierto = signal(false);
   /** El título de la pantalla, leído del primer `h1` que ya pone cada una (en T6 queda solo para lectores de pantalla). */
@@ -116,6 +132,15 @@ export class Shell {
   private readonly avisosALaVista = new AvisosALaVista();
 
   constructor() {
+    // El mismo corte que en el CSS: la preferencia no cambia cómo se abren los grupos dentro del cajón.
+    if (typeof window.matchMedia === 'function') {
+      const consulta = window.matchMedia(CORTE_ESCRITORIO);
+      this.esEscritorio.set(consulta.matches);
+      const actualizar = (evento: MediaQueryListEvent) => this.esEscritorio.set(evento.matches);
+      consulta.addEventListener('change', actualizar);
+      this.destruccion.onDestroy(() => consulta.removeEventListener('change', actualizar));
+    }
+
     // El encabezado del cajón muestra el título sin tocar las pantallas: sigue al primer `h1` del contenido.
     const observador = new MutationObserver(() => this.leerTitulo());
     observador.observe(this.host.nativeElement, { childList: true, subtree: true, characterData: true });
@@ -184,7 +209,30 @@ export class Shell {
     return this.abiertos().has(grupo);
   }
 
-  protected alternar(grupo: string): void {
+  protected plegarMenu(): void {
+    this.guardarColapsado(!this.colapsado());
+  }
+
+  protected activarGrupo(id: string): void {
+    if (this.enColumna()) {
+      this.guardarColapsado(false);
+      this.abrirGrupo(id);
+    } else {
+      this.alternar(id);
+    }
+  }
+
+  private guardarColapsado(colapsado: boolean): void {
+    this.colapsado.set(colapsado);
+    if (this.claveColapsado === null) return;
+    try {
+      localStorage.setItem(this.claveColapsado, String(colapsado));
+    } catch {
+      // Sin almacenamiento: el menú se achica igual, solo que no se recuerda.
+    }
+  }
+
+  private alternar(grupo: string): void {
     this.abiertos.update((abiertos) => {
       const nuevos = new Set(abiertos);
       if (!nuevos.delete(grupo)) nuevos.add(grupo);
@@ -280,5 +328,18 @@ export class Shell {
   protected salir(): void {
     this.auth.logout();
     this.router.navigate(['/login']);
+  }
+}
+
+function claveDeColapsado(usuarioId: number | null | undefined): string | null {
+  return usuarioId == null ? null : `${CLAVE_COLAPSADO}:${usuarioId}`;
+}
+
+function leerColapsado(clave: string | null): boolean {
+  if (clave === null) return false;
+  try {
+    return localStorage.getItem(clave) === 'true';
+  } catch {
+    return false;
   }
 }
