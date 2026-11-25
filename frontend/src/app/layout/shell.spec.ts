@@ -305,179 +305,19 @@ describe('Shell', () => {
       esperarEstado(el, true);
     });
 
-    const cuadro = (el: HTMLElement) => el.querySelector<HTMLElement>('.opciones.flotante');
-
-    async function renderEnColumna(): Promise<HTMLElement> {
+    it.each([false, true])('al tocar un grupo en la columna vuelve al menú ancho y lo abre (ya abierto: %s)', async (abierto) => {
       localStorage.setItem(clave, 'true');
-      return render(true, USUARIO, TODAS);
-    }
-
-    async function tocar(control: HTMLElement): Promise<void> {
-      control.click();
-      await estable();
-    }
-
-    async function abrirCuadro(el: HTMLElement): Promise<HTMLButtonElement> {
-      const icono = boton(el, 'Compras');
-      await tocar(icono);
-      expect(cuadro(el)).not.toBeNull();
-      return icono;
-    }
-
-    function esperarCerrado(el: HTMLElement, icono: HTMLButtonElement): void {
-      expect(cuadro(el)).toBeNull();
-      expect(icono.getAttribute('aria-expanded')).toBe('false');
-      expect(localStorage.getItem(clave)).toBe('true');
-    }
-
-    it.each([false, true])('abre las opciones sin ensanchar ni guardar de nuevo (grupo actual: %s)', async (actual) => {
-      const el = await renderEnColumna();
-      if (actual) await irA('/proveedores');
+      const el = await render(true, USUARIO, TODAS);
+      if (abierto) await irA('/proveedores');
       const compras = boton(el, 'Compras');
-      const guardar = vi.spyOn(Storage.prototype, 'setItem');
-      esperarCerrado(el, compras);
-      expect(compras.classList.contains('actual')).toBe(actual);
-
-      await tocar(compras);
-
-      esperarEstado(el, true);
-      expect(localStorage.getItem(clave)).toBe('true');
-      expect(guardar).not.toHaveBeenCalled();
-      expect(compras.getAttribute('aria-expanded')).toBe('true');
-      expect(compras.classList.contains('actual')).toBe(actual);
-      expect(cuadro(el)?.id).toBe(compras.getAttribute('aria-controls'));
-      const opciones = [...cuadro(el)!.querySelectorAll('a')];
-      expect(opciones.map((a) => [a.getAttribute('href'), a.textContent?.trim()])).toEqual([
-        ['/proveedores', 'Proveedores'], ['/compras', 'Compras'],
-      ]);
-      expect(cuadro(el)!.querySelectorAll('app-icono-menu svg[aria-hidden="true"]')).toHaveLength(2);
-      expect(opciones[0].getAttribute('aria-current')).toBe(actual ? 'page' : null);
-    });
-
-    it('al tocar otro ícono queda abierto un solo cuadro, el del nuevo grupo', async () => {
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-      const ventas = boton(el, 'Ventas');
-
-      await tocar(ventas);
-
       expect(compras.getAttribute('aria-expanded')).toBe('false');
-      expect(ventas.getAttribute('aria-expanded')).toBe('true');
-      expect(el.querySelectorAll('.opciones.flotante')).toHaveLength(1);
-      expect(cuadro(el)?.id).toBe(ventas.getAttribute('aria-controls'));
-      esperarEstado(el, true);
-      expect(localStorage.getItem(clave)).toBe('true');
-    });
 
-    it('tocar el mismo ícono cierra su cuadro', async () => {
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-
-      await tocar(compras);
-
-      esperarCerrado(el, compras);
-    });
-
-    it('Esc desde una opción cierra el cuadro y devuelve el foco al ícono', async () => {
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-      const opcion = cuadro(el)!.querySelector('a')!;
-      opcion.focus();
-      expect(document.activeElement).toBe(opcion);
-
-      opcion.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      compras.click();
       await estable();
-
-      esperarCerrado(el, compras);
-      expect(document.activeElement).toBe(compras);
-    });
-
-    it('un clic afuera cierra el cuadro', async () => {
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-
-      await tocar(document.body);
-
-      esperarCerrado(el, compras);
-    });
-
-    it.each([false, true])('elegir una opción cierra el cuadro (misma pantalla: %s)', async (misma) => {
-      const el = await renderEnColumna();
-      if (misma) await irA('/proveedores');
-      const compras = await abrirCuadro(el);
-
-      await tocar(cuadro(el)!.querySelector<HTMLAnchorElement>('a[href="/proveedores"]')!);
-
-      expect(TestBed.inject(Router).url).toBe('/proveedores');
-      esperarCerrado(el, compras);
-      expect(compras.classList.contains('actual')).toBe(true);
-    });
-
-    it('ensanchar cierra el cuadro y no altera los grupos que estaban abiertos en el menú ancho', async () => {
-      const el = await renderEnColumna();
-      await irA('/rubros');
-      const compras = await abrirCuadro(el);
-
-      await tocar(plegar(el));
-
       esperarEstado(el, false);
-      expect(cuadro(el)).toBeNull();
       expect(localStorage.getItem(clave)).toBe('false');
-      expect(compras.getAttribute('aria-expanded')).toBe('false');
-      expect(boton(el, 'Artículos').getAttribute('aria-expanded')).toBe('true');
-      await tocar(plegar(el));
-      esperarCerrado(el, compras);
-    });
-
-    it('pasar al celular cierra el cuadro, también al volver a escritorio', async () => {
-      const consulta = Object.assign(new EventTarget(), { matches: true });
-      vi.stubGlobal('matchMedia', () => consulta);
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-      const cambiarAncho = (matches: boolean) => {
-        consulta.matches = matches;
-        consulta.dispatchEvent(Object.assign(new Event('change'), { matches }));
-      };
-
-      cambiarAncho(false);
-      await estable();
-      expect(plegar(el).disabled).toBe(true);
-      esperarCerrado(el, compras);
-
-      cambiarAncho(true);
-      await estable();
-      esperarEstado(el, true);
-      esperarCerrado(el, compras);
-    });
-
-    it('al scrollear el lateral se cierra el cuadro', async () => {
-      const el = await renderEnColumna();
-      const compras = await abrirCuadro(el);
-
-      el.querySelector('aside.lateral')!.dispatchEvent(new Event('scroll'));
-      await estable();
-
-      esperarCerrado(el, compras);
-    });
-
-    it.each(['Enter', ' '])('el botón nativo admite %j y deja las opciones a continuación para Tab', async (key) => {
-      const el = await renderEnColumna();
-      const compras = boton(el, 'Compras');
-      expect(compras).toBeInstanceOf(HTMLButtonElement);
-      expect(compras.type).toBe('button');
-      expect(compras.tabIndex).toBe(0);
-      compras.focus();
-      expect(document.activeElement).toBe(compras);
-      expect(compras.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))).toBe(true);
-      expect(compras.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }))).toBe(true);
-
-      // jsdom no sintetiza el clic nativo de Enter/Espacio ni mueve el foco con Tab.
-      await tocar(compras);
-
-      expect(cuadro(el)).not.toBeNull();
-      expect(compras.nextElementSibling).toBe(cuadro(el));
-      expect([...cuadro(el)!.querySelectorAll('a')].map((a) => a.tabIndex)).toEqual([0, 0]);
-      expect(document.activeElement).toBe(compras);
+      expect(compras.getAttribute('aria-expanded')).toBe('true');
+      expect(opcionesDe(el, 'Compras')).toEqual(['Proveedores', 'Compras']);
     });
 
     it('Mostrador y los cinco grupos tienen ícono, nombre y título en la columna', async () => {
@@ -542,14 +382,6 @@ describe('Shell', () => {
       expect(icono?.getAttribute('viewBox')).toBe('0 0 16 16');
       expect(icono?.querySelector('path')).not.toBeNull();
       expect(icono?.querySelector('path')?.getAttribute('d')).toBe('M2.5 4h11M2.5 8h11M2.5 12h11');
-
-      await tocar(grupo);
-
-      expect(cuadro(el)?.id).toBe(grupo.getAttribute('aria-controls'));
-      expect(opcionesDe(el, 'Pedidos urgentes')).toEqual(['Caja']);
-      expect(cuadro(el)?.querySelector('a[href="/caja"]')).not.toBeNull();
-      esperarEstado(el, true);
-      expect(localStorage.getItem(clave)).toBe('true');
     });
 
     it('la columna del super admin conserva el enlace a Ferreterías y el botón Salir con sus rótulos', async () => {
