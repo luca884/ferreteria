@@ -33,7 +33,7 @@ describe('TicketLista', () => {
   const texto = (selector: string, fila = 0) =>
     filas()[fila].querySelector(selector)!.textContent!.trim();
 
-  async function crear(renglones: RenglonTicket[], elegido: number | null = null) {
+  async function crear(renglones: RenglonTicket[], elegido: number | null = null, conMensajeVacio = true) {
     await TestBed.configureTestingModule({
       imports: [TicketLista],
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
@@ -41,6 +41,7 @@ describe('TicketLista', () => {
     fixture = TestBed.createComponent(TicketLista);
     fixture.componentRef.setInput('renglones', renglones);
     fixture.componentRef.setInput('elegido', elegido);
+    fixture.componentRef.setInput('conMensajeVacio', conMensajeVacio);
     fixture.detectChanges();
   }
 
@@ -67,17 +68,28 @@ describe('TicketLista', () => {
     expect(el().querySelector('.descuento')).toBeNull();
   });
 
-  it('la grilla tiene encabezados Cant. | Código | Descripción | P. unit. | Total', async () => {
+  it('con un renglón la grilla conserva los cinco encabezados', async () => {
     await crear([renglon()]);
 
-    const encabezados = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
-    expect(encabezados).toEqual(['Cant.', 'Código', 'Descripción', 'P. unit.', 'Total']);
+    const encabezado = el().querySelector('thead')!;
+    const rotulos = Array.from(encabezado.querySelectorAll('th')).map((th) => th.textContent!.trim());
+    expect(rotulos).toEqual(['Cant.', 'Código', 'Descripción', 'P. unit.', 'Total']);
   });
 
-  it('los encabezados se ven también con el ticket vacío', async () => {
+  it('con el ticket vacío muestra «Listo para vender» en una celda de cinco columnas, sin encabezado', async () => {
     await crear([]);
 
-    expect(el().querySelectorAll('thead th').length).toBe(5);
+    const celda = el().querySelector('tbody .fila-vacia td');
+    expect(celda?.getAttribute('colspan')).toBe('5');
+    expect(celda?.querySelector('strong')?.textContent).toBe('Listo para vender');
+    expect(el().querySelector('thead')).toBeNull();
+  });
+
+  it('con el ticket vacío y sin mensaje no muestra encabezado ni filas', async () => {
+    await crear([], null, false);
+
+    expect(el().querySelectorAll('tbody tr')).toHaveLength(0);
+    expect(el().querySelector('thead')).toBeNull();
   });
 
   it('S6: cada celda lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
@@ -218,13 +230,21 @@ describe('TicketLista', () => {
     expect(filas()[0].querySelector('.sin-stock')!.textContent).not.toContain('$');
   });
 
-  it('scrollIntoView sigue al renglón elegido', async () => {
+  it('scrollIntoView sigue al renglón elegido y no hace scroll al vaciar el ticket', async () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView =
       scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
     await crear([renglon({ articuloId: 1 }), renglon({ articuloId: 2 })], 1);
     await fixture.whenStable();
 
-    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(filas()[1]);
+    scrollIntoView.mockClear();
+
+    fixture.componentRef.setInput('renglones', []);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });

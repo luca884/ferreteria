@@ -1,8 +1,10 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, timer } from 'rxjs';
 import { AccionBotonera, AVISO_BOTONERA_ID, Botonera } from './botonera';
+import { ModoMostrador, SelectorModo } from './selector-modo';
 import { AvisosCae } from './avisos-cae';
 import { AvisosFacturacion } from './avisos-facturacion';
 import { CajaBusqueda } from './caja-busqueda';
@@ -14,6 +16,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Cliente } from '../clientes/cliente.models';
 import { ClientesService } from '../clientes/clientes.service';
 import { DialogoCliente } from './dialogo-cliente';
+import { CamposPresupuesto } from './campos-presupuesto';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
@@ -25,6 +28,7 @@ import { accionDeTecla, atajosDeBotonera } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { PrimerosPasos } from './primeros-pasos';
 import { AVISO_ESCANEO_CON_DIALOGO, GuardaLector } from './guarda-lector';
+import { MENSAJE_VALIDEZ, diasDeValidez } from './validez-presupuesto';
 import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -62,7 +66,12 @@ import { CajaVigente, avisoParaVender } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
-import { DatosPresupuesto, PresupuestoResponse, documentoDePresupuesto } from '../presupuestos/presupuesto.models';
+import {
+  DIAS_VALIDEZ_POR_DEFECTO,
+  DatosPresupuesto,
+  PresupuestoResponse,
+  documentoDePresupuesto,
+} from '../presupuestos/presupuesto.models';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
 import { DatosRemito, RemitoEmitido, documentoDeRemito } from '../remitos/remito.models';
 import { RemitosService } from '../remitos/remitos.service';
@@ -70,6 +79,23 @@ import { VencimientoCertificado, vencimientoParaElMostrador } from '../facturaci
 import { FacturacionService } from '../facturacion/facturacion.service';
 
 const ESPERA_MS = 250;
+
+/** Debajo de escritorio la botonera sigue en la barra superior para mantener «Cobrar» fijo sobre el TOTAL. */
+function esEscritorio(): boolean {
+  return typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function' ||
+    window.matchMedia('(min-width: 1024px)').matches;
+}
+/** La acción que cierra el ticket en cada modo. */
+const CIERRE_DEL_MODO: Record<ModoMostrador, AccionBotonera> = {
+  venta: 'cobrar',
+  presupuesto: 'presupuesto',
+  remito: 'remito',
+};
+const ROTULOS_DEL_MODO: Partial<Record<AccionBotonera, string>> = {
+  presupuesto: 'Guardar presupuesto',
+  remito: 'Emitir remito',
+};
 /** Id del panel de avisos que la franja del celular abre y cierra (móvil-pulgar, T4). */
 const AVISOS_PANEL_ID = 'avisos-mostrador';
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -77,6 +103,7 @@ const AVISO_COBRADA_MS = 5000;
 const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
+const AVISO_ESCANEO_EN_CAMPO = 'Terminá con el campo antes de escanear.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_REMITO_FALLIDO = 'No se pudo emitir el remito. Probá de nuevo.';
 const MENSAJE_OCUPADO = 'El sistema está ocupado, reintentá.';
@@ -188,6 +215,7 @@ interface Escaneo {
     AvisosFacturacion,
     BarraAcciones,
     Botonera,
+    SelectorModo,
     MontoPipe,
     CajaBusqueda,
     DialogoCantidad,
@@ -195,9 +223,11 @@ interface Escaneo {
     DialogoConfirmacion,
     DialogoDescuento,
     DialogoCliente,
+    CamposPresupuesto,
     DialogoPresupuesto,
     DialogoRemito,
     ListaResultados,
+    NgTemplateOutlet,
     FichaArticulo,
     HojaMasAcciones,
     HojaRenglon,
@@ -214,6 +244,7 @@ interface Escaneo {
   host: {
     '(document:keydown)': 'alTeclear($event)',
     '(window:beforeunload)': 'alSalir($event)',
+    '(window:resize)': 'ajustarPresentacion()',
   },
 })
 export class Mostrador {
@@ -276,6 +307,23 @@ export class Mostrador {
     return estado === 'ABIERTA' || estado === 'DE_OTRO_DIA';
   });
   protected readonly ticket = inject(TicketStore);
+  /**
+   * Qué botones se ven. Sin renglones, ninguno (S1). En escritorio, con renglones, las acciones del renglón y del ticket
+   * más el cierre del modo: Cobrar, Guardar presupuesto o Emitir remito (S3). Buscar y Cliente no van: el buscador siempre
+   * tiene el foco y el cliente está en la barra. En el celular siguen los diez de siempre (la hoja «Más acciones» los usa).
+   */
+  protected readonly accionesVisibles = computed<readonly AccionBotonera[] | null>(() => {
+    if (this.ticket.ticket().renglones.length === 0) return [];
+    if (!this.escritorio()) return null;
+    return ['cantidad', 'descuento', 'descuentoTotal', CIERRE_DEL_MODO[this.modo()], 'quitar', 'vaciar'];
+  });
+  protected readonly rotulosDelModo = computed<Partial<Record<AccionBotonera, string>>>(() =>
+    this.escritorio() ? ROTULOS_DEL_MODO : {},
+  );
+  protected readonly principalDelModo = computed<AccionBotonera | null>(() =>
+    this.escritorio() ? CIERRE_DEL_MODO[this.modo()] : null,
+  );
+  protected readonly escritorio = signal(esEscritorio());
   private readonly caja = viewChild.required(CajaBusqueda);
 
   /**
@@ -414,7 +462,19 @@ export class Mostrador {
   /** Temporizador que oculta el aviso de venta cobrada; cada aviso nuevo arranca el suyo. */
   private ocultarAviso: ReturnType<typeof setTimeout> | undefined;
 
+  /** Qué se está armando: abre siempre en Venta. Cambiarlo no toca el ticket: cambia sólo el cierre (mostrador-simple S2, S5). */
+  protected readonly modo = signal<ModoMostrador>('venta');
   protected readonly dialogo = signal<Dialogo | null>(null);
+  /** Los datos del presupuesto que se escriben en el panel (S10): vuelven a su valor inicial al vaciarse el ticket. */
+  protected readonly clientePresupuesto = signal('');
+  protected readonly validezPresupuesto = signal(String(DIAS_VALIDEZ_POR_DEFECTO));
+  protected readonly observacionesPresupuesto = signal('');
+  protected readonly errorValidez = signal<string | null>(null);
+  /** Los campos del presupuesto se ven en el panel del escritorio, en modo Presupuesto y con renglones (S10). */
+  protected readonly conCamposDePresupuesto = computed(
+    () => this.escritorio() && this.modo() === 'presupuesto' && this.ticket.ticket().renglones.length > 0,
+  );
+  private readonly camposPresupuesto = viewChild(CamposPresupuesto);
   /** Para el buscador: con un diálogo abierto no recupera el foco diferido. */
   protected readonly sinDialogo = () => this.dialogo() === null;
   protected readonly aviso = signal<Aviso | null>(null);
@@ -466,6 +526,9 @@ export class Mostrador {
   constructor() {
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarMotivo));
+    effect(() => {
+      if (this.ticket.ticket().renglones.length === 0) untracked(() => this.reiniciarDatosDePresupuesto());
+    });
     this.leerCaja();
     this.leerFormas();
     this.leerFacturacion();
@@ -692,6 +755,10 @@ export class Mostrador {
     this.intentar(accion);
   }
 
+  protected ajustarPresentacion(): void {
+    this.escritorio.set(esEscritorio());
+  }
+
   protected alBotonera(accion: AccionBotonera): void {
     this.intentar(accion);
   }
@@ -740,6 +807,10 @@ export class Mostrador {
         return;
       }
       case 'presupuesto':
+        if (this.conCamposDePresupuesto()) {
+          this.guardarDesdeElPanel();
+          return;
+        }
         this.avisar(null);
         this.soltarFocoEnCelular();
         this.dialogo.set({ tipo: 'presupuesto' });
@@ -849,7 +920,7 @@ export class Mostrador {
     this.cerrarDialogo();
   }
 
-  /** Vuelve a Consumidor Final (desde el diálogo o desde el ticket). */
+  /** Vuelve a Consumidor Final desde el selector de cliente. */
   protected quitarCliente(): void {
     this.ticket.quitarCliente();
     this.cerrarDialogo();
@@ -990,6 +1061,47 @@ export class Mostrador {
       return `Venta N.º ${venta.numero} cobrada${marca}: ${total} (${formatearMonto(aCuenta / 100)} a cuenta corriente)`;
     }
     return `Venta N.º ${venta.numero} cobrada${marca}: ${total}`;
+  }
+
+  /** «Guardar presupuesto» o F8 en modo Presupuesto: valida la validez del panel y guarda con lo que ahí se escribió (S10). */
+  private guardarDesdeElPanel(): void {
+    if (this.enVuelo()) return;
+    const dias = diasDeValidez(this.validezPresupuesto());
+    if (dias === null) {
+      this.errorValidez.set(MENSAJE_VALIDEZ);
+      this.camposPresupuesto()?.enfocarValidez();
+      return;
+    }
+    this.errorValidez.set(null);
+    this.avisar(null);
+    const cliente = this.ticket.ticket().clienteNombre ? '' : this.clientePresupuesto().trim();
+    const observaciones = this.observacionesPresupuesto().trim();
+    this.guardarPresupuesto({
+      diasValidez: dias,
+      ...(cliente ? { clienteNombre: cliente } : {}),
+      ...(observaciones ? { observaciones } : {}),
+    });
+  }
+
+  /** La persona escribió en el panel: el error de la validez y el mensaje del servidor ya no vienen al caso. */
+  protected alEditarDatosDePresupuesto(): void {
+    this.errorValidez.set(null);
+    this.avisoCobro.set(null);
+  }
+
+  protected escaneoEnCampoDelPanel(): void {
+    this.avisoCobro.set(AVISO_ESCANEO_EN_CAMPO);
+  }
+
+  protected volverAlBuscador(): void {
+    this.caja().enfocar();
+  }
+
+  private reiniciarDatosDePresupuesto(): void {
+    this.clientePresupuesto.set('');
+    this.validezPresupuesto.set(String(DIAS_VALIDEZ_POR_DEFECTO));
+    this.observacionesPresupuesto.set('');
+    this.errorValidez.set(null);
   }
 
   /** Enter en el diálogo de presupuesto (F8): guarda el ticket con la clave del ticket (la misma en cada reintento). */

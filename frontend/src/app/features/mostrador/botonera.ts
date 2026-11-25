@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { AccionMostrador, Atajo, atajosDeBotonera } from './mostrador.atajos';
 
 /** Acciones que emite la botonera: todas las del mapa menos Esc. */
@@ -15,32 +15,63 @@ export const AVISO_BOTONERA_ID = 'aviso-botonera';
 @Component({
   selector: 'app-botonera',
   template: `
-    <div class="botonera" role="toolbar" aria-label="Acciones del mostrador">
-      @for (atajo of atajos(); track atajo.accion) {
-        <button
-          type="button"
-          class="accion-barra"
-          [class]="variantes[atajo.accion] ?? ''"
-          [attr.aria-disabled]="motivoDe(atajo.accion) === null ? null : 'true'"
-          [attr.aria-describedby]="explicada() === atajo.accion ? avisoId : null"
-          [attr.aria-keyshortcuts]="atajo.tecla"
-          (mousedown)="$event.preventDefault()"
-          (click)="emitir(atajo.accion)"
-        >
-          {{ atajo.etiqueta }}
-        </button>
-      }
-    </div>
+    @if (atajosVisibles().length) {
+      <div class="botonera" role="toolbar" aria-label="Acciones del mostrador">
+        @for (atajo of atajosVisibles(); track atajo.accion) {
+          <button
+            type="button"
+            class="accion-barra"
+            [class]="claseDe(atajo.accion)"
+            [attr.aria-disabled]="motivoDe(atajo.accion) === null ? null : 'true'"
+            [attr.aria-describedby]="explicada() === atajo.accion ? avisoId : null"
+            [attr.aria-keyshortcuts]="atajo.tecla"
+            (mousedown)="$event.preventDefault()"
+            (click)="emitir(atajo.accion)"
+          >
+            {{ rotuloDe(atajo) }}
+          </button>
+        }
+      </div>
+    }
   `,
   /* Los botones usan la clase global .accion-barra (styles.css); acá la fila, el separador y el apagado (S4). */
   styles: `
     :host {
       display: block;
     }
+    :host(:empty) {
+      display: none;
+    }
     .botonera {
       display: flex;
       align-items: stretch;
       gap: 6px;
+    }
+    /*
+     * En el panel de la derecha (escritorio): las acciones del renglón y del ticket en una grilla de tres, y el cierre del
+     * modo (Cobrar, Guardar presupuesto o Emitir remito) arriba y a todo el ancho, como en la maqueta A.
+     */
+    :host(.en-panel) .botonera {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    :host(.en-panel) .accion-barra {
+      width: auto;
+      min-width: 0;
+    }
+    :host(.en-panel) .accion-barra.primario {
+      grid-column: 1 / -1;
+      order: -1;
+      min-height: 52px;
+      font-size: var(--texto-md);
+      font-weight: 700;
+    }
+    :host(.en-panel) .peligro {
+      margin-left: 0;
+    }
+    :host(.en-panel) .peligro::before {
+      display: none;
     }
     /*
      * Una acción que hoy no se puede usar se ve apagada, con el mismo aspecto que le da el disabled de styles.css
@@ -117,6 +148,23 @@ export class Botonera {
     vaciar: 'peligro',
   };
   readonly atajos = input<readonly Atajo[]>(atajosDeBotonera());
+  /** null conserva toda la botonera; una lista elige qué acciones se muestran sin reordenarlas. */
+  readonly visibles = input<readonly AccionBotonera[] | null>(null);
+  protected readonly atajosVisibles = computed(() => {
+    const visibles = this.visibles();
+    const atajos = this.atajos();
+    return visibles === null
+      ? atajos
+      : atajos.filter(({ accion }) => accion !== 'cerrar' && visibles.includes(accion));
+  });
+  /** Otro texto para una acción según el modo («Guardar presupuesto»): la tecla y la acción son las de siempre. */
+  readonly rotulos = input<Partial<Record<AccionBotonera, string>>>({});
+  /** La acción principal del modo: se ve como botón primario. Cobrar ya lo es por `variantes`. */
+  readonly principal = input<AccionBotonera | null>(null);
+  protected claseDe(accion: AccionMostrador): string {
+    const base = this.variantes[accion] ?? '';
+    return this.principal() === accion && !base.includes('primario') ? `${base} primario`.trim() : base;
+  }
   /** El motivo por el que cada acción no se puede usar ahora; las que no figuran, se pueden. */
   readonly motivos = input<Partial<Record<AccionBotonera, string>>>({});
   /** La acción cuyo motivo está a la vista: su botón lo enlaza para que se lea con la tecla o el lector de pantalla. */
@@ -124,6 +172,10 @@ export class Botonera {
   readonly accion = output<AccionBotonera>();
 
   protected readonly avisoId = AVISO_BOTONERA_ID;
+
+  protected rotuloDe(atajo: Atajo): string {
+    return this.rotulos()[atajo.accion as AccionBotonera] ?? atajo.etiqueta;
+  }
 
   protected motivoDe(accion: AccionMostrador): string | null {
     return this.motivos()[accion as AccionBotonera] ?? null;

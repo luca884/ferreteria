@@ -1,11 +1,29 @@
 <app-barra-acciones>
   <h1 class="sr-only">Mostrador</h1>
+  <!-- Sólo en escritorio: debajo de 1024 px el cierre es el de siempre (Cobrar fijo y «Más acciones»), el modo no cambiaría nada. -->
+  @if (escritorio()) {
+    <app-selector-modo [modo]="modo()" (elegir)="modo.set($event)" />
+  }
+  <div class="chip-cliente">
+    Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong>
+    <button type="button" (mousedown)="$event.preventDefault()" (click)="alBotonera('cliente')">Cambiar</button>
+  </div>
+  @if (!escritorio()) {
+    <ng-container [ngTemplateOutlet]="botonera" />
+  }
+</app-barra-acciones>
+
+<ng-template #botonera>
   <app-botonera
+    [class.en-panel]="escritorio()"
+    [visibles]="accionesVisibles()"
+    [rotulos]="rotulosDelModo()"
+    [principal]="principalDelModo()"
     [motivos]="motivos()"
     [explicada]="motivoVisible()?.accion ?? null"
     (accion)="alBotonera($event)"
   />
-</app-barra-acciones>
+</ng-template>
 
 <div class="zona-busqueda">
   <!-- S4: por qué la acción que se acaba de intentar no se puede usar. Va debajo de la barra y no roba el foco. -->
@@ -29,8 +47,8 @@
 
   <!--
     movil-sectores T8c: la barra de cliente del celular, debajo del buscador, como el artboard 01: siempre dice a quién se le
-    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba y, en el celular, esconde
-    el renglón «Cliente: … Quitar» de abajo, que dice lo mismo). «Quitar» está en el selector.
+    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba).
+    «Quitar» está en el selector.
   -->
   <div class="sub-cliente">
     <span class="sub-cliente-nombre">Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong></span>
@@ -92,13 +110,6 @@
     <app-primeros-pasos />
   </div>
 
-  @if (ticket.ticket().clienteNombre; as cliente) {
-    <p class="cliente-ticket">
-      Cliente: <strong>{{ cliente }}</strong>
-      <button type="button" class="enlace" (click)="quitarCliente()">Quitar</button>
-    </p>
-  }
-
   @if (ticket.ticket().presupuestoNumero; as numero) {
     <p class="origen">Venta del presupuesto N.º {{ numero }}</p>
   }
@@ -157,7 +168,7 @@
   }
 </div>
 
-<aside class="panel-derecho" aria-label="Artículo y totales">
+<aside class="panel-derecho" [class.vacio]="!ticket.ticket().renglones.length && fichaMostrada() === null" aria-label="Artículo y totales">
   @if (fichaMostrada(); as articulo) {
     <app-ficha-articulo [articulo]="articulo" />
   } @else {
@@ -181,6 +192,24 @@
     </div>
   }
   <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
+  @if (conCamposDePresupuesto()) {
+    <app-campos-presupuesto
+      [(cliente)]="clientePresupuesto"
+      [(validez)]="validezPresupuesto"
+      [(observaciones)]="observacionesPresupuesto"
+      [clienteElegido]="ticket.ticket().clienteNombre ?? null"
+      [error]="errorValidez()"
+      [aviso]="avisoCobro()"
+      [bloqueado]="enVuelo()"
+      (guardar)="alBotonera('presupuesto')"
+      (salir)="volverAlBuscador()"
+      (escaneoDescartado)="escaneoEnCampoDelPanel()"
+      (editado)="alEditarDatosDePresupuesto()"
+    />
+  }
+  @if (escritorio()) {
+    <ng-container [ngTemplateOutlet]="botonera" />
+  }
   <!-- movil-sectores T8b: sólo del celular (styles.css lo esconde de 640 px para arriba). Abre «Más acciones». -->
   <button type="button" class="mas-acciones-ticket" aria-label="Más acciones del ticket" aria-haspopup="dialog" (click)="abrirMasAcciones($event)">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

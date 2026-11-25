@@ -6,15 +6,17 @@
     <col class="col-precio" />
     <col class="col-total" />
   </colgroup>
-  <thead>
-    <tr>
-      <th class="num">Cant.</th>
-      <th>Código</th>
-      <th>Descripción</th>
-      <th class="num">P. unit.</th>
-      <th class="num">Total</th>
-    </tr>
-  </thead>
+  @if (renglones().length > 0) {
+    <thead>
+      <tr>
+        <th class="num">Cant.</th>
+        <th>Código</th>
+        <th>Descripción</th>
+        <th class="num">P. unit.</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+  }
   <tbody>
     @for (r of renglones(); track r.articuloId; let i = $index) {
       <tr
@@ -48,7 +50,10 @@
       @if (conMensajeVacio()) {
         <tr class="fila-vacia">
           <td colspan="5">
-            <p class="vacio">El ticket está vacío. Escaneá un artículo para empezar.</p>
+            <p class="vacio">
+              <strong>Listo para vender</strong>
+              El ticket está vacío. Escaneá un artículo para empezar.
+            </p>
           </td>
         </tr>
       }

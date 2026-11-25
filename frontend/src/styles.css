@@ -2884,12 +2884,49 @@ ul.error {
   }
 }
 
+/* Mostrador: desde 640 px el cliente va en la barra superior en vez del renglón debajo del buscador. */
+app-mostrador .chip-cliente {
+  display: none;
+}
+@media screen and (min-width: 640px) {
+  app-mostrador .chip-cliente {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--e-1) var(--e-2) var(--e-1) var(--e-3);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 999px;
+    background: var(--superficie);
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+  }
+  app-mostrador .chip-cliente strong {
+    overflow: hidden;
+    color: var(--texto);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  app-mostrador .chip-cliente button {
+    flex: none;
+    padding: var(--e-1) var(--e-3);
+    border: 0;
+    border-radius: 999px;
+    background: var(--acento-suave);
+    color: var(--acento-fuerte);
+    font-weight: 600;
+  }
+  app-mostrador .chip-cliente button:hover {
+    background: var(--acento-anillo);
+  }
+}
+
 /*
  * 8c: el cliente. La barra «Cliente: … Cambiar» debajo del buscador (artboard 01 de movil-mostrador) y el selector de
  * cliente a pantalla completa con el pie fijo (artboard 04). La barra existe en la página siempre y sólo se ve en el
- * celular; en el celular esconde el renglón «Cliente: … Quitar» de siempre, que dice lo mismo («Quitar» está en el
- * selector). El selector (`DialogoCliente`) pone `.cliente-celular` sólo en el celular: el escritorio y la tablet
- * conservan su DOM y su diálogo centrado (S5). Reusa la barra «Volver» y el pie de las fichas (`.ficha-barra`,
+ * celular. «Quitar» está en el selector. El selector (`DialogoCliente`) pone `.cliente-celular` sólo en el celular:
+ * el escritorio y la tablet conservan su DOM y su diálogo centrado (S5). Reusa la barra «Volver» y el pie de las fichas (`.ficha-barra`,
  * `.ficha-volver`, `.ficha-pie`). Todo cuelga de `app-dialogo-cliente` o `app-mostrador` para ganarle a los estilos de cada
  * componente, que se cargan después de este archivo.
  */
@@ -2924,9 +2961,6 @@ ul.error {
     background: transparent;
     color: var(--acento-fuerte);
     font-weight: 600;
-  }
-  app-mostrador .zona-busqueda .cliente-ticket {
-    display: none;
   }
 
   /* El selector cubre toda la pantalla (también la barra de destinos), sin el velo ni la tarjeta del diálogo. */

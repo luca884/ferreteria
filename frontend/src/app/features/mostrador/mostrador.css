@@ -1,6 +1,6 @@
 /*
- * Barra con las teclas F arriba; debajo, el código grande y la grilla del ticket a la izquierda, y la ficha
- * con el TOTAL a la derecha. Ocupa todo el alto disponible; la grilla es lo único que scrollea.
+ * Modos y cliente arriba; debajo, el código grande y la grilla del ticket a la izquierda, y la ficha, el TOTAL y
+ * las acciones a la derecha. Ocupa todo el alto disponible; la grilla es lo único que scrollea.
  */
 :host {
   display: grid;
@@ -79,27 +79,6 @@ app-caja-busqueda {
   border-color: var(--borde);
   border-left-color: var(--texto-tenue);
   background: var(--superficie);
-}
-/* El cliente elegido con F9: se ve siempre, y se saca con «Quitar». */
-.cliente-ticket {
-  display: flex;
-  align-items: center;
-  gap: var(--e-2);
-  margin: 0;
-  padding: var(--e-2) var(--e-3);
-  border: 1px solid var(--borde);
-  border-left: 4px solid var(--texto-tenue);
-  border-radius: var(--radio);
-  background: var(--superficie);
-}
-.cliente-ticket .enlace {
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--acento);
-  font-weight: 700;
-  text-decoration: underline;
 }
 /* El ticket sale de un presupuesto: se cobra con lo que dice el mostrador, y la venta lo deja facturado. */
 .origen {
@@ -277,10 +256,23 @@ app-totales-ticket {
   text-wrap: balance;
 }
 
+/* En escritorio, sin renglones ni ficha, el buscador y el estado vacío usan todo el ancho. */
+@media screen and (min-width: 1024px) {
+  :host:has(> .panel-derecho.vacio) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'barra'
+      'busqueda'
+      'ticket';
+  }
+  .panel-derecho.vacio {
+    display: none;
+  }
+}
+
 /*
  * Debajo de escritorio el mostrador va en una columna (S6): botonera, buscador, ficha del artículo y ticket. El TOTAL y
- * Cobrar salen del flujo y se fijan abajo (S12d), para cobrar con el ticket cargado sin buscarlos scrolleando. Desde
- * 1024 px no se aplica nada de esto: el mostrador de escritorio, con lector y teclado, queda igual.
+ * Cobrar salen del flujo y se fijan abajo (S12d), para cobrar con el ticket cargado sin buscarlos scrolleando.
  */
 @media screen and (max-width: 1023.98px) {
   :host {

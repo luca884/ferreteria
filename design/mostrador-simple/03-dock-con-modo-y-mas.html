@@ -1,0 +1,122 @@
+<!doctype html><html lang="es-AR"><head><meta charset="utf-8"><meta name="viewport" content="width=1440"><title>C · Dock con modo y «Más»</title><style>
+:root{--acento:#2563eb;--acento-fuerte:#1d4ed8;--acento-suave:#eff6ff;--acento-anillo:#dbeafe;--acento-borde:#bfdbfe;--fondo:#f4f6fa;--superficie:#fff;--superficie-3:#f1f5f9;--borde:#e2e8f0;--borde-fuerte:#cbd5e1;--texto:#0f172a;--texto-suave:#475569;--texto-tenue:#5b6b82;--texto-deshabilitado:#94a3b8;--error:#b91c1c;--error-fondo:#fef2f2;--exito:#047857;--exito-fondo:#ecfdf5;--advertencia:#92400e;--advertencia-fondo:#fffbeb;--advertencia-borde:#fde68a;--radio-sm:4px;--radio:8px;--radio-lg:10px;--radio-xl:14px;--sombra:0 1px 2px rgba(15,23,42,.06),0 6px 16px rgba(15,23,42,.08);--foco:0 0 0 3px rgba(37,99,235,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fondo);color:var(--texto);font:14px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;width:1440px;height:900px;overflow:hidden}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--foco)}
+.demo{height:36px;display:flex;align-items:center;gap:10px;padding:0 16px;background:#0f172a;color:#cbd5e1;font-size:12px}
+.demo button{border:1px solid #475569;background:transparent;color:#e2e8f0;border-radius:999px;padding:3px 12px;cursor:pointer}
+.demo button[aria-pressed=true]{background:#e2e8f0;color:#0f172a}
+.pantalla{display:grid;grid-template-columns:64px 1fr;height:864px}
+.rail{background:var(--superficie);border-right:1px solid var(--borde);display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 0}
+.rail .logo{width:34px;height:34px;border-radius:9px;background:var(--acento-fuerte);color:#fff;display:grid;place-items:center;font-weight:700}
+.rail i{width:22px;height:22px;border-radius:6px;background:var(--borde)}
+.rail i.on{background:var(--acento)}
+.rail small{margin-top:auto;font-size:10px;color:var(--texto-tenue);text-align:center;padding:0 4px}
+main{display:flex;flex-direction:column;min-height:0;min-width:0;padding:20px 32px 0;position:relative}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:6px 14px;border:1px solid var(--borde-fuerte);border-radius:var(--radio);background:var(--superficie);cursor:pointer;font-weight:500}
+.btn:hover{background:var(--superficie-3)}
+.btn kbd{font:600 11px system-ui;color:var(--texto-tenue);background:var(--superficie-3);border:1px solid var(--borde);border-radius:4px;padding:0 5px}
+.btn.primario{background:var(--acento);border-color:var(--acento);color:#fff;font-weight:700;font-size:16px;min-height:52px;padding:6px 22px}
+.btn.primario:hover{background:var(--acento-fuerte)}
+.btn.primario kbd{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.3);color:#fff}
+.btn.chico{min-height:32px;padding:2px 10px;font-size:13px}
+.btn.peligro{color:var(--error);border-color:#fecaca}
+.btn.peligro:hover{background:var(--error-fondo)}
+.chip-cliente{display:inline-flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border:1px solid var(--borde-fuerte);border-radius:999px;background:var(--superficie);font-size:13px;color:var(--texto-suave)}
+.chip-cliente strong{color:var(--texto)}
+.chip-cliente button{border:0;background:var(--acento-suave);color:var(--acento-fuerte);border-radius:999px;padding:3px 12px;font-weight:600;cursor:pointer}
+.caja{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--exito);background:var(--exito-fondo);border-radius:999px;padding:3px 10px;font-weight:600}
+.caja::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--exito)}
+.buscar{display:flex;align-items:center;gap:12px;height:60px;padding:0 18px;background:var(--superficie);border:2px solid var(--acento);border-radius:var(--radio-lg);box-shadow:0 0 0 4px var(--acento-anillo)}
+.buscar svg{flex:none;color:var(--acento)}
+.buscar input{flex:1;border:0;outline:none;background:transparent;font-size:18px}
+.buscar input::placeholder{color:var(--texto-tenue)}
+.buscar .pista{font-size:12px;color:var(--texto-tenue);white-space:nowrap}
+.tabs{display:inline-flex;background:var(--superficie-3);border:1px solid var(--borde);border-radius:var(--radio-lg);padding:4px;gap:4px}
+.tabs button{border:0;background:transparent;border-radius:var(--radio);padding:8px 22px;font-weight:600;color:var(--texto-suave);cursor:pointer;font-size:15px}
+.tabs button[aria-selected=true]{background:var(--superficie);color:var(--acento-fuerte);box-shadow:0 1px 3px rgba(15,23,42,.15)}
+table{width:100%;border-collapse:collapse;background:var(--superficie)}
+.tabla{border:1px solid var(--borde);border-radius:var(--radio-lg);overflow:hidden;background:var(--superficie)}
+th{text-align:left;font-size:12px;color:var(--texto-tenue);font-weight:600;padding:10px 14px;background:var(--superficie-3);border-bottom:1px solid var(--borde)}
+td{padding:12px 14px;border-bottom:1px solid var(--borde)}
+th.n,td.n{text-align:right;font-variant-numeric:tabular-nums}
+td small{display:block;color:var(--texto-tenue);font-size:12px}
+tr.fila{cursor:pointer}
+tr.fila:hover td{background:#f8fafc}
+tr.fila.sel td{background:var(--acento-suave);border-bottom-color:var(--acento-borde)}
+tr.acc{display:none}
+tr.fila.sel + tr.acc{display:table-row}
+tr.acc td{background:var(--acento-suave);padding:0 14px 10px;border-bottom:1px solid var(--borde)}
+.acc .fila-acc{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--texto-tenue)}
+.desc{color:var(--exito);font-weight:600}
+.total-linea{display:flex;justify-content:space-between;align-items:baseline}
+.total-linea .monto{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.total-linea span:first-child{color:var(--texto-suave);font-weight:600}
+.sub{color:var(--texto-tenue);font-size:13px;display:flex;justify-content:space-between}
+.vacio-estado{display:grid;place-items:center;text-align:center;color:var(--texto-suave);gap:10px;padding:48px 0}
+.vacio-estado svg{color:var(--borde-fuerte)}
+.vacio-estado h2{margin:0;font-size:22px;color:var(--texto)}
+.vacio-estado p{margin:0;max-width:420px}
+.campos{display:grid;gap:10px}
+.campos label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--texto-suave)}
+.campos input,.campos textarea{border:1px solid var(--borde-fuerte);border-radius:var(--radio);padding:8px 10px;background:#fff;font-weight:400}
+.nota{margin:0;font-size:13px;color:var(--texto-suave);background:var(--superficie-3);border-radius:var(--radio);padding:8px 10px}
+body[data-estado=vacio] .con{display:none!important}
+body[data-estado=con] .sin{display:none!important}
+body:not([data-modo=venta]) .m-venta{display:none!important}
+body:not([data-modo=presupuesto]) .m-presupuesto{display:none!important}
+body:not([data-modo=remito]) .m-remito{display:none!important}
+@media (prefers-reduced-motion:no-preference){.btn,.tabs button{transition:background .15s ease}}
+
+.col{width:980px;margin:0 auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:16px}
+.col .arriba{display:flex;justify-content:space-between;align-items:center}
+.dock{margin:0 -32px;padding:14px 32px;background:var(--superficie);border-top:1px solid var(--borde);box-shadow:0 -6px 16px rgba(15,23,42,.06);position:relative}
+.dock .in{width:980px;margin:0 auto;display:flex;align-items:center;gap:16px}
+.dock .modo{display:inline-flex;gap:0;border:1px solid var(--borde-fuerte);border-radius:var(--radio);overflow:hidden}
+.dock .modo button{border:0;border-right:1px solid var(--borde);background:#fff;padding:10px 16px;cursor:pointer;font-weight:600;color:var(--texto-suave)}
+.dock .modo button:last-child{border-right:0}
+.dock .modo button[aria-pressed=true]{background:var(--acento);color:#fff}
+.dock .tot{margin-left:auto;display:flex;align-items:center;gap:20px}
+.dock .total-linea{gap:12px;align-items:center}.dock .total-linea .monto{font-size:28px}
+.extra{width:980px;margin:0 auto 12px;display:flex;gap:16px;align-items:end;background:var(--acento-suave);border:1px solid var(--acento-borde);border-radius:var(--radio-lg);padding:12px 16px}
+.extra .campos{display:flex;gap:14px;align-items:end;width:100%}
+.extra .campos label{width:auto}.extra .campos textarea{width:360px;height:40px;resize:none}
+.extra .campos .nota{background:transparent;padding:0;align-self:center}
+#mas{position:absolute;bottom:72px;left:calc(50% - 490px + 262px);background:#fff;border:1px solid var(--borde-fuerte);border-radius:var(--radio-lg);box-shadow:var(--sombra);padding:6px;width:260px;z-index:2}
+#mas button{display:flex;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px 12px;border-radius:var(--radio);cursor:pointer;text-align:left}
+#mas button:hover{background:var(--superficie-3)}
+#mas .peligro{color:var(--error)}
+#mas[hidden]{display:none}
+body[data-modo=venta] .extra{display:none}
+</style></head><body><div class="demo"><span>Prototipo:</span><button data-e="vacio" aria-pressed="true">Ticket vacío</button><button data-e="con" aria-pressed="false">Con artículos</button><span style="margin-left:auto">Probá las pestañas de modo y tocá un renglón</span></div><div class="pantalla"><nav class="rail" aria-label="Menú de la app (colapsado)"><div class="logo">F</div><i class="on" title="Mostrador"></i><i></i><i></i><i></i><i></i><small>Menú de la app</small></nav><main style="padding-bottom:0">
+<div class="col">
+<div class="arriba"><div class="chip-cliente">Cliente: <strong>Consumidor Final</strong><button type="button">Cambiar <kbd style="font:600 10px system-ui">F9</kbd></button></div><span class="caja m-venta">Caja abierta</span></div>
+<div class="buscar" role="search"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M21 5v14M18.5 5v14"/></svg><input aria-label="Código o nombre del artículo" placeholder="Escaneá un código o escribí el nombre del artículo" autofocus><span class="pista">Enter agrega · ↑↓ elige</span></div>
+<div class="sin vacio-estado"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M21 5v14M18.5 5v14"/></svg><h2>Escaneá para empezar</h2><p>Abajo elegís si es una venta, un presupuesto o un remito. Todo lo demás aparece cuando lo necesitás.</p></div>
+<div class="con"><div class="tabla"><table><thead><tr><th>Artículo</th><th class="n">Cant.</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Subtotal</th></tr></thead><tbody>
+<tr class="fila" tabindex="0"><td>Tornillo autoperforante 8 x 1&quot; (caja x100)<small>7791234500011 · Tornillería</small></td><td class="n">2</td><td class="n">$ 4.800,00</td><td class="n">—</td><td class="n"><strong>$ 9.600,00</strong></td></tr><tr class="acc"><td colspan="5"><div class="fila-acc"><button class="btn chico">Cantidad <kbd>F3</kbd></button><button class="btn chico">Descuento <kbd>F7</kbd></button><button class="btn chico peligro">Quitar <kbd>F10</kbd></button></div></td></tr>
+<tr class="fila" tabindex="0"><td>Cinta aisladora 3M 18 mm negra<small>7791234500028 · Electricidad</small></td><td class="n">3</td><td class="n">$ 1.250,00</td><td class="n">—</td><td class="n"><strong>$ 3.750,00</strong></td></tr><tr class="acc"><td colspan="5"><div class="fila-acc"><button class="btn chico">Cantidad <kbd>F3</kbd></button><button class="btn chico">Descuento <kbd>F7</kbd></button><button class="btn chico peligro">Quitar <kbd>F10</kbd></button></div></td></tr>
+<tr class="fila sel" tabindex="0"><td>Pintura látex interior blanca 4 L<small>7791234500035 · Pinturería</small></td><td class="n">1</td><td class="n">$ 38.500,00</td><td class="n"><span class="desc">10 %</span></td><td class="n"><strong>$ 34.650,00</strong></td></tr><tr class="acc"><td colspan="5"><div class="fila-acc"><button class="btn chico">Cantidad <kbd>F3</kbd></button><button class="btn chico">Descuento <kbd>F7</kbd></button><button class="btn chico peligro">Quitar <kbd>F10</kbd></button></div></td></tr>
+<tr class="fila" tabindex="0"><td>Adhesivo epoxi Poxipol 10 min<small>7791234500042 · Adhesivos</small></td><td class="n">2</td><td class="n">$ 3.900,00</td><td class="n">—</td><td class="n"><strong>$ 7.800,00</strong></td></tr><tr class="acc"><td colspan="5"><div class="fila-acc"><button class="btn chico">Cantidad <kbd>F3</kbd></button><button class="btn chico">Descuento <kbd>F7</kbd></button><button class="btn chico peligro">Quitar <kbd>F10</kbd></button></div></td></tr>
+</tbody></table></div></div>
+</div>
+<div class="con" style="margin:0 -32px"><div class="extra"><div class="campos m-presupuesto"><label>Validez (días)<input value="15" inputmode="numeric" style="width:110px"></label><label>Observaciones (opcional)<textarea rows="2" placeholder="Ej.: precios sujetos a cambio de lista"></textarea></label><p class="nota">El presupuesto no cobra ni mueve la caja.</p></div>
+<div class="campos m-remito"><label>Observaciones (opcional)<textarea rows="2" placeholder="Ej.: entrega en obra, Calle 14 N.º 2300"></textarea></label><p class="nota">El remito descuenta el stock ahora y no cobra: se factura después desde Remitos.</p></div></div></div>
+<footer class="dock"><div class="in">
+<div class="modo" role="group" aria-label="Modo"><button data-m="venta" aria-pressed="true">Venta</button><button data-m="presupuesto" aria-pressed="false">Presupuesto</button><button data-m="remito" aria-pressed="false">Remito</button></div>
+<button class="btn" data-mas aria-expanded="false" aria-controls="mas">⋯ Más</button>
+<div class="tot con"><div class="total-linea"><span>Total</span><span class="monto">$ 55.800,00</span></div><button class="btn primario m-venta">Cobrar <kbd>F4</kbd></button><button class="btn primario m-presupuesto">Guardar presupuesto <kbd>F8</kbd></button><button class="btn primario m-remito">Emitir remito</button></div>
+</div>
+<div id="mas" hidden role="menu"><button role="menuitem"><span>Cliente</span><kbd class="btn" style="min-height:0;padding:0 5px">F9</kbd></button><button role="menuitem" class="con"><span>Descuento total</span><kbd class="btn" style="min-height:0;padding:0 5px">F6</kbd></button><button role="menuitem" class="con peligro"><span>Vaciar ticket</span></button></div>
+</footer>
+</main></div><script>
+const b=document.body;
+function setE(e){b.dataset.estado=e;document.querySelectorAll('[data-e]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.e===e))}
+function setM(m){b.dataset.modo=m;document.querySelectorAll('[data-m]').forEach(x=>{if(x.getAttribute('role')==='tab')x.setAttribute('aria-selected',x.dataset.m===m);else x.setAttribute('aria-pressed',x.dataset.m===m)})}
+document.addEventListener('click',ev=>{const e=ev.target.closest('[data-e]');if(e)setE(e.dataset.e);const m=ev.target.closest('[data-m]');if(m)setM(m.dataset.m);
+const f=ev.target.closest('tr.fila');if(f){document.querySelectorAll('tr.fila.sel').forEach(x=>x!==f&&x.classList.remove('sel'));f.classList.toggle('sel')}
+const mas=ev.target.closest('[data-mas]');if(mas){const p=document.getElementById('mas');p.hidden=!p.hidden;mas.setAttribute('aria-expanded',!p.hidden)}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.matches('tr.fila'))ev.target.click()});
+setE('vacio');setM('venta');
+</script></body></html>

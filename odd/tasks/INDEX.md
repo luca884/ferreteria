@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-25 desde los 95 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-25 desde los 96 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~23 KB; los 95 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~23 KB; los 96 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **93 cerradas · 2 abiertas**
+- **94 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -22,7 +22,8 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
-| [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 5 |
+| [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 6 |
+| [`mostrador-simple.md`](mostrador-simple.md) | 2026-11-24 | el mostrador abre directo en Venta con un selector de modo (Venta / Presupuesto / Remito), sin botones apagados, y muestra cada acción cuando se puede | 12 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
@@ -127,7 +128,7 @@ Para ir de una sección de la spec (`docs/spec/cu-NN-*.md`) a las tareas que ya 
 | CU-04 | `cu-03-exportar-articulos`, `cu-04-listas-pdf`, `cu-13-compras`, `cu-13-factura-pdf`, `cu-14-precio-manual`, `para-decidir-caja-y-margen`, `recargos-y-margen-negativo` |
 | CU-05 | `cu-13-compras`, `cu-13-factura-pdf`, `cu-14-precio-manual`, `mejoras-rubros`, `menores-mejoras-nuevas`, `para-decidir-caja-y-margen`, `recargos-y-margen-negativo` |
 | CU-06 | `cu-03-costo-actualizado`, `recorrido-vendedor` |
-| CU-07 | `bajos-qa`, `cu-07-consumidor-final`, `cu-07-contingencias`, `cu-07-factura-mostrador`, `cu-07-motor-fiscal`, `cu-07-remito-presupuesto-imprimible`, `cu-07-tope-descuento`, `cu-07-venta-facturada`, `cu-12-ajustes-cuenta-corriente`, `descuento-efectivo`, `recorrido-vendedor`, `remito-devuelve-stock` |
+| CU-07 | `bajos-qa`, `cu-07-consumidor-final`, `cu-07-contingencias`, `cu-07-factura-mostrador`, `cu-07-motor-fiscal`, `cu-07-remito-presupuesto-imprimible`, `cu-07-tope-descuento`, `cu-07-venta-facturada`, `cu-12-ajustes-cuenta-corriente`, `descuento-efectivo`, `mostrador-simple`, `recorrido-vendedor`, `remito-devuelve-stock` |
 | CU-08 | `cu-08-consulta-ventas`, `cu-08-nc-cuenta-corriente`, `cu-08-nota-de-credito`, `remito-devuelve-stock` |
 | CU-09 | `cu-09-movimientos-articulo`, `cu-09-saldo-movimientos-demo`, `cu-09-stock-bajo-minimo`, `detalles-de-los-recorridos`, `hallazgos-qa-navegador` |
 | CU-10 | `cu-08-consulta-ventas`, `cu-10-reportes-de-caja`, `para-decidir-caja-y-margen` |

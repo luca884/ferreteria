@@ -125,6 +125,18 @@ td {
   text-align: center;
 }
 
+.vacio strong {
+  display: none;
+}
+@media screen and (min-width: 1024px) {
+  .vacio strong {
+    display: block;
+    margin-bottom: var(--e-2);
+    color: var(--texto);
+    font-size: var(--texto-xl);
+  }
+}
+
 /*
  * Una columna en la pantalla no son los 33rem fijos de las columnas de escritorio: las de números se achican y la
  * descripción se queda con el resto, que antes era 0 px. La descripción se lee entera y parte en dos renglones.
@@ -144,6 +156,39 @@ td {
   }
   .col-total {
     width: 7rem;
+  }
+  .detalle {
+    overflow: visible;
+  }
+  .descripcion {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/*
+ * Entre 1024 y 1279 px el ticket comparte el ancho con el menú y con el panel de 320 px: las columnas fijas de escritorio
+ * (33 rem) lo dejaban sin Descripción ni Total. Acá la grilla se acomoda sola: sin la columna del código (ya está en la
+ * ficha del panel), con las de números más angostas y la descripción partida en dos renglones.
+ */
+@media screen and (min-width: 1024px) and (max-width: 1279.98px) {
+  .grilla-ticket {
+    table-layout: auto;
+  }
+  .col-cantidad {
+    width: 3.5rem;
+  }
+  .col-precio {
+    width: 6.5rem;
+  }
+  .col-total {
+    width: 7rem;
+  }
+  .col-codigo,
+  th:nth-child(2),
+  td.codigo {
+    display: none;
   }
   .detalle {
     overflow: visible;
