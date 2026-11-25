@@ -7,6 +7,14 @@
 El Dueño arma el menú lateral de su ferretería: elige qué grupos hay (Ventas, Configuración, los que él cree), qué
 opciones lleva cada uno y en qué orden. Lo hace para su propio menú y para el de cada usuario.
 
+## Achicar el menú (menu-colapsable)
+
+Desde 1024 px, cada persona puede achicar el menú lateral con el botón de arriba a una columna de unos 64 px: el logo, el
+Mostrador, un ícono por grupo (con el color del grupo), el avatar y «Salir». Tocar un grupo en la columna abre el menú ancho
+con ese grupo desplegado. La elección se guarda en el navegador (`menu-lateral-colapsado:{usuarioId}`, una por usuario), no en el servidor: no es una
+disposición del Dueño y no cambia el menú de nadie más. Sin dato, el menú abre ancho como siempre. Debajo de 1024 px el
+menú sigue siendo el cajón y la barra de destinos de siempre.
+
 ## Qué se personaliza
 
 El menú lateral con sus grupos desplegables y las opciones de adentro. **«Mostrador» queda fijo arriba**, fuera de los

@@ -1,7 +1,22 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { IconoMenu } from './menu';
 
-/** Ícono de una opción del menú lateral (16×16, trazo). Decorativo: el rótulo va al lado. */
+type IconoGrupo = 'grupo-ventas' | 'grupo-articulos' | 'grupo-compras' | 'grupo-precios' | 'grupo-configuracion';
+
+const ICONOS_GRUPO = new Map<string, IconoGrupo>([
+  ['ventas', 'grupo-ventas'],
+  ['articulos', 'grupo-articulos'],
+  ['compras', 'grupo-compras'],
+  ['precios', 'grupo-precios'],
+  ['configuracion', 'grupo-configuracion'],
+]);
+
+/** Los grupos personalizados conservan un ícono genérico, independientemente del tono que tengan. */
+export function iconoDeGrupo(id: string): IconoGrupo | IconoMenu {
+  return ICONOS_GRUPO.get(id) ?? 'menu';
+}
+
+/** Ícono de una opción o un grupo del menú lateral (16×16, trazo). Decorativo: lo nombra el rótulo. */
 @Component({
   selector: 'app-icono-menu',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,6 +107,22 @@ import { IconoMenu } from './menu';
         @case ('menu') {
           <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
         }
+        @case ('grupo-ventas') {
+          <path d="M2.5 4h11v9.5h-11zM5 4V2.5h6V4M2.5 7.5h11M5 10.5h3" />
+        }
+        @case ('grupo-articulos') {
+          <path d="M2 2.5h5v5H2zM9 2.5h5v5H9zM2 9.5h5v5H2zM9 9.5h5v5H9z" />
+        }
+        @case ('grupo-compras') {
+          <path d="M2.5 6h11l.8 8h-12.6zM5.5 6V4a2.5 2.5 0 0 1 5 0v2" />
+        }
+        @case ('grupo-precios') {
+          <path d="M2 2h5.5l6.5 6.5L8.5 14 2 7.5z" />
+          <circle cx="5" cy="5" r="0.8" />
+        }
+        @case ('grupo-configuracion') {
+          <path d="M2 4h12M2 8h12M2 12h12M5 2v4M11 6v4M7 10v4" />
+        }
         @case ('usuarios') {
           <circle cx="8" cy="5" r="2.5" />
           <path d="M3 13.5c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2" />
@@ -114,5 +145,5 @@ import { IconoMenu } from './menu';
   `,
 })
 export class IconoDelMenu {
-  readonly nombre = input.required<IconoMenu>();
+  readonly nombre = input.required<IconoMenu | IconoGrupo>();
 }
