@@ -192,6 +192,21 @@
     </div>
   }
   <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
+  @if (conCamposDePresupuesto()) {
+    <app-campos-presupuesto
+      [(cliente)]="clientePresupuesto"
+      [(validez)]="validezPresupuesto"
+      [(observaciones)]="observacionesPresupuesto"
+      [clienteElegido]="ticket.ticket().clienteNombre ?? null"
+      [error]="errorValidez()"
+      [aviso]="avisoCobro()"
+      [bloqueado]="enVuelo()"
+      (guardar)="alBotonera('presupuesto')"
+      (salir)="volverAlBuscador()"
+      (escaneoDescartado)="escaneoEnCampoDelPanel()"
+      (editado)="alEditarDatosDePresupuesto()"
+    />
+  }
   @if (escritorio()) {
     <ng-container [ngTemplateOutlet]="botonera" />
   }

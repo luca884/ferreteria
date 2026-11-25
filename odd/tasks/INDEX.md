@@ -22,7 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
-| [`mostrador-simple.md`](mostrador-simple.md) | 2026-11-24 | el mostrador abre directo en Venta con un selector de modo (Venta / Presupuesto / Remito), sin botones apagados, y muestra cada acción cuando se puede | 10 |
+| [`mostrador-simple.md`](mostrador-simple.md) | 2026-11-24 | el mostrador abre directo en Venta con un selector de modo (Venta / Presupuesto / Remito), sin botones apagados, y muestra cada acción cuando se puede | 12 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |

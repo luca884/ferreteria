@@ -4,14 +4,12 @@ import { esCelular } from '../../shared/es-celular';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
   CLIENTE_MAXIMO,
-  DIAS_VALIDEZ_MAXIMOS,
   DIAS_VALIDEZ_POR_DEFECTO,
   DatosPresupuesto,
   OBSERVACIONES_MAXIMO,
 } from '../presupuestos/presupuesto.models';
 import { GuardaLector } from './guarda-lector';
-
-const MENSAJE_VALIDEZ = `La validez va de 1 a ${DIAS_VALIDEZ_MAXIMOS} días.`;
+import { MENSAJE_VALIDEZ, diasDeValidez } from './validez-presupuesto';
 
 /**
  * Guardar el ticket como presupuesto (F8). Presentacional: el contenedor le da el total y los renglones para la
@@ -240,10 +238,8 @@ export class DialogoPresupuesto {
 
   protected guardar(): void {
     if (this.enVuelo() || this.bloqueado()) return;
-    const dias = /^\s*\d+\s*$/.test(this.validez().nativeElement.value)
-      ? Number(this.validez().nativeElement.value)
-      : NaN;
-    if (!(dias >= 1 && dias <= DIAS_VALIDEZ_MAXIMOS)) {
+    const dias = diasDeValidez(this.validez().nativeElement.value);
+    if (dias === null) {
       this.error.set(MENSAJE_VALIDEZ);
       this.validez().nativeElement.focus();
       return;

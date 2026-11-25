@@ -1577,20 +1577,26 @@ describe('Mostrador', () => {
         ]);
       });
 
-      it('Presupuesto: «Guardar presupuesto» reemplaza a Cobrar, abre el diálogo de siempre y F8 sigue andando', async () => {
+      it('Presupuesto: «Guardar presupuesto» reemplaza a Cobrar y guarda desde los campos del panel, sin diálogo', async () => {
         await conTicket();
         await cambiarModo('Presupuesto');
 
         expect(rotulos()).toEqual(['Cantidad', 'Descuento', 'Dto. total', 'Guardar presupuesto', 'Quitar', 'Vaciar']);
         expect(enPanel().find((b) => b.textContent!.trim() === 'Guardar presupuesto')!.classList).toContain('primario');
+        expect(el().querySelector('.panel-derecho app-campos-presupuesto')).not.toBeNull();
 
         enPanel().find((b) => b.textContent!.trim() === 'Guardar presupuesto')!.click();
         await refrescar();
-        expect(el().querySelector('app-dialogo-presupuesto')).not.toBeNull();
-        await tecla('Escape');
+        expect(el().querySelector('app-dialogo-presupuesto')).toBeNull();
+        expect(guardados).toHaveLength(1);
+      });
 
-        await tecla('F8', campo());
-        expect(el().querySelector('app-dialogo-presupuesto')).not.toBeNull();
+      it('Venta y Remito no muestran los campos del presupuesto', async () => {
+        await conTicket();
+
+        expect(el().querySelector('app-campos-presupuesto')).toBeNull();
+        await cambiarModo('Remito');
+        expect(el().querySelector('app-campos-presupuesto')).toBeNull();
       });
 
       it('Remito: «Emitir remito» reemplaza a Cobrar y abre el diálogo de siempre', async () => {
@@ -3634,8 +3640,125 @@ describe('Mostrador', () => {
       guardar.click();
       await refrescar();
 
-      expect(normal(dialogoPresupuesto()?.querySelector('h2')?.textContent)).toBe('Guardar presupuesto');
-      expect(guardados).toHaveLength(0);
+      expect(dialogoPresupuesto()).toBeNull();
+      expect(guardados).toHaveLength(1);
+    });
+
+    describe('campos del panel (mostrador-simple S10)', () => {
+      const panel = () => el().querySelector<HTMLElement>('.panel-derecho app-campos-presupuesto');
+      const campoDe = (nombre: string) => panel()!.querySelector<HTMLInputElement>(`input[name="${nombre}"]`)!;
+      async function escribirEn(nombre: string, valor: string) {
+        const input = campoDe(nombre);
+        input.value = valor;
+        input.dispatchEvent(new Event('input'));
+        await refrescar();
+      }
+      async function enModoPresupuesto() {
+        await conMartillos();
+        elegirModo('Presupuesto');
+        await refrescar();
+      }
+
+      it('en modo Presupuesto muestra Validez con 15, Observaciones y Cliente, y no abre el diálogo', async () => {
+        await enModoPresupuesto();
+
+        expect(campoDe('validez').value).toBe('15');
+        expect(campoDe('observaciones').value).toBe('');
+        expect(campoDe('cliente').value).toBe('');
+        expect(dialogoPresupuesto()).toBeNull();
+      });
+
+      it('«Guardar presupuesto» manda lo escrito en el panel, sin abrir un diálogo', async () => {
+        await enModoPresupuesto();
+        await escribirEn('cliente', ' Obra Perez ');
+        await escribirEn('validez', '30');
+        await escribirEn('observaciones', 'Entrega en obra');
+
+        botonera('Guardar presupuesto').click();
+        await refrescar();
+
+        expect(dialogoPresupuesto()).toBeNull();
+        expect(guardados).toHaveLength(1);
+        expect(guardados[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          diasValidez: 30,
+          clienteNombre: 'Obra Perez',
+          observaciones: 'Entrega en obra',
+        });
+      });
+
+      it('F8 en modo Presupuesto guarda directo con los 15 días; en modo Venta sigue abriendo el diálogo', async () => {
+        await conMartillos();
+        await tecla('F8');
+        expect(dialogoPresupuesto()).not.toBeNull();
+        await tecla('Escape');
+        expect(guardados).toHaveLength(0);
+
+        elegirModo('Presupuesto');
+        await tecla('F8');
+
+        expect(dialogoPresupuesto()).toBeNull();
+        expect(guardados).toHaveLength(1);
+        expect(guardados[0].pedido.diasValidez).toBe(15);
+      });
+
+      it.each(['0', '91', '', 'abc', '1.5'])('la validez «%s» marca el error en el panel y no guarda', async (valor) => {
+        await enModoPresupuesto();
+        await escribirEn('validez', valor);
+
+        botonera('Guardar presupuesto').click();
+        await refrescar();
+
+        expect(guardados).toHaveLength(0);
+        expect(normal(panel()!.querySelector('[role="alert"]')?.textContent)).toBe('La validez va de 1 a 90 días.');
+        expect(campoDe('validez').getAttribute('aria-invalid')).toBe('true');
+        expect(document.activeElement).toBe(campoDe('validez'));
+
+        await escribirEn('validez', '20');
+        expect(panel()!.querySelector('[role="alert"]')).toBeNull();
+      });
+
+      it('Enter en un campo guarda el presupuesto', async () => {
+        await enModoPresupuesto();
+        campoDe('observaciones').focus();
+
+        await tecla('Enter', campoDe('observaciones'));
+
+        expect(guardados).toHaveLength(1);
+      });
+
+      it('un error del servidor se ve en el panel y el reintento usa la misma clave', async () => {
+        await enModoPresupuesto();
+        botonera('Guardar presupuesto').click();
+        await refrescar();
+
+        await fallarGuardado(0, 503, { status: 503, message: 'El servidor está ocupado.' });
+        expect(normal(panel()!.querySelector('[role="status"]')?.textContent)).toBe('El servidor está ocupado.');
+
+        botonera('Guardar presupuesto').click();
+        await refrescar();
+        expect(guardados).toHaveLength(2);
+        expect(guardados[1].pedido.clave).toBe(guardados[0].pedido.clave);
+      });
+
+      it('al guardarse, los campos vuelven a su valor inicial para el presupuesto siguiente', async () => {
+        await enModoPresupuesto();
+        await escribirEn('validez', '30');
+        await escribirEn('observaciones', 'Entrega en obra');
+        botonera('Guardar presupuesto').click();
+        await refrescar();
+        await guardarOk(0, presupuestoGuardado(12, 3000));
+        await tecla('Escape');
+
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+
+        expect(campoDe('validez').value).toBe('15');
+        expect(campoDe('observaciones').value).toBe('');
+      });
     });
 
     it('no exige caja abierta: sin caja F8 abre el diálogo y el botón está habilitado', async () => {
@@ -8037,12 +8160,17 @@ describe('Mostrador', () => {
       }
     }
 
-    /** En el celular, por «Más acciones»; en el escritorio, por el botón de la botonera. */
+    /**
+     * En el celular, por «Más acciones»; en el escritorio, por el botón de la botonera. El presupuesto del escritorio no
+     * tiene diálogo en su modo (mostrador-simple S10: sus datos van en el panel): se abre con F8 desde el modo Venta.
+     */
     async function abrir(d: Documento, celular: boolean) {
       if (celular) {
         el$('button.mas-acciones-ticket')!.click();
         await refrescar();
         filaMas(d.etiqueta).click();
+      } else if (d.nombre === 'presupuesto') {
+        await tecla('F8');
       } else {
         botoneraBoton(d.botonera).click();
       }
