@@ -289,6 +289,8 @@ describe('Mostrador', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
+  const chipCliente = () => el().querySelector('app-barra-acciones .chip-cliente')!;
+  const nombreEnChipCliente = () => chipCliente().querySelector('strong')?.textContent?.trim();
   const botonesDeBotonera = () => Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button'));
   const rotulo = (b: HTMLButtonElement) => b.textContent!.replace(/\s+/g, ' ').trim();
 
@@ -1271,9 +1273,13 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(2);
     });
 
-    it('confirmar «Vaciar» limpia el ticket y el localStorage y renueva la clave', async () => {
+    it('confirmar «Vaciar» limpia el ticket, el cliente y el localStorage y renueva la clave', async () => {
       await conTicket();
       expect(JSON.parse(localStorage.getItem('ticket:3:7')!).clave).toBe('clave-1');
+      await tecla('F9');
+      await tecla('ArrowDown');
+      await tecla('Enter');
+      expect(nombreEnChipCliente()).toBe('Ferretería Norte SRL');
 
       botonera('Vaciar').click();
       await refrescar();
@@ -1282,6 +1288,7 @@ describe('Mostrador', () => {
 
       expect(dialogo()).toBeNull();
       expect(renglonesTicket()).toHaveLength(0);
+      expect(nombreEnChipCliente()).toBe('Consumidor Final');
       expect(localStorage.getItem('ticket:3:7')).toBeNull();
       await escanear('C', articulo(3));
       expect(JSON.parse(localStorage.getItem('ticket:3:7')!).clave).toBe('clave-2');
@@ -4602,7 +4609,9 @@ describe('Mostrador', () => {
     const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
     const dialogoCliente = () => el().querySelector<HTMLElement>('app-dialogo-cliente [role="dialog"]');
-    const clienteDelTicket = () => normal(el().querySelector('.cliente-ticket')?.textContent);
+    const quitarEnDialogo = () =>
+      Array.from(dialogoCliente()!.querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => normal(b.textContent) === 'Quitar cliente')!;
 
     async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
       const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -4657,20 +4666,22 @@ describe('Mostrador', () => {
       expect(dialogoCliente()).toBeNull();
     });
 
-    it('sin cliente no hay renglón de cliente: la venta es a Consumidor Final', async () => {
+    it('sin cliente el chip dice «Consumidor Final»', async () => {
       await conMartillos();
 
-      expect(el().querySelector('.cliente-ticket')).toBeNull();
+      expect(nombreEnChipCliente()).toBe('Consumidor Final');
     });
 
-    it('elegir un cliente cierra el diálogo, lo muestra en el ticket y devuelve el foco al buscador', async () => {
+    it('elegir un cliente cierra el diálogo, lo muestra en el chip y devuelve el foco al buscador', async () => {
       await conMartillos();
 
       await elegirNorte();
 
       expect(dialogoCliente()).toBeNull();
-      expect(clienteDelTicket()).toContain('Cliente: Ferretería Norte SRL');
+      expect(nombreEnChipCliente()).toBe('Ferretería Norte SRL');
       expect(document.activeElement).toBe(campo());
+      const botones = Array.from(el().querySelectorAll('.zona-busqueda button'));
+      expect(botones.map((b) => normal(b.textContent))).not.toContain('Quitar');
     });
 
     it('el cliente se puede elegir antes del primer renglón y queda al agregar artículos', async () => {
@@ -4681,31 +4692,34 @@ describe('Mostrador', () => {
       await enter();
       await responder(llamadas.length - 1, exacto(articulo(1)));
 
-      expect(clienteDelTicket()).toContain('Ferretería Norte SRL');
+      expect(nombreEnChipCliente()).toBe('Ferretería Norte SRL');
     });
 
-    it('«Quitar» en el ticket vuelve a Consumidor Final', async () => {
+    it('«Cambiar» del chip permite quitar el cliente y volver a Consumidor Final', async () => {
       await conMartillos();
       await elegirNorte();
 
-      (el().querySelector('.cliente-ticket button') as HTMLButtonElement).click();
+      const cambiar = chipCliente().querySelector('button')!;
+      expect(normal(cambiar.textContent)).toBe('Cambiar');
+      cambiar.click();
+      await refrescar();
+      quitarEnDialogo().click();
       await refrescar();
 
-      expect(el().querySelector('.cliente-ticket')).toBeNull();
+      expect(dialogoCliente()).toBeNull();
+      expect(nombreEnChipCliente()).toBe('Consumidor Final');
     });
 
-    it('«Quitar cliente» del diálogo también vuelve a Consumidor Final y cierra', async () => {
+    it('«Quitar cliente» desde F9 también vuelve a Consumidor Final y cierra', async () => {
       await conMartillos();
       await elegirNorte();
       await tecla('F9');
 
-      Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-cliente button'))
-        .find((b) => normal(b.textContent) === 'Quitar cliente')!
-        .click();
+      quitarEnDialogo().click();
       await refrescar();
 
       expect(dialogoCliente()).toBeNull();
-      expect(el().querySelector('.cliente-ticket')).toBeNull();
+      expect(nombreEnChipCliente()).toBe('Consumidor Final');
     });
 
     it('Esc cierra el diálogo sin cambiar el cliente', async () => {
@@ -4716,7 +4730,7 @@ describe('Mostrador', () => {
       await tecla('Escape');
 
       expect(dialogoCliente()).toBeNull();
-      expect(clienteDelTicket()).toContain('Ferretería Norte SRL');
+      expect(nombreEnChipCliente()).toBe('Ferretería Norte SRL');
     });
 
     it('el cobro manda el clienteId, y tras cobrar el ticket queda sin cliente', async () => {
@@ -4733,7 +4747,7 @@ describe('Mostrador', () => {
       cobros[0].respuesta.complete();
       await refrescar();
 
-      expect(el().querySelector('.cliente-ticket')).toBeNull();
+      expect(nombreEnChipCliente()).toBe('Consumidor Final');
     });
 
     describe('cuenta corriente en F9 (CC-007)', () => {

@@ -47,8 +47,8 @@
 
   <!--
     movil-sectores T8c: la barra de cliente del celular, debajo del buscador, como el artboard 01: siempre dice a quién se le
-    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba y, en el celular, esconde
-    el renglón «Cliente: … Quitar» de abajo, que dice lo mismo). «Quitar» está en el selector.
+    vende y «Cambiar» abre el selector. Sólo del celular (styles.css la esconde de 640 px para arriba).
+    «Quitar» está en el selector.
   -->
   <div class="sub-cliente">
     <span class="sub-cliente-nombre">Cliente: <strong>{{ ticket.ticket().clienteNombre ?? 'Consumidor Final' }}</strong></span>
@@ -109,13 +109,6 @@
 
     <app-primeros-pasos />
   </div>
-
-  @if (ticket.ticket().clienteNombre; as cliente) {
-    <p class="cliente-ticket">
-      Cliente: <strong>{{ cliente }}</strong>
-      <button type="button" class="enlace" (click)="quitarCliente()">Quitar</button>
-    </p>
-  }
 
   @if (ticket.ticket().presupuestoNumero; as numero) {
     <p class="origen">Venta del presupuesto N.º {{ numero }}</p>

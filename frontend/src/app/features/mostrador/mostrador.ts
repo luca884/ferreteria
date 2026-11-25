@@ -894,7 +894,7 @@ export class Mostrador {
     this.cerrarDialogo();
   }
 
-  /** Vuelve a Consumidor Final (desde el diálogo o desde el ticket). */
+  /** Vuelve a Consumidor Final desde el selector de cliente. */
   protected quitarCliente(): void {
     this.ticket.quitarCliente();
     this.cerrarDialogo();
