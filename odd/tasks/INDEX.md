@@ -22,7 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
-| [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 5 |
+| [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 7 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |

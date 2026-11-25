@@ -16,7 +16,7 @@
   </button>
   <span class="titulo-pantalla">{{ tituloPantalla() }}</span>
 </header>
-<aside #cajon class="lateral" id="menu-lateral" tabindex="-1" [class.abierto]="menuAbierto()">
+<aside #cajon class="lateral" id="menu-lateral" tabindex="-1" [class.abierto]="menuAbierto()" (scroll)="cerrarCuadroGrupo()">
   <div class="marca">
     <svg class="logo" viewBox="0 0 28 28" aria-hidden="true">
       <rect width="28" height="28" rx="7" />
@@ -58,15 +58,19 @@
         <span class="rotulo-fijo">{{ mostrador.rotulo }}</span>
       </a>
       @for (grupo of grupos(); track grupo.id) {
-        @let desplegado = !enColumna() && abierto(grupo.id);
+        @let cuadro = cuadroGrupo();
+        @let flotante = enColumna() && cuadro?.id === grupo.id ? cuadro : null;
+        @let desplegado = enColumna() ? !!flotante : abierto(grupo.id);
         <button
+          #controlGrupo
           type="button"
           class="grupo"
+          [class.actual]="enColumna() && esGrupoActual(grupo.id)"
           [attr.data-seccion]="grupo.tono"
           [attr.aria-expanded]="desplegado"
           [attr.aria-controls]="'menu-' + grupo.id"
           [attr.title]="grupo.rotulo"
-          (click)="activarGrupo(grupo.id)"
+          (click)="activarGrupo(grupo.id, controlGrupo)"
         >
           @if (enColumna()) {
             <app-icono-menu class="icono-grupo" [nombre]="iconoDeGrupo(grupo.id)" />
@@ -75,9 +79,18 @@
           <svg class="flecha" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
         </button>
         @if (desplegado) {
-          <div class="opciones" [id]="'menu-' + grupo.id" [attr.data-seccion]="grupo.tono">
+          <div
+            #opcionesGrupo
+            class="opciones"
+            [class.flotante]="!!flotante"
+            [id]="'menu-' + grupo.id"
+            [attr.data-seccion]="grupo.tono"
+            [style.top.px]="flotante?.arriba"
+            [style.left.px]="flotante?.izquierda"
+            [style.max-height.px]="flotante?.altoMaximo"
+          >
             @for (opcion of grupo.opciones; track opcion.ruta) {
-              <a [routerLink]="opcion.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page">
+              <a [routerLink]="opcion.ruta" routerLinkActive="activo" ariaCurrentWhenActive="page" (click)="flotante && cerrarCuadroGrupo()">
                 <app-icono-menu [nombre]="opcion.icono" />
                 {{ opcion.rotulo }}
               </a>

@@ -569,4 +569,20 @@ nav a:focus-visible {
   .icono-grupo {
     color: var(--tono);
   }
+  :host(.menu-colapsado) .grupo.actual {
+    background: var(--tono-suave);
+  }
+
+  /* Fija al viewport para que no la recorte el scroll del lateral; arriba, izquierda y alto máximo los calcula el shell. */
+  .opciones.flotante {
+    position: fixed;
+    z-index: calc(var(--z-barra) + 1);
+    min-width: 176px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie);
+    box-shadow: var(--sombra-2);
+  }
 }

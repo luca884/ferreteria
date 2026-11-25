@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Renderer2, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NavigationEnd, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
@@ -22,6 +22,7 @@ const CLAVE_COLAPSADO = 'menu-lateral-colapsado';
 const CORTE_ESCRITORIO = '(min-width: 1024px)';
 
 type Destino = Pick<OpcionMenu, 'ruta' | 'rotulo' | 'icono'> & { id: string };
+type CuadroGrupo = { id: string; boton: HTMLButtonElement; arriba: number; izquierda: number; altoMaximo: number };
 
 /** «Juan Pérez» → «JP», «ana» → «A». */
 export function iniciales(nombre: string): string {
@@ -44,7 +45,8 @@ export function iniciales(nombre: string): string {
  * Por debajo de 1024 px (S2) el menú pasa a ser un cajón que se abre con el botón «Menú» de un encabezado nuevo, que
  * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
  * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve:
- * el menú de escritorio se puede achicar a una columna de íconos y el navegador recuerda la elección.
+ * el menú de escritorio se puede achicar a una columna de íconos. Ahí los grupos abren un cuadro flotante sin
+ * cambiar el ancho guardado ni qué grupos se habían abierto en el menú ancho.
  *
  * En el celular, abajo queda la barra de destinos: Mostrador, los primeros dos grupos con opciones y «Más» para abrir
  * el mismo cajón de siempre (CU-17, S5).
@@ -117,6 +119,8 @@ export class Shell {
   protected readonly enColumna = computed(() => this.esEscritorio() && this.colapsado());
   protected readonly textoPlegar = computed(() => this.colapsado() ? 'Abrir el menú' : 'Achicar el menú');
   protected readonly iconoDeGrupo = iconoDeGrupo;
+  protected readonly cuadroGrupo = signal<CuadroGrupo | null>(null);
+  private readonly opcionesGrupo = viewChild<ElementRef<HTMLElement>>('opcionesGrupo');
 
   /** El cajón del menú (por debajo de 1024 px). Arranca cerrado y el corte lo resuelve el CSS. */
   protected readonly menuAbierto = signal(false);
@@ -136,10 +140,23 @@ export class Shell {
     if (typeof window.matchMedia === 'function') {
       const consulta = window.matchMedia(CORTE_ESCRITORIO);
       this.esEscritorio.set(consulta.matches);
-      const actualizar = (evento: MediaQueryListEvent) => this.esEscritorio.set(evento.matches);
+      const actualizar = (evento: MediaQueryListEvent) => {
+        this.esEscritorio.set(evento.matches);
+        if (!evento.matches) this.cerrarCuadroGrupo();
+      };
       consulta.addEventListener('change', actualizar);
       this.destruccion.onDestroy(() => consulta.removeEventListener('change', actualizar));
     }
+
+    // En captura también se ven los clics de controles que detienen la propagación.
+    const dejarDeEscuchar = inject(Renderer2).listen('document', 'click', (evento: MouseEvent) => {
+      const cuadro = this.cuadroGrupo();
+      if (!cuadro || !(evento.target instanceof Node)) return;
+      if (!cuadro.boton.contains(evento.target) && !this.opcionesGrupo()?.nativeElement.contains(evento.target)) {
+        this.cerrarCuadroGrupo();
+      }
+    }, { capture: true });
+    this.destruccion.onDestroy(dejarDeEscuchar);
 
     // El encabezado del cajón muestra el título sin tocar las pantallas: sigue al primer `h1` del contenido.
     const observador = new MutationObserver(() => this.leerTitulo());
@@ -210,16 +227,31 @@ export class Shell {
   }
 
   protected plegarMenu(): void {
+    this.cerrarCuadroGrupo();
     this.guardarColapsado(!this.colapsado());
   }
 
-  protected activarGrupo(id: string): void {
-    if (this.enColumna()) {
-      this.guardarColapsado(false);
-      this.abrirGrupo(id);
-    } else {
+  protected esGrupoActual(id: string): boolean {
+    return this.grupoActual() === id && this.seccion() !== 'mostrador';
+  }
+
+  protected activarGrupo(id: string, boton: HTMLButtonElement): void {
+    if (!this.enColumna()) {
       this.alternar(id);
+      return;
     }
+    if (this.cuadroGrupo()?.id === id) {
+      this.cerrarCuadroGrupo();
+      return;
+    }
+    // Cerca del pie la ventana deja lugar para las opciones: el cuadro sube y, si no entra, scrollea por dentro.
+    const { top, right } = boton.getBoundingClientRect();
+    const arriba = Math.max(8, Math.min(top, window.innerHeight - 104));
+    this.cuadroGrupo.set({ id, boton, arriba, izquierda: right + 8, altoMaximo: window.innerHeight - arriba - 8 });
+  }
+
+  protected cerrarCuadroGrupo(): void {
+    this.cuadroGrupo.set(null);
   }
 
   private guardarColapsado(colapsado: boolean): void {
@@ -273,12 +305,20 @@ export class Shell {
   }
 
   /**
-   * Esc cierra y Tab da la vuelta dentro del cajón. Sin cajón abierto no se toca nada: en escritorio el menú es la columna
-   * del grid y el teclado se comporta como siempre.
+   * Esc cierra el cuadro de escritorio o el cajón del celular. Solo el cajón intercepta Tab.
    */
   protected alTeclear(evento: Event): void {
     // Lo que un control de adentro ya resolvió (Esc en el buscador vacía la búsqueda) no se pisa desde acá.
-    if (!(evento instanceof KeyboardEvent) || evento.defaultPrevented || !this.menuAbierto()) return;
+    if (!(evento instanceof KeyboardEvent) || evento.defaultPrevented) return;
+
+    const cuadro = this.cuadroGrupo();
+    if (cuadro && evento.key === 'Escape') {
+      evento.preventDefault();
+      this.cerrarCuadroGrupo();
+      cuadro.boton.focus({ preventScroll: true });
+      return;
+    }
+    if (!this.menuAbierto()) return;
 
     if (evento.key === 'Escape') {
       evento.preventDefault();
