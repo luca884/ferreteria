@@ -1,13 +1,13 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-22 desde los 94 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-25 desde los 95 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~22 KB; los 94 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~23 KB; los 95 documentos suman 1,6 MB. Leerlos todos no entra en contexto.
 
-- **92 cerradas · 2 abiertas**
+- **93 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -22,6 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
+| [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 5 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |
 | [`movil-pulgar.md`](movil-pulgar.md) | 2026-11-14 | — | 16 |
 | [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
@@ -136,7 +137,7 @@ Para ir de una sección de la spec (`docs/spec/cu-NN-*.md`) a las tareas que ya 
 | CU-14 | `arreglos-precios`, `cu-03-configuracion-precios`, `cu-03-controles-de-datos`, `cu-13-factura-pdf`, `cu-14-precio-manual`, `decisiones-qa`, `ofertas`, `para-decidir-caja-y-margen`, `recargos-y-margen-negativo` |
 | CU-15 | `cu-08-consulta-ventas`, `cu-08-nota-de-credito`, `cu-13-factura-pdf`, `reportes-ventas` |
 | CU-16 | `cu-07-contingencias`, `cu-07-factura-mostrador`, `cu-08-consulta-ventas`, `cu-08-nota-de-credito`, `cu-09-movimientos-articulo` |
-| CU-17 | `personalizar-menu`, `responsive` |
+| CU-17 | `menu-colapsable`, `personalizar-menu`, `responsive` |
 
 ## Regenerar
 
