@@ -19,11 +19,13 @@ Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigu
 
 ## Tasks
 
-- [ ] T1 · S1, S2, S3 · ruta: delegada (respaldo de contexto: la sesión ya pasó los 150k) · Aceptación: S1-S3 con tests de integración (backend) y spec del frontend; suite backend y frontend verdes; `ng build` ok · Evidencia: — · Commit: — · Risk: item 1 (migración), item 2 (seguridad)
-- [ ] T2 · S1-S3 · ruta: inline · Aceptación: revisión nativa (RDD) del commit de T1 y PR abierto · Evidencia: — · Risk: —
+- [x] T1 · S1, S2, S3 · ruta: delegada (respaldo de contexto: la sesión ya pasó los 150k) · Aceptación: S1-S3 con tests de integración (backend) y spec del frontend; suite backend y frontend verdes; `ng build` ok · Evidencia: L4 · Commit: `138d636c` · Risk: item 1 (migración), item 2 (seguridad)
+- [x] T2 · S1-S3 · ruta: inline · Aceptación: revisión nativa (RDD) del commit de T1 y PR abierto · Evidencia: L5 · Risk: —
 
 ## Log
 
 - L1 (2026-11-27) Luca: «me parece bien no tener licencia y que quede para mi uso nada mas, y la cuenta tiene sentido que sea de dueno pero es verdad que tendriamos que deshabilitar lo de la contrasena, creo que ya lo tiene bloqueado ese usuario en la bdd»
 - L2 (2026-11-27) Verificado: no hay bloqueo. Ninguna migración tiene una marca así; `AuthService.cambiarContrasena` (`AuthService.java:110-124`) cambia la contraseña si la actual es correcta. Además `EdicionUsuarioRequest` deja que el Dueño se cambie el email. No se probó en producción para no cambiarle la contraseña de verdad a la demo.
 - L3 (2026-11-27) Luca aprueba la propuesta (S2): «dale».
+- L4 (2026-11-27) T1: RED observado (V50 inexistente; con solo la migración, los tres endpoints daban 204/200 en vez de 403; la sesión sin `cuentaDemo`; el enlace visible). GREEN: `CuentaDemoIntegrationTest` + `MigracionV50Test` 7/7; con `MigracionV6Test` y `TenantScopingArchTest` 49/49; frontend 6549 tests y `ng build` ok; suite backend completa exit 0 (8 m 36 s) sobre el estado final.
+- L5 (2026-11-27) T2: revisión nativa con lentes risk y reliability (escalada por ítem 2) aprobada y reconocida, lineage `review-a2d4a09dc7733031`. Queda fuera del alcance, para decidir: otro Dueño creado desde la demo puede desactivarla.
