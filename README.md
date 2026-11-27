@@ -1,6 +1,69 @@
 # Ferretería
 
-Sistema web multi-tenant para ferreterías: mostrador, stock, listas de precios de proveedores y factura electrónica con ARCA.
+SaaS multi-tenant de gestión para ferreterías de Mar del Plata: venta rápida en mostrador con lector de código de barras, control de stock, actualización masiva de precios desde listas de proveedores (Excel y PDF) y facturación electrónica con ARCA. Cada ferretería es un tenant y tiene sus propios datos.
+
+## Probalo
+
+[Abrí la demo](https://frontend-production-c14f.up.railway.app) e ingresá con el email `Demo@prueba.test` y la contraseña `demo1234`.
+
+Es una cuenta compartida con datos de ejemplo: recorré la app sin modificar los datos. La facturación no está habilitada en esta demo.
+
+## Capturas
+
+**Mostrador:** búsqueda de artículos con precio y stock, sin agregar productos al ticket.
+
+![Resultados de búsqueda de tornillos en el mostrador](docs/capturas/02-mostrador.png)
+
+<details>
+<summary>Ver las otras seis capturas</summary>
+
+**Ingreso:** pantalla de acceso a la demo.
+
+![Formulario de ingreso](docs/capturas/01-login.png)
+
+**Artículos:** catálogo con costos, precios y stock disponible.
+
+![Listado de artículos](docs/capturas/03-articulos.png)
+
+**Ventas:** historial con filtros por número, cliente y fecha.
+
+![Historial de ventas](docs/capturas/04-ventas.png)
+
+**Clientes:** listado con estado y saldos de cuenta corriente.
+
+![Listado de clientes](docs/capturas/05-clientes.png)
+
+**Importación de listas:** primer paso para elegir el proveedor y el archivo, sin cargar una lista.
+
+![Inicio de la importación de una lista de precios](docs/capturas/06-importacion-listas.png)
+
+**Reportes:** resumen de ventas, costos y ganancia del período elegido.
+
+![Resumen de ventas de un día](docs/capturas/07-reportes.png)
+
+</details>
+
+## Qué hace
+
+- Busca artículos por código o descripción y permite vender, facturar y consultar ventas anteriores.
+- Gestiona el catálogo, los movimientos de stock y las compras a proveedores.
+- Importa listas de proveedores y permite revisar los cambios antes de actualizar precios en lote.
+- Gestiona caja, clientes y cobranzas de cuenta corriente, y muestra reportes de ventas.
+
+Los 17 casos de uso están en la [especificación del MVP](docs/spec.md).
+
+## Stack
+
+- **Frontend:** Angular 22 y TypeScript; Vitest para las pruebas.
+- **Backend:** Java 17, Spring Boot, Spring Security con JWT y JPA/Hibernate.
+- **Base de datos:** MySQL 8.4 con migraciones Flyway; pruebas de integración con MySQL real en Testcontainers.
+
+## Arquitectura
+
+- Monolito modular: la base es compartida y los datos de negocio se aíslan por `ferreteria_id`, que el backend toma del JWT, no de un parámetro del cliente.
+- `TenantScopedRepository` acota las consultas por ferretería; ArchUnit comprueba que no se usen métodos sin ese filtro, salvo excepciones documentadas.
+- Los importes se representan con `BigDecimal` en Java y `DECIMAL` en MySQL.
+- Solo el módulo de facturación se integra con ARCA: WSAA para autenticarse y WSFEv1 para pedir el CAE.
 
 ## Arrancar en local
 
