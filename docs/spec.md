@@ -37,13 +37,13 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 |---|---|---|
 | [`00-vision-y-alcance.md`](spec/00-vision-y-alcance.md) | Visión y alcance | 1.2 KB |
 | [`01-actores-y-roles.md`](spec/01-actores-y-roles.md) | Actores y roles | 2.3 KB |
-| [`02-casos-de-uso.md`](spec/02-casos-de-uso.md) | Casos de uso del MVP + mapa de módulos | 2.5 KB |
+| [`02-casos-de-uso.md`](spec/02-casos-de-uso.md) | Casos de uso del MVP + mapa de módulos | 2.6 KB |
 | [`10-reglas-de-negocio.md`](spec/10-reglas-de-negocio.md) | Reglas de negocio | 14.9 KB |
-| [`11-modelo-de-datos.md`](spec/11-modelo-de-datos.md) | Modelo de datos | 21.7 KB |
+| [`11-modelo-de-datos.md`](spec/11-modelo-de-datos.md) | Modelo de datos | 22.6 KB |
 | [`12-integracion-arca.md`](spec/12-integracion-arca.md) | Integración ARCA | 16.6 KB |
 | [`13-arquitectura-y-stack.md`](spec/13-arquitectura-y-stack.md) | Arquitectura y stack | 2.4 KB |
 | [`14-fuera-de-alcance.md`](spec/14-fuera-de-alcance.md) | Fuera del alcance del MVP | 3.1 KB |
-| [`15-plan-de-implementacion.md`](spec/15-plan-de-implementacion.md) | Plan de implementación | 4.3 KB |
+| [`15-plan-de-implementacion.md`](spec/15-plan-de-implementacion.md) | Plan de implementación | 4.5 KB |
 | [`16-preguntas-abiertas.md`](spec/16-preguntas-abiertas.md) | Preguntas abiertas para validar con ferreterías | 2.5 KB |
 
 ## Mapa de líneas del archivo original
@@ -52,7 +52,9 @@ Citado como `docs/spec.md:<línea>` en el SDD y en `odd/tasks` (59 referencias).
 tenía 676 líneas y se partió el 2026-11-10 **sin editar una sola palabra**: cada bloque se copió verbatim.
 Única excepción, corregida el 2026-11-10 por decisión de Luca: el conteo de casos de uso de
 [`spec/02-casos-de-uso.md`](spec/02-casos-de-uso.md), que decía «12 casos de uso … cinco módulos» cuando la propia
-lista tiene 16 CU y seis módulos. Está marcada ahí con un comentario.
+lista tenía entonces 16 CU y seis módulos (hoy son 17). Está marcada ahí con un comentario.
+Desde el 2026-11-26 la spec se corrige donde no coincidía con el código (stack, modelo de datos), así que ya no
+es una copia literal del original: los cambios quedan en el historial de git.
 Para resolver una cita histórica, buscá la línea en la tabla:
 
 | Rango original | Archivo nuevo |
