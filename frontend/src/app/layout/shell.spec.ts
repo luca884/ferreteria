@@ -647,6 +647,27 @@ describe('Shell', () => {
     }
   });
 
+  it.each([true, false])('muestra el enlace de contraseña solo si cuentaDemo no está prendida (%s)', async (cuentaDemo) => {
+    const sesion = {
+      userId: 2,
+      nombre: 'Dueño de prueba',
+      email: 'dueno@prueba.test',
+      rol: 'DUENO' as const,
+      ferreteriaId: 1,
+      ferreteriaNombre: 'Ferretería de prueba',
+      cuentaDemo,
+    };
+    const el = await render(true, sesion);
+    const enlace = el.querySelector('.usuario a[href="/mi-contrasena"]');
+
+    if (cuentaDemo) {
+      expect(enlace).toBeNull();
+    } else {
+      expect(enlace?.textContent?.trim()).toBe('Cambiar mi contraseña');
+    }
+    expect(el.querySelector('.usuario button.salir')?.textContent?.trim()).toBe('Salir');
+  });
+
   it('el primer elemento es el enlace «Saltar al contenido», que lleva el foco al contenido', async () => {
     const el = await render(true);
 

@@ -43,6 +43,15 @@ describe('AuthService', () => {
     expect(localStorage.getItem('ferreteria.token')).toBe('jwt-de-prueba');
   });
 
+  it('al entrar con una cuenta demo conserva la marca en el signal y en la sesión guardada', () => {
+    const sesionDemo = { ...respuesta.sesion, cuentaDemo: true };
+    service.login(sesionDemo.email, 'demo1234').subscribe();
+    http.expectOne((r) => r.url.endsWith('/auth/login')).flush({ ...respuesta, sesion: sesionDemo });
+
+    expect(service.sesion()).toEqual(sesionDemo);
+    expect(JSON.parse(localStorage.getItem('ferreteria.sesion')!)).toEqual(sesionDemo);
+  });
+
   it('esSuperAdmin es verdadero solo con el rol SUPER_ADMIN', () => {
     expect(service.esSuperAdmin()).toBe(false);
 

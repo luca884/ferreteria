@@ -109,6 +109,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(CredencialesDemoProtegidasException.class)
+    public ResponseEntity<ApiError> credencialesDemoProtegidas(CredencialesDemoProtegidasException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(EstadoCuentaDemoProtegidoException.class)
+    public ResponseEntity<ApiError> estadoCuentaDemoProtegido(EstadoCuentaDemoProtegidoException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     /** Un usuario sin ferreteria (super admin) pidiendo datos de una ferreteria. */
     @ExceptionHandler(MissingTenantException.class)
     public ResponseEntity<ApiError> missingTenant(MissingTenantException ex) {

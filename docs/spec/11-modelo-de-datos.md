@@ -13,7 +13,7 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 | --- | --- | --- |
 | Tenant | razón social, CUIT, condición IVA, domicilio comercial, inicio de actividades, Ingresos Brutos, estado (activo/suspendido) | 1—N con todo lo demás |
 | ConfigArca (módulo `facturacion`) | marca «de prueba», ambiente (`SIMULADOR`, `HOMOLOGACION` o `PRODUCCION`; sin asignar al principio, de producción no se vuelve), punto de venta (fijo en 1 con el simulador), facturación habilitada y su fecha de activación. La marca, el simulador y la habilitación los pone solo el super admin (CU-01). El certificado, la clave cifrada y su vencimiento llegan con CU-01 paso 3 (rama 5 del plan de facturación) | 1—1 con Tenant |
-| Usuario | email, hash de contraseña, nombre, rol, activo | N—1 Tenant |
+| Usuario | email, hash de contraseña, nombre, rol, activo, `cuenta_demo` (`BOOLEAN NOT NULL DEFAULT FALSE`) | N—1 Tenant |
 | Rubro | nombre, margen por defecto | 1—N Artículo |
 | Proveedor | nombre, CUIT, mapeo de columnas de su lista (JSON) | 1—N Artículo, 1—N ImportacionLista |
 | Articulo | código interno, código de barras, código proveedor, descripción, costo, margen, alícuota IVA, precio final, unidad, stock actual, stock mínimo, ubicación, activo | N—1 Rubro, N—1 Proveedor |

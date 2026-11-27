@@ -107,9 +107,11 @@
       }
       <span class="salir-texto">Salir</span>
     </button>
-    <a class="cambiar-contrasena" routerLink="/mi-contrasena" routerLinkActive="activo" ariaCurrentWhenActive="page">
-      Cambiar mi contraseña
-    </a>
+    @if (!auth.sesion()?.cuentaDemo) {
+      <a class="cambiar-contrasena" routerLink="/mi-contrasena" routerLinkActive="activo" ariaCurrentWhenActive="page">
+        Cambiar mi contraseña
+      </a>
+    }
   </div>
 </aside>
 <main #contenido id="contenido" class="contenido" tabindex="-1">

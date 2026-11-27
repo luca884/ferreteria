@@ -110,6 +110,7 @@ public class AuthService {
     public void cambiarContrasena(AuthUser authUser, String actual, String nueva) {
         Usuario usuario = usuarioRepository.findById(authUser.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        usuario.exigirCredencialesEditables();
         limiteDeIntentos.reservarCambioDeContrasena(authUser.userId());
         if (!passwordEncoder.matches(actual, usuario.getPasswordHash())) {
             throw new DatosInvalidosException(Map.of("passwordActual", "La contraseña actual no es correcta."));
@@ -133,6 +134,7 @@ public class AuthService {
                 usuario.getFerreteriaId(),
                 ferreteria == null ? null : ferreteria.getRazonSocial(),
                 usuario.getTopeDescuento(),
-                usuario.isDebeCambiarContrasena());
+                usuario.isDebeCambiarContrasena(),
+                usuario.isCuentaDemo());
     }
 }

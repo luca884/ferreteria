@@ -12,6 +12,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.common.exception.CredencialesDemoProtegidasException;
+import com.ferreteria.common.exception.EstadoCuentaDemoProtegidoException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -58,6 +60,10 @@ public class Usuario {
      */
     @Column(name = "debe_cambiar_contrasena", nullable = false)
     private boolean debeCambiarContrasena;
+
+    /** Se administra por migración, no desde la aplicación. */
+    @Column(name = "cuenta_demo", nullable = false, insertable = false, updatable = false)
+    private boolean cuentaDemo;
 
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
@@ -124,6 +130,18 @@ public class Usuario {
         this.activo = activo;
     }
 
+    public void exigirCredencialesEditables() {
+        if (cuentaDemo) {
+            throw new CredencialesDemoProtegidasException();
+        }
+    }
+
+    public void exigirEstadoDeCuentaEditable() {
+        if (cuentaDemo) {
+            throw new EstadoCuentaDemoProtegidoException();
+        }
+    }
+
     /** El titular cambia la suya: la contraseña pasa a ser una que eligió él. */
     public void cambiarPropiaContrasena(String passwordHash) {
         this.passwordHash = passwordHash;
@@ -150,6 +168,7 @@ public class Usuario {
     public Rol getRol() { return rol; }
     public boolean isActivo() { return activo; }
     public boolean isDebeCambiarContrasena() { return debeCambiarContrasena; }
+    public boolean isCuentaDemo() { return cuentaDemo; }
     public BigDecimal getTopeDescuento() { return topeDescuento; }
     public String getTelefono() { return telefono; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
