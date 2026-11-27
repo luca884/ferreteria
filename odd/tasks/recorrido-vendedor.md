@@ -6,7 +6,7 @@ Pronóstico: desconocido hasta terminar el recorrido (T1 y T2 no cambian código
 
 ## Specs
 
-Alcance: producción (https://frontend-production-c14f.up.railway.app), solo la «Ferretería de Prueba (uso interno)», como `vendedor1@prueba.test` (Sofía Acosta, tope de descuento 10 %) y `vendedor2@prueba.test` (Matías Romero, sin tope). Credenciales: vault, `wiki/ferreteria-de-prueba.md`. Todo lo que `docs/spec.md` le da al Vendedor (fila del rol en la tabla de roles y las reglas de cada CU), y que lo que es solo del Dueño no se vea en el front ni pase en el back (403). Ver [[seguridad-en-todas-las-capas]].
+Alcance: producción (https://frontend-production-c14f.up.railway.app), solo la «Ferretería de Prueba (uso interno)», como `vendedor1@prueba.test` (tope de descuento 10 %) y `vendedor2@prueba.test` (sin tope). Credenciales: vault, `wiki/ferreteria-de-prueba.md`. Todo lo que `docs/spec.md` le da al Vendedor (fila del rol en la tabla de roles y las reglas de cada CU), y que lo que es solo del Dueño no se vea en el front ni pase en el back (403). Ver [[seguridad-en-todas-las-capas]].
 Fuera de alcance: ARCA real (la ferretería factura con el Simulador), cambiar la configuración de la ferretería, crear, resetear o desactivar usuarios, cambiar contraseñas, y arreglar código. Los hallazgos se le muestran a Luca antes de tocar código.
 Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vendedor haría en un día normal. Cada documento creado se anota con su número. La caja queda cerrada al terminar, como estaba. No se entra como Dueño salvo para leer.
 
@@ -42,9 +42,9 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
 
   Antes, en la misma sesión: «Con ego lite entra a la URL del proyecto del front y entra con las credenciales de la ferreteria de prueba» y «proba vos con la scredenciales y entra». Como Dueño (solo lectura): 57 artículos, 8 rubros, 5 proveedores, 11 clientes, ventas hasta la N.º 21, 4 presupuestos, 3 remitos, 3 compras, 1 caja cerrada (30/10) y 3 usuarios (el Dueño y los dos vendedores). Facturación habilitada con el Simulador, punto de venta 1.
 - L2 (2026-11-08) Referencias: `odd/tasks/recorrido-dueno.md` (método: recorrido como usuario real, hallazgos H#), `odd/tasks/guards-por-rol.md` (guards de ruta por rol), `docs/spec.md:27` (Vendedor: «Buscar artículos, vender, facturar, consultar stock, abrir y cerrar la caja») y las reglas por CU (presupuestos y remitos: `docs/spec.md:132-141`; cuenta corriente: `:117-119` y `:200-231`; compras y recargos solo del Dueño: `:289`; reintentar factura: `:335`).
-- L3 (2026-11-08) Recorrido hecho (T1), con Sofía y Matías, sin errores graves. Las 24 rutas del Dueño redirigen a `/mostrador`, y los endpoints del Dueño responden 403 con un pedido bien formado.
+- L3 (2026-11-08) Recorrido hecho (T1), con los dos vendedores, sin errores graves. Las 24 rutas del Dueño redirigen a `/mostrador`, y los endpoints del Dueño responden 403 con un pedido bien formado.
   - **Probado y anda:**
-    - el tope de descuento: Sofía, 10,5 % rechazado y 10 % aceptado; Matías, 15 % + 5 % aceptados;
+    - el tope de descuento: vendedor1, 10,5 % rechazado y 10 % aceptado; vendedor2, 15 % + 5 % aceptados;
     - las formas de pago: efectivo con vuelto, Mixto, Crédito +10 %, no facturable;
     - el Simulador (X y «SIMULADO») y la reimpresión;
     - la cuenta corriente dentro del límite. Con exceso, el Vendedor no puede autorizar y no ve cifras;
@@ -58,11 +58,11 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
     - H3 (baja): la spec quedó atrás de la app: «No facturable» ahora son dos botones de cobro, y «Costo al» ahora es «Última actualización».
     - H4 (decisión de producto): en Mixto, el resto se sugiere solo con Enter, no con un clic.
   - **Creado:**
-    - ventas 22 a 28 (Sofía: 22 a 27; Matías: 28);
+    - ventas 22 a 28 (vendedor1: 22 a 27; vendedor2: 28);
     - el presupuesto 5 (Vendido) y el remito 4 (Facturado);
     - el cliente 12, «Ramón Prueba (recorrido vendedor)»;
-    - la caja del 01/11, que estaba abierta: la cerró Sofía, sin diferencia;
-    - la caja 3: la abrió Sofía y la cerró Matías, sin diferencia.
+    - la caja del 01/11, que estaba abierta: la cerró vendedor1, sin diferencia;
+    - la caja 3: la abrió vendedor1 y la cerró vendedor2, sin diferencia.
 
     Estado final: `SIN_CAJA`.
   - **No probado:** la reimpresión con CAE tardío, el diálogo de impresión real (se reemplazó `window.print`), el alta de cliente desde F9, y los POST de alta del Dueño con cuerpo válido (se cubrieron con PUT y DELETE sobre un id inexistente).

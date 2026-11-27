@@ -34,7 +34,7 @@ Cada módulo es un paquete con su dominio, servicios y controladores. ArchUnit i
 | Frontend | Angular, TypeScript, RxJS |
 | ARCA | XML de WSAA y WSFEv1 armado con el JDK, sin cliente generado del WSDL (rama 6); BouncyCastle para firmar el TRA (rama 5) |
 | Impresión | Hoja del navegador (`window.print`, D6). El QR de ARCA lo arma `facturacion` con ZXing (`com.google.zxing:core`) y el front lo dibuja en SVG. Sin librería de PDF |
-| Tests | JUnit 5, Mockito, Testcontainers, ArchUnit, Karma/Jasmine |
+| Tests | JUnit 5, Mockito, Testcontainers, ArchUnit, Vitest |
 | Infra | Docker, Railway (backend, base y frontend servido por Caddy) |
 <!-- fin payload: spec.md:568-602 -->
 

@@ -5,6 +5,8 @@
 <!-- spec payload: spec.md:623-661 -->
 ## Plan de implementación
 
+> **Plan original, conservado como registro.** Describe el orden en que se encaró el proyecto, no su estado actual: los casos de uso de las fases 2 a 6 ya están implementados (ver el índice en [../spec.md](../spec.md)). Las referencias a ramas y al vault son de ese momento.
+
 Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La fase 0 y la prueba con ARCA corren en paralelo porque ARCA es lo único que puede trabar el proyecto entero. Desde el 2026-10-28 (plan de facturación), esa prueba es el simulador de la fase 5 más la homologación con la piloto.
 
 0. **Validación con ferreterías** (1 semana, en paralelo con la fase 1)
@@ -39,6 +41,6 @@ Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La f
 6. **Stock, pulido y piloto** (CU-02, CU-09) (2 semanas)
    - Ajustes de stock, gestión de usuarios, carga inicial de datos del piloto y paso a producción en ARCA (rama 11 de la fase 5).
 
-**Forma de trabajo con Claude Code:** este documento se exporta como `docs/spec.md` en el repo y el `CLAUDE.md` apunta a él. Cada caso de uso se implementa en una rama propia: primero los tests del dominio, después el endpoint y después la pantalla.
+**Forma de trabajo:** la spec vive en `docs/spec/` (índice en `docs/spec.md`) y el `AGENTS.md` apunta a ella. Cada caso de uso se implementa en una rama propia: primero los tests del dominio, después el endpoint y después la pantalla.
 <!-- fin payload: spec.md:623-661 -->
 

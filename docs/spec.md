@@ -1,7 +1,5 @@
 # Ferretería SaaS — Especificación del MVP
 
-> Versión viva (editable): [Claude Doc](https://claude.ai/code/artifact/2f71e9a9-f655-41f6-85f2-29fdc96a94f7) · capturada el 2026-10-11
-
 Esta spec está **partida por caso de uso**. Antes era un solo archivo de 170 KB (~43k tokens):
 leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la tarea necesita.
 
@@ -15,38 +13,38 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 
 | CU | Archivo | Qué cubre | Rol | Tamaño |
 |---|---|---|---|---|
-| CU-01 | [`cu-01-configurar-ferreteria.md`](spec/cu-01-configurar-ferreteria.md) | Configurar la ferretería | Dueño | 8.7 KB |
-| CU-02 | [`cu-02-usuarios.md`](spec/cu-02-usuarios.md) | Gestionar usuarios | Dueño | 0.3 KB |
-| CU-03 | [`cu-03-articulos.md`](spec/cu-03-articulos.md) | Gestionar artículos | Dueño | 5.6 KB |
-| CU-04 | [`cu-04-importar-lista-precios.md`](spec/cu-04-importar-lista-precios.md) | Importar lista de precios del proveedor | Dueño | 3.0 KB |
-| CU-05 | [`cu-05-actualizar-precios.md`](spec/cu-05-actualizar-precios.md) | Actualizar precios masivamente | Dueño | 1.1 KB |
-| CU-06 | [`cu-06-buscar-articulo.md`](spec/cu-06-buscar-articulo.md) | Buscar artículo | Vendedor | 0.7 KB |
-| CU-07 | [`cu-07-vender-facturar.md`](spec/cu-07-vender-facturar.md) | Vender y facturar | Vendedor | 25.4 KB |
-| CU-08 | [`cu-08-anular-venta.md`](spec/cu-08-anular-venta.md) | Anular una venta | Dueño | 4.9 KB |
-| CU-09 | [`cu-09-stock.md`](spec/cu-09-stock.md) | Consultar y ajustar stock | Dueño | 2.5 KB |
-| CU-10 | [`cu-10-caja.md`](spec/cu-10-caja.md) | Abrir y cerrar caja | Vendedor y Dueño | 6.5 KB |
-| CU-11 | [`cu-11-clientes.md`](spec/cu-11-clientes.md) | Clientes | Vendedor y Dueño | 5.8 KB |
-| CU-12 | [`cu-12-cobranza.md`](spec/cu-12-cobranza.md) | Cobranza de cuenta corriente | Dueño | 25.8 KB |
-| CU-13 | [`cu-13-compras.md`](spec/cu-13-compras.md) | Registrar una compra | Dueño | 6.7 KB |
-| CU-14 | [`cu-14-precio-manual.md`](spec/cu-14-precio-manual.md) | Precio manual y ajustes sobre el precio final | quien edita artículos | 2.4 KB |
-| CU-15 | [`cu-15-reportes.md`](spec/cu-15-reportes.md) | Reportes de ventas | Dueño | 2.7 KB |
-| CU-16 | [`cu-16-consultar-ventas.md`](spec/cu-16-consultar-ventas.md) | Consultar y reimprimir ventas | Dueño | 5.6 KB |
-| CU-17 | [`cu-17-personalizar-menu.md`](spec/cu-17-personalizar-menu.md) | Personalizar el menú | Dueño | 4.0 KB |
+| CU-01 | [`cu-01-configurar-ferreteria.md`](spec/cu-01-configurar-ferreteria.md) | Configurar la ferretería | Dueño | 9.5 KB |
+| CU-02 | [`cu-02-usuarios.md`](spec/cu-02-usuarios.md) | Gestionar usuarios | Dueño | 0.9 KB |
+| CU-03 | [`cu-03-articulos.md`](spec/cu-03-articulos.md) | Gestionar artículos | Dueño | 6.8 KB |
+| CU-04 | [`cu-04-importar-lista-precios.md`](spec/cu-04-importar-lista-precios.md) | Importar lista de precios del proveedor | Dueño | 3.8 KB |
+| CU-05 | [`cu-05-actualizar-precios.md`](spec/cu-05-actualizar-precios.md) | Actualizar precios masivamente | Dueño | 2.1 KB |
+| CU-06 | [`cu-06-buscar-articulo.md`](spec/cu-06-buscar-articulo.md) | Buscar artículo | Vendedor | 1.5 KB |
+| CU-07 | [`cu-07-vender-facturar.md`](spec/cu-07-vender-facturar.md) | Vender y facturar | Vendedor | 28.9 KB |
+| CU-08 | [`cu-08-anular-venta.md`](spec/cu-08-anular-venta.md) | Anular una venta | Dueño | 5.4 KB |
+| CU-09 | [`cu-09-stock.md`](spec/cu-09-stock.md) | Consultar y ajustar stock | Dueño | 3.2 KB |
+| CU-10 | [`cu-10-caja.md`](spec/cu-10-caja.md) | Abrir y cerrar caja | Vendedor y Dueño | 7.2 KB |
+| CU-11 | [`cu-11-clientes.md`](spec/cu-11-clientes.md) | Clientes | Vendedor y Dueño | 6.4 KB |
+| CU-12 | [`cu-12-cobranza.md`](spec/cu-12-cobranza.md) | Cobranza de cuenta corriente | Dueño | 26.8 KB |
+| CU-13 | [`cu-13-compras.md`](spec/cu-13-compras.md) | Registrar una compra | Dueño | 8.0 KB |
+| CU-14 | [`cu-14-precio-manual.md`](spec/cu-14-precio-manual.md) | Precio manual y ajustes sobre el precio final | quien edita artículos | 3.0 KB |
+| CU-15 | [`cu-15-reportes.md`](spec/cu-15-reportes.md) | Reportes de ventas | Dueño | 3.3 KB |
+| CU-16 | [`cu-16-consultar-ventas.md`](spec/cu-16-consultar-ventas.md) | Consultar y reimprimir ventas | Dueño | 6.5 KB |
+| CU-17 | [`cu-17-personalizar-menu.md`](spec/cu-17-personalizar-menu.md) | Personalizar el menú | Dueño | 8.8 KB |
 
 ## Secciones transversales
 
 | Archivo | Contenido | Tamaño |
 |---|---|---|
-| [`00-vision-y-alcance.md`](spec/00-vision-y-alcance.md) | Visión y alcance | 1.1 KB |
-| [`01-actores-y-roles.md`](spec/01-actores-y-roles.md) | Actores y roles | 2.3 KB |
-| [`02-casos-de-uso.md`](spec/02-casos-de-uso.md) | Casos de uso del MVP + mapa de módulos | 1.8 KB |
+| [`00-vision-y-alcance.md`](spec/00-vision-y-alcance.md) | Visión y alcance | 1.2 KB |
+| [`01-actores-y-roles.md`](spec/01-actores-y-roles.md) | Actores y roles | 2.4 KB |
+| [`02-casos-de-uso.md`](spec/02-casos-de-uso.md) | Casos de uso del MVP + mapa de módulos | 2.6 KB |
 | [`10-reglas-de-negocio.md`](spec/10-reglas-de-negocio.md) | Reglas de negocio | 14.9 KB |
-| [`11-modelo-de-datos.md`](spec/11-modelo-de-datos.md) | Modelo de datos | 20.8 KB |
-| [`12-integracion-arca.md`](spec/12-integracion-arca.md) | Integración ARCA | 16.5 KB |
+| [`11-modelo-de-datos.md`](spec/11-modelo-de-datos.md) | Modelo de datos | 22.6 KB |
+| [`12-integracion-arca.md`](spec/12-integracion-arca.md) | Integración ARCA | 16.6 KB |
 | [`13-arquitectura-y-stack.md`](spec/13-arquitectura-y-stack.md) | Arquitectura y stack | 2.4 KB |
-| [`14-fuera-de-alcance.md`](spec/14-fuera-de-alcance.md) | Fuera del alcance del MVP | 3.0 KB |
-| [`15-plan-de-implementacion.md`](spec/15-plan-de-implementacion.md) | Plan de implementación | 4.3 KB |
-| [`16-preguntas-abiertas.md`](spec/16-preguntas-abiertas.md) | Preguntas abiertas para validar con ferreterías | 2.4 KB |
+| [`14-fuera-de-alcance.md`](spec/14-fuera-de-alcance.md) | Fuera del alcance del MVP | 3.1 KB |
+| [`15-plan-de-implementacion.md`](spec/15-plan-de-implementacion.md) | Plan de implementación | 4.5 KB |
+| [`16-preguntas-abiertas.md`](spec/16-preguntas-abiertas.md) | Preguntas abiertas para validar con ferreterías | 2.5 KB |
 
 ## Mapa de líneas del archivo original
 
@@ -54,7 +52,9 @@ Citado como `docs/spec.md:<línea>` en el SDD y en `odd/tasks` (59 referencias).
 tenía 676 líneas y se partió el 2026-11-10 **sin editar una sola palabra**: cada bloque se copió verbatim.
 Única excepción, corregida el 2026-11-10 por decisión de Luca: el conteo de casos de uso de
 [`spec/02-casos-de-uso.md`](spec/02-casos-de-uso.md), que decía «12 casos de uso … cinco módulos» cuando la propia
-lista tiene 16 CU y seis módulos. Está marcada ahí con un comentario.
+lista tenía entonces 16 CU y seis módulos (hoy son 17). Está marcada ahí con un comentario.
+Desde el 2026-11-26 la spec se corrige donde no coincidía con el código (stack, modelo de datos), así que ya no
+es una copia literal del original: los cambios quedan en el historial de git.
 Para resolver una cita histórica, buscá la línea en la tabla:
 
 | Rango original | Archivo nuevo |

@@ -42,7 +42,7 @@
    - **Última compra.** Debajo dice «Última compra: <comprobante> del dd/MM/aaaa», con un link que abre esa compra (`/compras/{id}`).
    - **Visibilidad.** Solo para el Dueño; el Vendedor no ve recargos ni compras.
 
-> **Fuera del tramo 1:** el pago de la compra (efectivo, cheque, cuenta corriente, G36), la cuenta corriente y el pago a proveedores (G39, G40), la anulación de una compra, la devolución al proveedor (G37), el cálculo del costo desde la lista menos 3 bonificaciones en el renglón (G86), el IVA y el total de la factura, el alta rápida de un artículo desde la compra (G94), la fecha de última compra (G19) y el libro IVA Compras (G87). El precio manual y los ajustes sobre el precio final son una feature aparte, posterior (2026-10-21, Luca).
+> **Fuera del tramo 1:** el pago de la compra (efectivo, cheque, cuenta corriente, G36), la cuenta corriente y el pago a proveedores (G39, G40), la anulación de una compra, la devolución al proveedor (G37), el cálculo del costo desde la lista menos 3 bonificaciones en el renglón (G86), el alta rápida de un artículo desde la compra (G94) y el libro IVA Compras (G87). El precio manual y los ajustes sobre el precio final son una feature aparte, posterior (2026-10-21, Luca).
 <!-- fin payload: spec.md:257-298 -->
 
 **Agregado móvil: Compras y Proveedores** (≤639.98 px).

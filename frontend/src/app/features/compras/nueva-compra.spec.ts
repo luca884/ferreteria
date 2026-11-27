@@ -75,7 +75,7 @@ describe('NuevaCompra', () => {
   const borrador: BorradorDeFactura = {
     proveedorId: 4,
     proveedorNombre: 'Bulonera Sur',
-    cuits: ['30657162163'],
+    cuits: ['30699999993'],
     tipo: 'FA',
     puntoVenta: 13,
     numero: 605684,
@@ -881,11 +881,11 @@ describe('NuevaCompra', () => {
 
     it('sin proveedor para el CUIT lo avisa y deja elegirlo', async () => {
       await crear();
-      api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30657162163', '20111111112'] }));
+      api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30699999993', '20111111112'] }));
       await subirPdf();
 
       expect(campo<HTMLSelectElement>('select[name=proveedor]').value).toBe('');
-      expect(el().textContent).toContain('No encontramos un proveedor con el CUIT 30657162163, 20111111112. Elegilo de la lista.');
+      expect(el().textContent).toContain('No encontramos un proveedor con el CUIT 30699999993, 20111111112. Elegilo de la lista.');
     });
 
     describe('el aviso del proveedor no encontrado (bugs-relevamiento-celular, S1 y S12)', () => {
@@ -910,10 +910,10 @@ describe('NuevaCompra', () => {
 
       it('va junto al select de proveedor, que queda enfocado, y se va al elegirlo', async () => {
         await crear();
-        api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30657162163'] }));
+        api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30699999993'] }));
         await subirPdf();
 
-        expect(avisoJuntoAlProveedor()).toBe('No encontramos un proveedor con el CUIT 30657162163. Elegilo de la lista.');
+        expect(avisoJuntoAlProveedor()).toBe('No encontramos un proveedor con el CUIT 30699999993. Elegilo de la lista.');
         expect(select().getAttribute('aria-describedby')).toBe('proveedor-aviso');
         expect(document.activeElement).toBe(select());
 
