@@ -13,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.CredencialesDemoProtegidasException;
+import com.ferreteria.common.exception.EstadoCuentaDemoProtegidoException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -132,6 +133,12 @@ public class Usuario {
     public void exigirCredencialesEditables() {
         if (cuentaDemo) {
             throw new CredencialesDemoProtegidasException();
+        }
+    }
+
+    public void exigirEstadoDeCuentaEditable() {
+        if (cuentaDemo) {
+            throw new EstadoCuentaDemoProtegidoException();
         }
     }
 

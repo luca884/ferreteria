@@ -15,12 +15,14 @@ Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigu
   - `PUT /api/usuarios/{id}/password` sobre un usuario con la marca: 403 con el mismo mensaje y sin cambios.
   - La sesión (respuesta del login y lo que el frontend guarda) dice si la cuenta es demo; con la marca, el frontend no muestra «Cambiar mi contraseña».
   - Sin la marca, los tres endpoints y la pantalla siguen exactamente como hoy (test que lo pruebe).
+- S4: a la propuesta «a un usuario demo nadie lo puede desactivar ni cambiarle el rol (ni otro Dueño), con 403 y test», Luca: «dale». Aceptación: con la marca, desactivar el usuario y cambiarle el rol en `PUT /api/usuarios/{id}` (o el endpoint de desactivación que exista) responden 403 con el mensaje «Es una cuenta de demostración: no se puede desactivar ni cambiar su rol.» y no cambian nada, aunque lo pida otro Dueño. Editar nombre o tope de la demo sin tocar rol ni email sigue igual. Sin la marca, desactivar y cambiar el rol siguen exactamente como hoy (test que lo pruebe).
 - S3 (supuesto técnico): la marca es la columna `usuario.cuenta_demo BOOLEAN NOT NULL DEFAULT FALSE` (V50), y la misma migración hace `UPDATE usuario SET cuenta_demo = TRUE WHERE email = 'demo@prueba.test'`. Así producción queda protegida con el deploy, sin pasos a mano.
 
 ## Tasks
 
 - [x] T1 · S1, S2, S3 · ruta: delegada (respaldo de contexto: la sesión ya pasó los 150k) · Aceptación: S1-S3 con tests de integración (backend) y spec del frontend; suite backend y frontend verdes; `ng build` ok · Evidencia: L4 · Commit: `138d636c` · Risk: item 1 (migración), item 2 (seguridad)
 - [x] T2 · S1-S3 · ruta: inline · Aceptación: revisión nativa (RDD) del commit de T1 y PR abierto · Evidencia: L5 · Risk: —
+- [ ] T3 · S4 · ruta: delegada (respaldo de contexto) · Aceptación: S4 con tests de integración; suite backend verde; verificación independiente y revisión nativa · Evidencia: — · Commit: — · Risk: item 2 (seguridad)
 
 ## Log
 
@@ -30,3 +32,4 @@ Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigu
 - L4 (2026-11-27) T1: RED observado (V50 inexistente; con solo la migración, los tres endpoints daban 204/200 en vez de 403; la sesión sin `cuentaDemo`; el enlace visible). GREEN: `CuentaDemoIntegrationTest` + `MigracionV50Test` 7/7; con `MigracionV6Test` y `TenantScopingArchTest` 49/49; frontend 6549 tests y `ng build` ok; suite backend completa exit 0 (8 m 36 s) sobre el estado final.
 - L5 (2026-11-27) T2: revisión nativa con lentes risk y reliability (escalada por ítem 2) aprobada y reconocida, lineage `review-a2d4a09dc7733031`. Queda fuera del alcance, para decidir: otro Dueño creado desde la demo puede desactivarla.
 - L6 (2026-11-27) Verificación independiente (`gentle-ai-verify`, Risk: item 1 e item 2): S1, S2 y S3 PASS, sin bloqueantes. Tests focalizados 49/49 backend y 112/112 frontend. Sin otro escritor de `password_hash` o `email` salvo el reseteo del super admin (`UsuariosParaPlataformaImpl:91-98`), que queda sin guardia a propósito: es la vía para recuperar la demo.
+- L7 (2026-11-27) Explicado a Luca el hueco: desde la demo se crea otro Dueño, y ese Dueño puede desactivar a la demo (las reglas solo impiden desactivarse a uno mismo y quedarse sin Dueño activo, `UsuarioService.java:23-24`) o pasarla a Vendedor. Luca: «dale» → S4, T3.

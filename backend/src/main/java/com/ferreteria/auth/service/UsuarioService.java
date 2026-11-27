@@ -78,12 +78,14 @@ public class UsuarioService {
             email = usuario.getEmail();
         }
         exigirRolDeFerreteria(datos.rol());
-        boolean cambiaElRol = datos.rol() != usuario.getRol();
-        if (cambiaElRol && id.equals(actorId)) {
-            throw new ReglaDeNegocioException(CAMBIARSE_EL_ROL);
-        }
-        if (cambiaElRol && usuario.getRol() == Rol.DUENO && usuario.isActivo()) {
-            exigirOtroDuenoActivo(id);
+        if (datos.rol() != usuario.getRol()) {
+            usuario.exigirEstadoDeCuentaEditable();
+            if (id.equals(actorId)) {
+                throw new ReglaDeNegocioException(CAMBIARSE_EL_ROL);
+            }
+            if (usuario.getRol() == Rol.DUENO && usuario.isActivo()) {
+                exigirOtroDuenoActivo(id);
+            }
         }
         if (emailUnico.enUsoPorOtro(datos.email(), id)) {
             throw emailRepetido();
@@ -99,6 +101,7 @@ public class UsuarioService {
         usuarios.bloquearFerreteriaScoped();
         Usuario usuario = obtener(id);
         if (!activo) {
+            usuario.exigirEstadoDeCuentaEditable();
             if (id.equals(actorId)) {
                 throw new ReglaDeNegocioException(DESACTIVARSE);
             }
