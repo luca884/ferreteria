@@ -6,6 +6,7 @@
 **CU-02 Gestionar usuarios** (Dueño)
 
 1. Crea, edita o desactiva usuarios con rol Dueño o Vendedor.
+2. Un Dueño no puede desactivarse ni cambiarse el rol a sí mismo, y la ferretería conserva siempre al menos un Dueño activo.
 <!-- fin payload: spec.md:61-65 -->
 
 **Agregado móvil: ficha de usuario** (≤639.98 px, solo Dueño).

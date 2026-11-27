@@ -14,18 +14,18 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 | CU | Archivo | Qué cubre | Rol | Tamaño |
 |---|---|---|---|---|
 | CU-01 | [`cu-01-configurar-ferreteria.md`](spec/cu-01-configurar-ferreteria.md) | Configurar la ferretería | Dueño | 9.5 KB |
-| CU-02 | [`cu-02-usuarios.md`](spec/cu-02-usuarios.md) | Gestionar usuarios | Dueño | 0.7 KB |
-| CU-03 | [`cu-03-articulos.md`](spec/cu-03-articulos.md) | Gestionar artículos | Dueño | 6.7 KB |
+| CU-02 | [`cu-02-usuarios.md`](spec/cu-02-usuarios.md) | Gestionar usuarios | Dueño | 0.9 KB |
+| CU-03 | [`cu-03-articulos.md`](spec/cu-03-articulos.md) | Gestionar artículos | Dueño | 6.8 KB |
 | CU-04 | [`cu-04-importar-lista-precios.md`](spec/cu-04-importar-lista-precios.md) | Importar lista de precios del proveedor | Dueño | 3.8 KB |
 | CU-05 | [`cu-05-actualizar-precios.md`](spec/cu-05-actualizar-precios.md) | Actualizar precios masivamente | Dueño | 2.1 KB |
 | CU-06 | [`cu-06-buscar-articulo.md`](spec/cu-06-buscar-articulo.md) | Buscar artículo | Vendedor | 1.5 KB |
-| CU-07 | [`cu-07-vender-facturar.md`](spec/cu-07-vender-facturar.md) | Vender y facturar | Vendedor | 28.8 KB |
+| CU-07 | [`cu-07-vender-facturar.md`](spec/cu-07-vender-facturar.md) | Vender y facturar | Vendedor | 28.9 KB |
 | CU-08 | [`cu-08-anular-venta.md`](spec/cu-08-anular-venta.md) | Anular una venta | Dueño | 5.4 KB |
-| CU-09 | [`cu-09-stock.md`](spec/cu-09-stock.md) | Consultar y ajustar stock | Dueño | 3.0 KB |
-| CU-10 | [`cu-10-caja.md`](spec/cu-10-caja.md) | Abrir y cerrar caja | Vendedor y Dueño | 7.1 KB |
+| CU-09 | [`cu-09-stock.md`](spec/cu-09-stock.md) | Consultar y ajustar stock | Dueño | 3.2 KB |
+| CU-10 | [`cu-10-caja.md`](spec/cu-10-caja.md) | Abrir y cerrar caja | Vendedor y Dueño | 7.2 KB |
 | CU-11 | [`cu-11-clientes.md`](spec/cu-11-clientes.md) | Clientes | Vendedor y Dueño | 6.4 KB |
-| CU-12 | [`cu-12-cobranza.md`](spec/cu-12-cobranza.md) | Cobranza de cuenta corriente | Dueño | 26.5 KB |
-| CU-13 | [`cu-13-compras.md`](spec/cu-13-compras.md) | Registrar una compra | Dueño | 8.1 KB |
+| CU-12 | [`cu-12-cobranza.md`](spec/cu-12-cobranza.md) | Cobranza de cuenta corriente | Dueño | 26.8 KB |
+| CU-13 | [`cu-13-compras.md`](spec/cu-13-compras.md) | Registrar una compra | Dueño | 8.0 KB |
 | CU-14 | [`cu-14-precio-manual.md`](spec/cu-14-precio-manual.md) | Precio manual y ajustes sobre el precio final | quien edita artículos | 3.0 KB |
 | CU-15 | [`cu-15-reportes.md`](spec/cu-15-reportes.md) | Reportes de ventas | Dueño | 3.3 KB |
 | CU-16 | [`cu-16-consultar-ventas.md`](spec/cu-16-consultar-ventas.md) | Consultar y reimprimir ventas | Dueño | 6.5 KB |
@@ -36,7 +36,7 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 | Archivo | Contenido | Tamaño |
 |---|---|---|
 | [`00-vision-y-alcance.md`](spec/00-vision-y-alcance.md) | Visión y alcance | 1.2 KB |
-| [`01-actores-y-roles.md`](spec/01-actores-y-roles.md) | Actores y roles | 2.3 KB |
+| [`01-actores-y-roles.md`](spec/01-actores-y-roles.md) | Actores y roles | 2.4 KB |
 | [`02-casos-de-uso.md`](spec/02-casos-de-uso.md) | Casos de uso del MVP + mapa de módulos | 2.6 KB |
 | [`10-reglas-de-negocio.md`](spec/10-reglas-de-negocio.md) | Reglas de negocio | 14.9 KB |
 | [`11-modelo-de-datos.md`](spec/11-modelo-de-datos.md) | Modelo de datos | 22.6 KB |
