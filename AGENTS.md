@@ -46,7 +46,7 @@ Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vend
 2. **Repositorios de datos de una ferretería extienden `TenantScopedRepository`** y se usan con sus métodos `*Scoped` (`findScoped`, `findAllScoped`, o métodos propios que llamen a `TenantContext.requireFerreteriaId()`). Los finders sin scope (`findById`, `findAll`…) están prohibidos por `TenantScopingArchTest`. Excepción documentada: `@UnscopedTenantAccess(reason = "...")`.
 3. **Un recurso de otra ferretería devuelve 404**, igual que uno inexistente.
 4. **Plata en `BigDecimal` / `DECIMAL`**. Nunca `double`.
-5. **Módulos por paquete** (`auth`, `tenant`, `ferreteria`, `catalogo`, y después `ventas`, `stock`, `facturacion`, `documentos`). Solo `facturacion` habla con ARCA.
+5. **Módulos por paquete** (`auth`, `tenant`, `ferreteria`, `plataforma`, `catalogo`, `cotizacion`, `ventas`, `stock`, `clientes`, `compras`, `facturacion`, `menu`, más `common` para lo compartido). Solo `facturacion` habla con ARCA.
 6. **Migraciones con Flyway**, nunca `ddl-auto` distinto de `validate`. Los datos demo van en `db/dev-data` (solo perfiles dev y test).
 7. Todo endpoint nuevo de datos de una ferretería lleva un caso en un test de integración que pruebe que otra ferretería no lo ve.
 

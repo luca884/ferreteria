@@ -42,4 +42,4 @@ railway up ./frontend --path-as-root --service frontend --ci
 ## Documentación
 
 - `docs/spec.md`: especificación del MVP (casos de uso, reglas de negocio, modelo de datos, ARCA, plan).
-- `CLAUDE.md`: reglas de arquitectura y convenciones para trabajar en el repo.
+- `AGENTS.md`: reglas de arquitectura y convenciones para trabajar en el repo.

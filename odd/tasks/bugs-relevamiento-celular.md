@@ -198,7 +198,7 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
   Ego-browser (Perla, Nueva compra, sin confirmar nada). Para llegar al caso sin CUIT se usaron las 3 primeras páginas de `Lista/LISTA 336.pdf`, que dan 42 renglones y `cuits: []`; con el PDF entero ahora corta el tope de T2.
   - Antes (4200): «No encontramos un proveedor con el CUIT . Elegilo de la lista.», arriba del todo, sin foco.
   - Después (8081/4201): el aviso nuevo arriba del select, con el foco en el select. Al elegir un proveedor, el aviso se va.
-  - Con `Facturas/pdf (17).pdf` (2 CUIT sin proveedor en Perla): «No encontramos un proveedor con el CUIT 30657162163, 20231742353. Elegilo de la lista.», también con foco.
+  - Con `Facturas/pdf (17).pdf` (2 CUIT sin proveedor en Perla): «No encontramos un proveedor con el CUIT 30699999993, 20444444445. Elegilo de la lista.», también con foco.
 
   Próximo paso: T3.
 - L13 (2026-11-09) T3 hecha (el código en el commit «fix: Reportes borra el resultado anterior ante un error y pinta en rojo la ganancia negativa»).

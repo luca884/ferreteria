@@ -39,6 +39,6 @@ Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La f
 6. **Stock, pulido y piloto** (CU-02, CU-09) (2 semanas)
    - Ajustes de stock, gestión de usuarios, carga inicial de datos del piloto y paso a producción en ARCA (rama 11 de la fase 5).
 
-**Forma de trabajo con Claude Code:** este documento se exporta como `docs/spec.md` en el repo y el `CLAUDE.md` apunta a él. Cada caso de uso se implementa en una rama propia: primero los tests del dominio, después el endpoint y después la pantalla.
+**Forma de trabajo:** la spec vive en `docs/spec/` (índice en `docs/spec.md`) y el `AGENTS.md` apunta a ella. Cada caso de uso se implementa en una rama propia: primero los tests del dominio, después el endpoint y después la pantalla.
 <!-- fin payload: spec.md:623-661 -->
 
