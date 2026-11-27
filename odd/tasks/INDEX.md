@@ -22,7 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
-| [`cuenta-demo-protegida.md`](cuenta-demo-protegida.md) | 2026-11-27 | que nadie pueda dejar afuera al resto cambiando las credenciales de la cuenta demo pública (demo@prueba.test, rol Dueño, publicada en el README) | 5 |
+| [`cuenta-demo-protegida.md`](cuenta-demo-protegida.md) | 2026-11-27 | que nadie pueda dejar afuera al resto cambiando las credenciales de la cuenta demo pública (demo@prueba.test, rol Dueño, publicada en el README) | 6 |
 | [`menu-colapsable.md`](menu-colapsable.md) | 2026-11-24 | que el menú lateral de la app se pueda achicar a una columna de íconos con un botón y que se acuerde cómo lo dejó cada persona, para dejarle más lugar | 6 |
 | [`mostrador-simple.md`](mostrador-simple.md) | 2026-11-24 | el mostrador abre directo en Venta con un selector de modo (Venta / Presupuesto / Remito), sin botones apagados, y muestra cada acción cuando se puede | 13 |
 | [`personalizar-menu.md`](personalizar-menu.md) | 2026-11-20 | — | 48 |

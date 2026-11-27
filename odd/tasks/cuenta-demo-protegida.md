@@ -22,7 +22,7 @@ Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigu
 
 - [x] T1 · S1, S2, S3 · ruta: delegada (respaldo de contexto: la sesión ya pasó los 150k) · Aceptación: S1-S3 con tests de integración (backend) y spec del frontend; suite backend y frontend verdes; `ng build` ok · Evidencia: L4 · Commit: `138d636c` · Risk: item 1 (migración), item 2 (seguridad)
 - [x] T2 · S1-S3 · ruta: inline · Aceptación: revisión nativa (RDD) del commit de T1 y PR abierto · Evidencia: L5 · Risk: —
-- [ ] T3 · S4 · ruta: delegada (respaldo de contexto) · Aceptación: S4 con tests de integración; suite backend verde; verificación independiente y revisión nativa · Evidencia: — · Commit: — · Risk: item 2 (seguridad)
+- [x] T3 · S4 · ruta: delegada (respaldo de contexto) · Aceptación: S4 con tests de integración; suite backend verde; verificación independiente y revisión nativa · Evidencia: L8 · Commit: `ef616ee1` · Risk: item 2 (seguridad)
 
 ## Log
 
@@ -33,3 +33,4 @@ Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigu
 - L5 (2026-11-27) T2: revisión nativa con lentes risk y reliability (escalada por ítem 2) aprobada y reconocida, lineage `review-a2d4a09dc7733031`. Queda fuera del alcance, para decidir: otro Dueño creado desde la demo puede desactivarla.
 - L6 (2026-11-27) Verificación independiente (`gentle-ai-verify`, Risk: item 1 e item 2): S1, S2 y S3 PASS, sin bloqueantes. Tests focalizados 49/49 backend y 112/112 frontend. Sin otro escritor de `password_hash` o `email` salvo el reseteo del super admin (`UsuariosParaPlataformaImpl:91-98`), que queda sin guardia a propósito: es la vía para recuperar la demo.
 - L7 (2026-11-27) Explicado a Luca el hueco: desde la demo se crea otro Dueño, y ese Dueño puede desactivar a la demo (las reglas solo impiden desactivarse a uno mismo y quedarse sin Dueño activo, `UsuarioService.java:23-24`) o pasarla a Vendedor. Luca: «dale» → S4, T3.
+- L8 (2026-11-27) T3: RED 3/12 (otro Dueño recibía 200 al desactivar y al cambiar el rol; la demo sobre sí misma 422 en vez de 403). GREEN 12/12; suite backend completa 6588 tests, 0 fallos. Verificación independiente (Risk: item 2): S1-S4 PASS, 153 tests de usuarios y ArchUnit en verde; reactivar no se bloquea (vía de recuperación). Revisión nativa risk + reliability aprobada, lineage `review-7b78d49275a415ec`. Al pasar de ~400 líneas, el límite del slice queda en `ef616ee1` (un commit por unidad).
