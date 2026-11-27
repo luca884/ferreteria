@@ -7,6 +7,7 @@
 
 1. Crea, edita o desactiva usuarios con rol Dueño o Vendedor.
 2. Un Dueño no puede desactivarse ni cambiarse el rol a sí mismo, y la ferretería conserva siempre al menos un Dueño activo.
+3. Una cuenta marcada como demo no permite cambiar el email ni cambiar o resetear la contraseña. Sin cambiar el email, se puede editar el resto con las reglas habituales; la cuenta demo no ve «Cambiar mi contraseña».
 <!-- fin payload: spec.md:61-65 -->
 
 **Agregado móvil: ficha de usuario** (≤639.98 px, solo Dueño).

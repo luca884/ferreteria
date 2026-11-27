@@ -18,6 +18,8 @@ export interface Sesion {
   topeDescuento?: number | null;
   /** Su contraseña la eligió otra persona: hasta que la cambie, toda pantalla lleva a «Mi contraseña». Ausente en una sesión guardada antes. */
   debeCambiarContrasena?: boolean;
+  /** La cuenta demo tiene las credenciales protegidas. Ausente en una sesión guardada antes. */
+  cuentaDemo?: boolean;
 }
 
 /** El token y la sesión con los que se entra: el login de siempre y el `/auth/totp/verificar` del super admin. */

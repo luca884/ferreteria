@@ -70,6 +70,13 @@ public class UsuarioService {
     public Usuario actualizar(Long id, DatosEdicion datos, Long actorId) {
         usuarios.bloquearFerreteriaScoped();
         Usuario usuario = obtener(id);
+        String email = EmailUnico.normalizar(datos.email());
+        if (usuario.isCuentaDemo()) {
+            if (!email.equals(EmailUnico.normalizar(usuario.getEmail()))) {
+                usuario.exigirCredencialesEditables();
+            }
+            email = usuario.getEmail();
+        }
         exigirRolDeFerreteria(datos.rol());
         boolean cambiaElRol = datos.rol() != usuario.getRol();
         if (cambiaElRol && id.equals(actorId)) {
@@ -81,7 +88,7 @@ public class UsuarioService {
         if (emailUnico.enUsoPorOtro(datos.email(), id)) {
             throw emailRepetido();
         }
-        usuario.actualizar(datos.nombre().trim(), EmailUnico.normalizar(datos.email()), datos.rol());
+        usuario.actualizar(datos.nombre().trim(), email, datos.rol());
         usuario.cambiarTopeDescuento(datos.topeDescuento());
         usuario.cambiarTelefono(datos.telefono());
         return guardar(usuario);
@@ -106,6 +113,7 @@ public class UsuarioService {
     @Transactional
     public void resetearContrasena(Long id, String nueva, Long actorId) {
         Usuario usuario = obtener(id);
+        usuario.exigirCredencialesEditables();
         PoliticaDeContrasena.validar("password", nueva);
         if (id.equals(actorId)) {
             // El Dueño que se resetea la propia la eligió él: no hay nada que obligarlo a cambiar. Pero repetir la que

@@ -1,0 +1,29 @@
+# cuenta-demo-protegida
+
+Objetivo: que nadie pueda dejar afuera al resto cambiando las credenciales de la cuenta demo pública (`demo@prueba.test`, rol Dueño, publicada en el README) · Por qué: el repo es público para el CV y los recruiters entran con esa cuenta; hoy cualquiera puede cambiarle la contraseña o el email.
+Rama: `feat/cuenta-demo-protegida` desde `f97abed7` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`, frontend `npx ng test --watch=false --include=<spec>` / `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/cuenta-demo-protegida/tasks` · Modelo: caso 5 (seguridad + migración), Opus; la implementación la hace un worker (respaldo de contexto de la sesión).
+Pronóstico: ~250 líneas · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: una marca por usuario que protege las credenciales de una cuenta demo. Sin pantalla para prenderla: la migración la prende para `demo@prueba.test` (no existe en dev ni en test, así que ahí no cambia nada) y los tests la prenden a mano.
+Fuera de alcance: limitar qué datos de negocio puede tocar la cuenta demo (sigue siendo Dueño), resetear datos, licencia.
+
+- S1: «la cuenta tiene sentido que sea de dueno pero es verdad que tendriamos que deshabilitar lo de la contrasena» — Aceptación: con la marca prendida, `PUT /api/auth/password` rechaza el cambio con 403 y el mensaje «Es una cuenta de demostración: no se puede cambiar la contraseña ni el email.», sin tocar el hash (sigue entrando con la contraseña de antes). Sin la marca, todo sigue igual. — Checks: test de integración del endpoint.
+- S2: a la propuesta «con la marca puesta, el backend rechaza cambiar la contraseña, el email, y el reseteo de contraseña desde la gestión de usuarios; el frontend esconde "Cambiar mi contraseña" para esa cuenta; tests de integración de cada caso», Luca: «dale». Aceptación:
+  - `PUT /api/usuarios/{id}` sobre un usuario con la marca: si el email cambia, 403 con el mismo mensaje de S1 y sin cambios; si el email queda igual, la edición del resto (nombre, rol, tope) sigue como hoy (con sus reglas actuales: no cambiarse el rol a sí mismo, último Dueño).
+  - `PUT /api/usuarios/{id}/password` sobre un usuario con la marca: 403 con el mismo mensaje y sin cambios.
+  - La sesión (respuesta del login y lo que el frontend guarda) dice si la cuenta es demo; con la marca, el frontend no muestra «Cambiar mi contraseña».
+  - Sin la marca, los tres endpoints y la pantalla siguen exactamente como hoy (test que lo pruebe).
+- S3 (supuesto técnico): la marca es la columna `usuario.cuenta_demo BOOLEAN NOT NULL DEFAULT FALSE` (V50), y la misma migración hace `UPDATE usuario SET cuenta_demo = TRUE WHERE email = 'demo@prueba.test'`. Así producción queda protegida con el deploy, sin pasos a mano.
+
+## Tasks
+
+- [ ] T1 · S1, S2, S3 · ruta: delegada (respaldo de contexto: la sesión ya pasó los 150k) · Aceptación: S1-S3 con tests de integración (backend) y spec del frontend; suite backend y frontend verdes; `ng build` ok · Evidencia: — · Commit: — · Risk: item 1 (migración), item 2 (seguridad)
+- [ ] T2 · S1-S3 · ruta: inline · Aceptación: revisión nativa (RDD) del commit de T1 y PR abierto · Evidencia: — · Risk: —
+
+## Log
+
+- L1 (2026-11-27) Luca: «me parece bien no tener licencia y que quede para mi uso nada mas, y la cuenta tiene sentido que sea de dueno pero es verdad que tendriamos que deshabilitar lo de la contrasena, creo que ya lo tiene bloqueado ese usuario en la bdd»
+- L2 (2026-11-27) Verificado: no hay bloqueo. Ninguna migración tiene una marca así; `AuthService.cambiarContrasena` (`AuthService.java:110-124`) cambia la contraseña si la actual es correcta. Además `EdicionUsuarioRequest` deja que el Dueño se cambie el email. No se probó en producción para no cambiarle la contraseña de verdad a la demo.
+- L3 (2026-11-27) Luca aprueba la propuesta (S2): «dale».
